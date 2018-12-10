@@ -243,6 +243,15 @@ public:
 			s[i] = tmp ;
 		}
 	}
+
+	T *BeginAddress()
+	{
+		return s ;
+	}
+	T *EndAddress() 
+	{
+		return s + size ;
+	}
 } ;
 
 #endif

@@ -38,7 +38,7 @@ int main( int argc, char *argv[] )
 
 	int c, option_index ;
 	option_index = 0 ;
-	POASet poaSet( 5 ) ;
+	POASet poaSet( 9 ) ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
