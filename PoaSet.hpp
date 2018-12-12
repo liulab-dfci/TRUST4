@@ -283,13 +283,13 @@ public:
 					diffSum += diff ; 
 				}
 			
-				/*if ( e - s > bestWindow.b - bestWindow.a 
+				if ( e - s > bestWindow.b - bestWindow.a 
 					|| ( e - s == bestWindow.b - bestWindow.a && diffSum < bestDiffSum ) )
 				{
 					bestWindow.a = s ;
 					bestWindow.b = e ;
 					bestDiffSum = diffSum ;
-				}*/
+				}
 
 				s = e ;
 			}
