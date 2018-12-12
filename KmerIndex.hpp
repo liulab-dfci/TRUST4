@@ -20,7 +20,7 @@ class KmerIndex
 {
 private:
 	std::map< uint64_t, SimpleVector<struct _indexInfo> > index ;
-
+	SimpleVector<struct _indexInfo> nullHit ;
 public:
 	KmerIndex() {}
 	~KmerIndex()
@@ -53,7 +53,7 @@ public:
 	SimpleVector<struct _indexInfo> *Search( KmerCode &kmerCode )
 	{
 		if ( !kmerCode.IsValid() )
-			return NULL ;
+			return &nullHit ;
 		uint64_t kcode = kmerCode.GetCode() ;
 		
 		return &index[kcode] ;

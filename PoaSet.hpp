@@ -126,14 +126,14 @@ private:
 			{
 				if ( tag == ret - 1 )
 				{
-					top[ret] = i ;
+					top[ret] = record[i] ;
 					++ret ;
-					link[i] = top[tag] ;
+					link[ record[i] ] = top[tag] ;
 				}
 				else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
 				{
-					top[ tag + 1 ] = i ;
-					link[i] = top[tag] ;
+					top[ tag + 1 ] = record[i] ;
+					link[ record[i] ] = top[tag] ;
 				}
 			}
 		}
@@ -206,7 +206,9 @@ public:
 		int hitSize = hits.Size() ;
 		int i, j ;
 		int ret = 0 ;
-		for ( i = 0 ; i < hitSize ; ++i )
+		//for ( i = 0 ; i < hitSize ; ++i )
+		//	printf( "%d %d\n", i, hits[i].readOffset) ;
+		for ( i = 0 ; i < hitSize ; )
 		{
 			for ( j = i + 1 ; j < hitSize ; ++j )
 			{
@@ -280,14 +282,14 @@ public:
 						break ;
 					diffSum += diff ; 
 				}
-
-				if ( e - s > bestWindow.b - bestWindow.a 
+			
+				/*if ( e - s > bestWindow.b - bestWindow.a 
 					|| ( e - s == bestWindow.b - bestWindow.a && diffSum < bestDiffSum ) )
 				{
 					bestWindow.a = s ;
 					bestWindow.b = e ;
 					bestDiffSum = diffSum ;
-				}
+				}*/
 
 				s = e ;
 			}
@@ -373,6 +375,7 @@ public:
 			overlaps.PushBack( no ) ;
 			i = j ;
 		}
+		return overlaps.Size() ;
 	}
 
 	
@@ -419,7 +422,11 @@ public:
 		//	printf( "- %d %d %d %d\n", it->readOffset, it->indexHit.idx, it->indexHit.offset, it->indexHit.strand ) ;
 		
 		SimpleVector<struct _overlap> overlaps ;
-		GetPoaOverlaps( hits,  overlaps ) ;
+		int overlapCnt = GetPoaOverlaps( hits,  overlaps ) ;
+		
+		// Determine whether we want to add this reads.
+		for ( i = 0 ; i < overlapCnt ; ++i )
+			printf( "%d: %d %s. %d %d %d %d\n", i, overlaps[i].poaIdx, poas[ overlaps[i].poaIdx ].name, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].poaStart, overlaps[i].poaEnd ) ;
 
 		return 0 ;
 	}
