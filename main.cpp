@@ -3,7 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "PoaSet.hpp"
+#include "SeqSet.hpp"
+#include "AlignAlgo.hpp"
 
 char usage[] = "./bcr [OPTIONS]:\n"
 		"Required:\n"
@@ -38,7 +39,7 @@ int main( int argc, char *argv[] )
 
 	int c, option_index ;
 	option_index = 0 ;
-	POASet poaSet( 9 ) ;
+	SeqSet seqSet( 9 ) ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
@@ -52,7 +53,7 @@ int main( int argc, char *argv[] )
 
 		if ( c == 'f' )
 		{
-			poaSet.InputRefFa( optarg ) ;
+			seqSet.InputRefFa( optarg ) ;
 		}
 		else if ( c == 'u' )
 		{
@@ -67,8 +68,13 @@ int main( int argc, char *argv[] )
 			mateReads.AddReadFile( optarg ) ;
 		}
 	}
-
-	if ( poaSet.Size() == 0 )
+	/*char align[10000] ;
+	char t[] = "ACGGGGTTTTTT" ;
+	char p[] = "ACTTTTTTGGGG" ;
+	AlignAlgo::GlobalAlignment( t, strlen( t ), p, strlen( p ), align ) ;
+	AlignAlgo::VisualizeAlignment( t, strlen( t ), p, strlen( p ), align ) ; */
+	
+	if ( seqSet.Size() == 0 )
 	{
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
@@ -76,8 +82,9 @@ int main( int argc, char *argv[] )
 	
 	while ( reads.Next() )
 	{
-		poaSet.AddRead( reads.seq ) ;
-		//printf( "done\n" ) ;
+		printf( "%s %s\n", reads.id, reads.seq ) ;
+		seqSet.AddRead( reads.seq ) ;
+		printf( "done\n" ) ;
 	}
 	return 0 ;
 }

@@ -13,7 +13,7 @@ struct _indexInfo
 {
 	index_t idx ;
 	index_t offset ;
-	int strand ;
+	//int strand ;
 } ;
 
 class KmerIndex
@@ -40,7 +40,7 @@ public:
 		struct _indexInfo newEntry ;
 		newEntry.idx = poaId ;
 		newEntry.offset = offset ;
-		newEntry.strand = strand ;
+		//newEntry.strand = strand ;
 		index[ kmerCode.GetCode() ].PushBack( newEntry ) ;
 		
 		//printf( "%d\n", hash[key].Memory() ) ;
@@ -66,7 +66,7 @@ public:
 		if ( len < kl )
 			return ;
 		kmerCode.Restart() ;
-		KmerCode rcKmerCode( kl ) ;
+		//KmerCode rcKmerCode( kl ) ;
 
 		for ( i = 0 ; i < kl - 1 ; ++i )
 			kmerCode.Append( s[i] ) ;
@@ -77,8 +77,8 @@ public:
 			{
 				Insert( kmerCode, id, i - kl + 1, 1 ) ;
 
-				rcKmerCode.SetCode( kmerCode.GetReverseComplementCode() ) ;
-				Insert( rcKmerCode, id, len - 1 - i, -1 ) ;
+				//rcKmerCode.SetCode( kmerCode.GetReverseComplementCode() ) ;
+				//Insert( rcKmerCode, id, len - 1 - i, -1 ) ;
 			}
 		}
 	}
