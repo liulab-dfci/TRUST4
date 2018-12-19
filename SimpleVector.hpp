@@ -39,9 +39,40 @@ public:
 	{
 		size = in.size ;
 		capacity = in.capacity ;
-		s = in.s ;
+		if ( capacity > 0 )
+		{
+			//s = in.s ;
+			s = (T *)malloc( sizeof( T ) * capacity ) ;
+			memcpy( s, in.s, sizeof( T ) * capacity ) ;
+		}
+		else 
+			s = NULL ;
 		inc = in.inc ;
 		maxInc = in.maxInc ;
+	}
+	
+	SimpleVector& operator=( const SimpleVector &in )
+	{
+		if ( this != &in )
+		{
+			if ( s != NULL )
+				free( s ) ;
+			size = in.size ;
+			capacity = in.capacity ;
+
+			if ( capacity > 0 )
+			{
+				//s = in.s ;
+				s = (T *)malloc( sizeof( T ) * capacity ) ;
+				memcpy( s, in.s, sizeof( T ) * capacity ) ;
+			}
+			else 
+				s = NULL ;
+
+			inc = in.inc ;
+			maxInc = in.maxInc ;
+		}
+		return *this ;
 	}
 
 	~SimpleVector()
@@ -138,6 +169,7 @@ public:
 
 	T &operator[]( int i )
 	{
+		//assert( i < size ) ;
 		if ( i >= size )
 		{
 			fprintf( stderr, "%s: Access out of the vector.\n", __func__ ) ;
