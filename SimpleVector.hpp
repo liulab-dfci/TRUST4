@@ -275,6 +275,52 @@ public:
 			s[i] = tmp ;
 		}
 	}
+	
+	// Expand the array by given size.
+	// Does not care about the value in the new allocated space.
+	int Expand( int expandSize )
+	{
+		int newSize = size + expandSize ;
+		if ( newSize <= capacity )
+		{
+			size = newSize ;
+		}
+		else
+		{
+			//int tmp = capacity ;
+			capacity = newSize + inc ;
+			inc *= 2 ;
+			if ( maxInc > 0 && inc > maxInc )
+				inc = maxInc ;
+			if ( size == 0 )
+				s = (T *)malloc( sizeof( T ) * capacity ) ;
+			else
+				s = (T *)realloc( s, sizeof( T ) * capacity ) ;
+			if ( s == NULL ) 
+			{
+				fprintf( stderr, "%s: Failed to allocate memory.\n", __func__ ) ;
+				exit( 1 ) ;
+			}
+			size = newSize ;
+		}
+		return size ;
+	}
+
+	void ShiftRight( int shift )
+	{
+		size = Expand( shift ) ;
+		int i ;
+
+		for ( i = size - 1 ; i >= shift ; --i )
+			s[i] = s[i - shift] ;
+		return ;
+	}
+	
+	// Set the content to zero in the range
+	void SetZero( int start, int len )
+	{
+		memset( s + start, 0, sizeof( T ) * len ) ;
+	}
 
 	T *BeginAddress()
 	{

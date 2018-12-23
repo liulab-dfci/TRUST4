@@ -59,7 +59,7 @@ public:
 		return &index[kcode] ;
 	}
 
-	void BuildIndexFromRead( KmerCode &kmerCode, char *s, int len, int id )
+	void BuildIndexFromRead( KmerCode &kmerCode, char *s, int len, int id, int shift = 0 )
 	{
 		int i ;
 		int kl = kmerCode.GetKmerLength() ;
@@ -75,12 +75,45 @@ public:
 			kmerCode.Append( s[i] ) ;
 			if ( kmerCode.IsValid() )
 			{
-				Insert( kmerCode, id, i - kl + 1, 1 ) ;
+				Insert( kmerCode, id, i - kl + 1 + shift, 1 ) ;
 
 				//rcKmerCode.SetCode( kmerCode.GetReverseComplementCode() ) ;
 				//Insert( rcKmerCode, id, len - 1 - i, -1 ) ;
 			}
 		}
+	}
+	
+	// When merging or extending sequences, there kmer position will shift and change id.
+	void UpdateIndex( KmerCode &kmerCode, char *s, int len, int shift, int oldId, int id ) 
+	{
+		int i, j ;
+		int kl = kmerCode.GetKmerLength() ;
+		if ( len < kl )
+			return ;
+		kmerCode.Restart() ;
+
+		for ( i = 0 ; i < kl - 1 ; ++i )
+			kmerCode.Append( s[i] ) ;
+		for ( ; i < len ; ++i )
+		{
+			kmerCode.Append( s[i] ) ;
+			if ( kmerCode.IsValid() )
+			{
+				SimpleVector<struct _indexInfo> &list = *Search( kmerCode ) ;	
+				int size = list.Size() ;
+
+				for ( j = 0 ; j < size ; ++j )
+				{
+					if ( list[j].idx == oldId && list[j].offset == i - kl + 1 )
+					{
+						list[j].idx = id ;
+						list[j].offset += shift ;
+						break ;
+					}
+				}
+			}
+		}
+
 	}
 } ;
 

@@ -4,6 +4,16 @@
 
 #include "defs.h"
 
+#define EDIT_MATCH 0
+#define EDIT_MISMATCH 1
+#define EDIT_INSERT 2
+#define EDIT_DELETE 3
+
+#define SCORE_MATCH 5
+#define SCORE_MISMATCH (-2)
+#define SCORE_GAPOPEN (-4)
+#define SCORE_GAPEXTEND (-1)
+#define SCORE_INDEL (-4)
 
 class AlignAlgo
 {
