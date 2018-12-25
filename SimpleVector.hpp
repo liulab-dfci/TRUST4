@@ -80,6 +80,13 @@ public:
 		if ( s != NULL )
 			free( s ) ;
 	}
+	
+	void Release()
+	{
+		if ( s != NULL )
+			free( s ) ;
+		s = NULL ;
+	}
 
 	void Reserve( int sz )
 	{
@@ -169,7 +176,7 @@ public:
 
 	T &operator[]( int i )
 	{
-		//assert( i < size ) ;
+		assert( i < size ) ;
 		if ( i >= size )
 		{
 			fprintf( stderr, "%s: Access out of the vector.\n", __func__ ) ;
@@ -278,7 +285,7 @@ public:
 	
 	// Expand the array by given size.
 	// Does not care about the value in the new allocated space.
-	int Expand( int expandSize )
+	int ExpandBy( int expandSize )
 	{
 		int newSize = size + expandSize ;
 		if ( newSize <= capacity )
@@ -306,9 +313,14 @@ public:
 		return size ;
 	}
 
+	int ExpandTo( int newSize )
+	{
+		return ExpandBy( newSize - size ) ;
+	}
+
 	void ShiftRight( int shift )
 	{
-		size = Expand( shift ) ;
+		size = ExpandBy( shift ) ;
 		int i ;
 
 		for ( i = size - 1 ; i >= shift ; --i )

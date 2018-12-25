@@ -570,6 +570,8 @@ public:
 		}
 
 		rcRead = new char[len + 1] ;
+		ReverseComplement( rcRead, read, len ) ;		
+		
 		// Compute wehterh the extension matched right.
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
@@ -795,23 +797,160 @@ public:
 				if ( j < k || seq.isRef )
 					continue ;
 
-				
+				// Only extend the novel seqs.
 				if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 					++k ;
 			}	
 
 			if ( k > 1 )
 			{
+				int eOverlapCnt = k ;
 				addNew = false ;		
 				// Merge sequences.
 				// Reorder the overlaps to the order on the read coordinate.
 				std::sort( extendedOverlaps, extendedOverlaps + ( k - 1 ), CompSortOverlapsOnReadCoord ) ;
+				
+				// Compute the new consensus.
+				int sum = 0 ;
+				for ( i = 0 ; i < eOverlapCnt ; ++i )
+					sum += seqs[ extendedOverlaps[i].seqIdx ].consensusLen ;
+				char *newConsensus = new char[ sum + len + 1 ] ;
+				
+				// Compute the location of the seqs in the new merged seq
+				int *seqOffset = new int[ eOverlapCnt ] ; 
+				int base = 0 ;
+				
+				if ( extendedOverlaps[0].readStart > 0 )
+				{
+					for ( i = 0 ; i < eOverlapCnt ; ++i )
+						seqOffset[i] = extendedOverlaps[i].readStart ;
+				}
+				else
+				{
+					seqOffset[0] = 0 ;
+					
+					for ( i = 1 ; i < eOverlapCnt ; ++i )
+					{
+						seqOffset[i] = seqOffset[i - 1] + seqs[ extendedOverlaps[i].seqIdx ].consensusLen - 1  
+							+ ( extendedOverlaps[i].readStart - extendedOverlaps[i - 1].readEnd ) ;	
+					}
+				}
+				
+				// Copy the original consensus in.
+				for ( i = 0 ; i < eOverlapCnt ; ++i )
+				{
+					memcpy( newConsensus + seqOffset[i], seqs[ extendedOverlaps[i].seqIdx ].consensus,
+						seqs[ extendedOverlaps[i].seqIdx ].consensusLen ) ;	
+				}
 
-				// Since the read length should be shorter than the sequence length, there should be not extension.
-				// Might not be true in future, but for simplicity, let's just assume this read is only for merging.
-						
+				// Fill in the gaps
+				if ( extendedOverlaps[0].readStart > 0 )
+					memcpy( newConsensus, r, extendedOverlaps[0].readStart ) ;		
+				
+				for ( i = 1 ; i < eOverlapCnt ; ++i )
+				{
+					if ( extendedOverlaps[i].readStart > extendedOverlaps[i - 1].readEnd + 1 )
+						memcpy( newConsensus + seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen,
+							r + extendedOverlaps[i - 1].readEnd + 1, 
+							extendedOverlaps[i].readStart - extendedOverlaps[i - 1].readEnd - 1 ) ;
+				}
+				
+
+				int newConsensusLen = 0 ;
+				if ( extendedOverlaps[i - 1].readEnd < len )
+				{
+					memcpy( newConsensus + seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen,
+							r + extendedOverlaps[i - 1].readEnd + 1,
+							len - extendedOverlaps[i - 1].readEnd -1 ) ;
+					newConsensusLen = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen 
+					                     + ( len - extendedOverlaps[i - 1].readEnd - 1 ) ;
+					newConsensus[ newConsensusLen ] = '\0' ;
+				}
+				else
+				{
+					newConsensusLen = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen ;
+					newConsensus[ newConsensusLen ] = '\0' ;
+				}
 
 				// Rearrange the memory structure for posWeight.	
+				SimpleVector<struct _posWeight> newPosWeights ;
+				newPosWeights.ExpandTo( newConsensusLen ) ;
+				newPosWeights.SetZero( 0, newConsensusLen ) ;
+				
+				for ( i = 0 ; i < eOverlapCnt ; ++i )
+				{
+					// Though not the most efficient implementation, it seems very straightforward.
+					int seqIdx = extendedOverlaps[i].seqIdx ;
+					for ( j = 0 ; j < seqs[ seqIdx ].consensusLen ; ++j )
+					{
+						int l ;
+						for ( l = 0 ; l < 4 ; ++l )
+							newPosWeights[ seqOffset[i] + j ].count[l] += seqs[ seqIdx ].posWeight[j].count[l] ;
+					}
+				}
+
+				// Update the index.
+				int newSeqIdx = extendedOverlaps[0].seqIdx ;
+				KmerCode kmerCode( kmerLength ) ;
+				if ( seqOffset[0] != 0 )
+				{
+					seqIndex.UpdateIndex( kmerCode, seqs[ extendedOverlaps[0].seqIdx ].consensus, 
+							seqs[ extendedOverlaps[0].seqIdx].consensusLen, seqOffset[0], 
+							extendedOverlaps[0].seqIdx, newSeqIdx ) ; 
+				}
+				for ( i = 1 ; i < eOverlapCnt ; ++i )
+				{
+					seqIndex.UpdateIndex( kmerCode, seqs[ extendedOverlaps[i].seqIdx ].consensus, 
+							seqs[ extendedOverlaps[i].seqIdx].consensusLen, seqOffset[i], 
+							extendedOverlaps[i].seqIdx, newSeqIdx ) ;
+				}
+				
+				// Update the index for the gap.
+				if ( extendedOverlaps[0].readStart > 0 )
+				{
+					seqIndex.BuildIndexFromRead( kmerCode, r, extendedOverlaps[0].readStart + kmerLength - 1, newSeqIdx ) ;
+				}
+				for ( i = 1 ; i < eOverlapCnt ; ++i )
+				{
+					if ( extendedOverlaps[i].readStart > extendedOverlaps[i - 1].readEnd + 1 )
+					{
+						int start = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen 
+									- kmerLength + 1 ;
+						int end = seqOffset[i] + kmerLength - 2 ;
+						int rstart = extendedOverlaps[i - 1].readEnd - kmerLength + 2 ;
+						seqIndex.BuildIndexFromRead( kmerCode, r + rstart, end - start + 1, newSeqIdx, start ) ;
+					}
+				}
+				if ( extendedOverlaps[i - 1].readEnd < len - 1 )
+				{
+					int start = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen 
+						- kmerLength + 1 ;
+					int rstart = extendedOverlaps[i - 1].readEnd - kmerLength + 2 ;
+					seqIndex.BuildIndexFromRead( kmerCode, r + rstart, len - rstart, newSeqIdx, start ) ;
+				}
+
+				// Relase the memory for merged seqs.
+				for ( i = 1 ; i < eOverlapCnt ; ++i )
+				{
+					int seqIdx = extendedOverlaps[i].seqIdx ;
+					free( seqs[ seqIdx ].name ) ;
+					free( seqs[ seqIdx ].consensus ) ;
+					seqs[ seqIdx ].name = NULL ;
+					seqs[ seqIdx ].consensus = NULL ;
+					seqs[ seqIdx ].posWeight.Release() ;
+				}
+					
+				// Put the new allocated stuff in.
+				free( seqs[ newSeqIdx ].consensus ) ;
+				seqs[ newSeqIdx ].consensus = newConsensus ;
+				seqs[ newSeqIdx ].consensusLen = newConsensusLen ;
+					
+				// either one of the ends of read or seq should be 0.
+				readInConsensusOffset = 0 ;
+				if ( extendedOverlaps[0].seqStart > 0 )
+					readInConsensusOffset = extendedOverlaps[0].seqStart ;
+
+				delete[] seqOffset ;
 			}
 			else if ( k == 1 )
 			{
@@ -824,15 +963,17 @@ public:
 				// Compute the new consensus.
 				if ( extendedOverlaps[0].readStart > 0 || extendedOverlaps[0].readEnd < len - 1 )
 				{
-					char *newConsensus = (char *)malloc( sizeof( char ) * ( len + seq.consensusLen + 1 ) ) ;
+					char *newConsensus = (char *)malloc( sizeof( char ) * ( 
+						( extendedOverlaps[0].readStart + len - 1 -extendedOverlaps[0].readEnd ) + seq.consensusLen + 1 ) ) ;
 
 					if ( extendedOverlaps[0].readStart > 0 )
 					{
 						// add read[0...readStart-1] to the consensus.
-						for ( i = 0 ; i < extendedOverlaps[0].readStart ; ++i )
-							newConsensus[i] = r[i] ;
+						//for ( i = 0 ; i < extendedOverlaps[0].readStart ; ++i )
+						//	newConsensus[i] = r[i] ;
+						memcpy( newConsensus, r, extendedOverlaps[0].readStart ) ;
 					}
-					memcpy( newConsensus + i, seq.consensus, seq.consensusLen ) ;
+					memcpy( newConsensus + extendedOverlaps[0].readStart, seq.consensus, seq.consensusLen ) ;
 					j = extendedOverlaps[0].readStart + seq.consensusLen ;	
 
 					if ( extendedOverlaps[0].readEnd < len - 1 )
@@ -841,6 +982,7 @@ public:
 							newConsensus[j] = r[i] ;
 					}
 					newConsensus[j] = '\0' ;
+					//printf( "new consensus %s %d. %s %d\n", seq.consensus, seq.consensusLen, newConsensus, j ) ;
 					
 					// Update index 
 					int shift = extendedOverlaps[0].readStart ;
@@ -852,18 +994,18 @@ public:
 					}
 					if ( extendedOverlaps[0].readEnd < len - 1 )
 					{
-						int start = extendedOverlaps[0].readEnd - kmerLength + 2 ;
-						seqIndex.BuildIndexFromRead( kmerCode, r + start , 
-							( len - start ), seqIdx, 
+						int rstart = extendedOverlaps[0].readEnd - kmerLength + 2 ;
+						seqIndex.BuildIndexFromRead( kmerCode, r + rstart , 
+							( len - rstart ), seqIdx, 
 							extendedOverlaps[0].readStart + seq.consensusLen ) ;
 					}
 					
 					// Rearrange the memory structure for posWeight.
 					int expandSize = extendedOverlaps[0].readStart + ( len - 1 - extendedOverlaps[0].readEnd ) ;
-					seq.posWeight.Expand( expandSize ) ;
+					seq.posWeight.ExpandBy( expandSize ) ;
 					if ( shift > 0 )
 					{
-						for ( i = seq.consensusLen - 1 ; i >= 0 ; ++i )
+						for ( i = seq.consensusLen - 1 ; i >= 0 ; --i )
 							seq.posWeight[i + shift] = seq.posWeight[i] ;
 						
 						seq.posWeight.SetZero( 0, shift ) ;
@@ -881,8 +1023,11 @@ public:
 
 					free( seq.consensus ) ;
 					seq.consensus = newConsensus ;
-					seq.consensusLen = strlen( newConsensus ) ;		
-				}	
+					seq.consensusLen = strlen( newConsensus ) ;	
+					//printf( "new consensus len %d\n", seq.consensusLen ) ;
+				}
+				else
+					readInConsensusOffset = extendedOverlaps[0].seqStart ;
 			}
 
 			// Update the posweight, assume we already compute the new readStart and shift existing posWeight.
@@ -893,7 +1038,7 @@ public:
 					++seq.posWeight[i + readInConsensusOffset].count[ nucToNum[ r[i] - 'A' ] ] ;
 			}
 			
-			delete[] rcRead ;
+			free( rcRead ) ;
 			delete[] align ;
 		}
 
@@ -910,12 +1055,14 @@ public:
 					;
 				}
 			}
-			
+
+			// TODO: If overlaps on C-gene, it should not be truncated.  
+
 			// Add the sequence to SeqSet
 			int idx = seqs.size() ;
 			struct _seqWrapper ns ;
 
-			ns.name = NULL ;
+			ns.name = strdup( seqs[ overlaps[0].seqIdx ].name ) ;
 			ns.consensus = strdup( read ) ;
 			ns.consensusLen = strlen( read ) ;
 			if ( overlaps[0].strand == -1 )
@@ -923,6 +1070,7 @@ public:
 			ns.isRef = false ;
 			
 			ns.posWeight.Reserve( len ) ;
+			ns.posWeight.ExpandTo( len ) ;
 			ns.posWeight.SetZero( 0, len ) ;
 			for ( i = 0 ; i < len ; ++i )
 			{
@@ -941,6 +1089,19 @@ public:
 		delete[] extendedOverlaps ;
 
 		return ret ;
+	}
+
+	void Output()
+	{
+		int i ;
+		int size = seqs.size() ;
+		for ( i = 0 ; i < size ; ++i )
+		{
+			if ( seqs[i].isRef )
+				continue ;
+
+			printf( ">%s\n%s\n", seqs[i].name, seqs[i].consensus ) ;
+		}
 	}
 } ;
 

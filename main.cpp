@@ -86,5 +86,7 @@ int main( int argc, char *argv[] )
 		seqSet.AddRead( reads.seq ) ;
 		printf( "done\n" ) ;
 	}
+
+	seqSet.Output() ;
 	return 0 ;
 }
