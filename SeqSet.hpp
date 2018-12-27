@@ -406,7 +406,7 @@ public:
 					struct _hit nh = hits[i];
 					nh.readOffset = hitCoordLIS[k].a ;
 					nh.indexHit.offset = hitCoordLIS[k].b ;
-					//printf( "%d: %d %d %d %d\n", i, nh.readOffset, nh.indexHit.idx, nh.indexHit.offset, nh.indexHit.strand ) ;
+					//printf( "%d: %d %d %d %d\n", i, nh.readOffset, nh.indexHit.idx, nh.indexHit.offset, nh.strand ) ;
 					finalHits.PushBack( nh ) ;
 				}
 
@@ -429,6 +429,7 @@ public:
 				no.strand = finalHits[0].strand ;
 				no.seqStart = finalHits[0].indexHit.offset ;
 				no.seqEnd = finalHits[ lisSize - 1 ].indexHit.offset + kmerLength - 1 ;
+
 
 				if ( hitLen * 2 < no.seqEnd - no.seqStart + 1 )
 				{
@@ -743,10 +744,10 @@ public:
 		if ( overlapCnt == 0 )
 			return -1 ;
 
-		/*for ( i = 0 ; i < overlapCnt ; ++i )
+		for ( i = 0 ; i < overlapCnt ; ++i )
 			printf( "%d: %d %s. %d. %d %d %d %d\n", i, overlaps[i].seqIdx, seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
-					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; */
-		
+					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
+		fflush( stdout ) ;	
 		std::sort( overlaps.begin(), overlaps.end() ) ;
 		
 		// If the read only overlaps with the reference, we will add that to the seq.
@@ -1018,7 +1019,7 @@ public:
 						int rstart = extendedOverlaps[0].readEnd - kmerLength + 2 ;
 						seqIndex.BuildIndexFromRead( kmerCode, r + rstart , 
 							( len - rstart ), seqIdx, 
-							extendedOverlaps[0].readStart + seq.consensusLen ) ;
+							extendedOverlaps[0].readStart + seq.consensusLen - kmerLength + 1 ) ;
 					}
 					
 					// Rearrange the memory structure for posWeight.
@@ -1052,6 +1053,7 @@ public:
 			}
 
 			// Update the posweight, assume we already compute the new readStart and shift existing posWeight.
+			// seqIdx holds the index that we need to update.
 			if ( !addNew )
 			{
 				struct _seqWrapper &seq = seqs[seqIdx] ;
@@ -1096,7 +1098,7 @@ public:
 			for ( i = 0 ; i < len ; ++i )
 			{
 				//memset( ns.posWeight[i].count, 0, sizeof( ns.posWeight[i].count ) ) ;
-				++ns.posWeight[i].count[ nucToNum[ read[i] - 'A' ] ] ;
+				++ns.posWeight[i].count[ nucToNum[ ns.consensus[i] - 'A' ] ] ;
 			}
 			seqs.push_back( ns ) ;
 

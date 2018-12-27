@@ -67,19 +67,20 @@ public:
 			return ;
 		kmerCode.Restart() ;
 		//KmerCode rcKmerCode( kl ) ;
-
+		KmerCode prevKmerCode ;
 		for ( i = 0 ; i < kl - 1 ; ++i )
 			kmerCode.Append( s[i] ) ;
 		for ( ; i < len ; ++i )
 		{
 			kmerCode.Append( s[i] ) ;
-			if ( kmerCode.IsValid() )
+			if ( kmerCode.IsValid() && !kmerCode.IsEqual( prevKmerCode ) )
 			{
 				Insert( kmerCode, id, i - kl + 1 + shift, 1 ) ;
 
 				//rcKmerCode.SetCode( kmerCode.GetReverseComplementCode() ) ;
 				//Insert( rcKmerCode, id, len - 1 - i, -1 ) ;
 			}
+			prevKmerCode = kmerCode ;
 		}
 	}
 	

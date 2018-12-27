@@ -127,6 +127,14 @@ class KmerCode
 				invalidPos = -1 ;
 		}
 
+		bool IsEqual( const KmerCode &in )
+		{
+			if ( code == in.code )
+				return true ;
+			else
+				return false ;
+		}
+
 		KmerCode& operator=( const KmerCode& in ) 
 		{
 			kmerLength = in.kmerLength ;

@@ -83,6 +83,7 @@ int main( int argc, char *argv[] )
 	while ( reads.Next() )
 	{
 		printf( "%s %s\n", reads.id, reads.seq ) ;
+		fflush( stdout ) ;
 		seqSet.AddRead( reads.seq ) ;
 		printf( "done\n" ) ;
 	}
