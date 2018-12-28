@@ -61,6 +61,8 @@ struct _overlap
 	{
 		if ( similarity != b.similarity )
 			return similarity > b.similarity ; // The overlap with higher similarity should come first.
+		else if ( readEnd - readStart != b.readEnd - b.readStart )
+			return readEnd - readStart > b.readEnd - b.readStart ;
 		else if ( seqIdx != b.seqIdx )
 			return seqIdx < b.seqIdx ;
 		else if ( strand !=  b.strand )
@@ -163,8 +165,8 @@ private:
 			int tag = BinarySearch_LIS( top, ret, hits[ record[i] ].a, hits ) ;				
 			if ( tag == -1 )
 			{
-				top[0] = i ;
-				link[i] = -1 ;
+				top[0] = record[i] ;
+				link[ record[i] ] = -1 ;
 			}
 			else if ( hits[ record[i] ].a > hits[ top[tag] ].a )
 			{
@@ -387,7 +389,7 @@ public:
 
 				std::sort( concordantHitCoord.BeginAddress(), concordantHitCoord.EndAddress(), CompSortPairBInc ) ;
 				//for ( k = 0 ; k < e - s ; ++k )	
-				//	printf( "%d: %d %d %d\n", i, hits[i].indexHit.idx, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
+				//	printf( "%d (%d-%d): %d %d %d\n", i, s, e, hits[i].indexHit.idx, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
 
 
 				// Compute the longest increasing subsequence.
@@ -465,29 +467,35 @@ public:
 		SimpleVector<struct _hit> hits ;		    	
 
 		KmerCode kmerCode( kmerLength ) ;
+		KmerCode prevKmerCode( kmerLength ) ;
 
 		// Locate the hits from the same-strand case.
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( read[i] ) ;
-
+		
 		for ( ; i < len ; ++i )
 		{
 			kmerCode.Append( read[i] ) ;
-			SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
-
-			int size = indexHit.Size() ;
-
-			//if ( size >= 40 )
-			//	continue ;
-
-			for ( j = 0 ; j < size ; ++j )
+			if ( i == kmerLength || !prevKmerCode.IsEqual( kmerCode ) )
 			{
-				struct _hit nh ;
-				nh.indexHit = indexHit[j] ;
-				nh.readOffset = i - kmerLength + 1 ;
-				nh.strand = 1 ;
-				hits.PushBack( nh ) ;
+				SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+
+				int size = indexHit.Size() ;
+
+				//if ( size >= 40 )
+				//	continue ;
+
+				for ( j = 0 ; j < size ; ++j )
+				{
+					struct _hit nh ;
+					nh.indexHit = indexHit[j] ;
+					nh.readOffset = i - kmerLength + 1 ;
+					nh.strand = 1 ;
+					hits.PushBack( nh ) ;
+				}
 			}
+
+			prevKmerCode = kmerCode ;
 		}
 		// Locate the hits from the opposite-strand case.
 		char *rcRead =  new char[len + 1] ;
@@ -499,21 +507,31 @@ public:
 		for ( ; i < len ; ++i )
 		{
 			kmerCode.Append( rcRead[i] ) ;
-			SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
-
-			int size = indexHit.Size() ;
-
-			//if ( size >= 40 )
-			//	continue ;
-
-			for ( j = 0 ; j < size ; ++j )
+			if ( i == kmerLength || !prevKmerCode.IsEqual( kmerCode ) )
 			{
-				struct _hit nh ;
-				nh.indexHit = indexHit[j] ;
-				nh.readOffset = i - kmerLength + 1 ;
-				nh.strand = -1 ;
-				hits.PushBack( nh ) ;
+				SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+
+				int size = indexHit.Size() ;
+
+				//if ( size >= 40 )
+				//	continue ;
+
+				for ( j = 0 ; j < size ; ++j )
+				{
+					struct _hit nh ;
+					nh.indexHit = indexHit[j] ;
+					nh.readOffset = i - kmerLength + 1 ;
+					nh.strand = -1 ;
+					hits.PushBack( nh ) ;
+					if ( seqs[indexHit[j].idx].name == NULL)
+					{
+						printf( "%d %d\n", indexHit[j].idx, indexHit[j].offset ) ;
+					}
+					assert( seqs[indexHit[j].idx].name != NULL ) ;
+				}
 			}
+
+			prevKmerCode = kmerCode ;
 		}
 		delete[] rcRead ;
 
@@ -583,7 +601,7 @@ public:
 			
 			int hitCnt = hitCoords.Size() ;
 			int matchCnt = 0, mismatchCnt = 0, indelCnt = 0  ;
-			double similarity = 0 ;
+			double similarity = 1 ;
 			
 			matchCnt += 2 * kmerLength ;
 			char *align = new char[ overlaps[i].readEnd - overlaps[i].readStart + 1 + 
@@ -601,8 +619,9 @@ public:
 						matchCnt += 2 * kmerLength ; 
 								
 						AlignAlgo::GlobalAlignment( seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
-								hitCoords[j].b - hitCoords[j - 1].b - 1,
-								r + hitCoords[j - 1].a + kmerLength, hitCoords[j].a - hitCoords[j - 1].a - 1, 
+								hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ) ,
+								r + hitCoords[j - 1].a + kmerLength, 
+								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
 								align ) ;
 
 						GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;		
@@ -649,8 +668,9 @@ public:
 						matchCnt += 2 * kmerLength ;
 						
 						AlignAlgo::GlobalAlignment( seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
-								hitCoords[j].b - hitCoords[j - 1].b - 1,
-								r + hitCoords[j - 1].a + kmerLength, hitCoords[j].a - hitCoords[j - 1].a - 1, 
+								hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ),
+								r + hitCoords[j - 1].a + kmerLength, 
+								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength ) , 
 								align ) ;	
 						
 						GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;
@@ -665,9 +685,13 @@ public:
 				}
 			} // for j
 			delete[] align ;
-
-			overlaps[i].similarity = (double)matchCnt / ( overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 
+			
+			//printf( "%d %d %d\n", matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1 ) ;
+			if ( similarity == 1 )
+				overlaps[i].similarity = (double)matchCnt / ( overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 
 								overlaps[i].readEnd - overlaps[i].readStart + 1 ) ;
+			else
+				overlaps[i].similarity = 0 ;
 		} // for i
 		delete[] rcRead ;
 
@@ -723,7 +747,7 @@ public:
 		extendedOverlap.readEnd = overlap.readEnd + rightOverhangSize ;
 		extendedOverlap.seqStart = overlap.seqStart - leftOverhangSize ;
 		extendedOverlap.seqEnd = overlap.seqEnd + rightOverhangSize ;
-		
+		extendedOverlap.strand = overlap.strand ;	
 		return 1 ;
 	}
 
@@ -744,11 +768,12 @@ public:
 		if ( overlapCnt == 0 )
 			return -1 ;
 
-		for ( i = 0 ; i < overlapCnt ; ++i )
-			printf( "%d: %d %s. %d. %d %d %d %d\n", i, overlaps[i].seqIdx, seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
-					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
-		fflush( stdout ) ;	
 		std::sort( overlaps.begin(), overlaps.end() ) ;
+		
+		for ( i = 0 ; i < overlapCnt ; ++i )
+			printf( "%d: %d %s. %d. %d %d %d %d. %lf\n", i, overlaps[i].seqIdx, seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
+					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd, overlaps[i].similarity ) ; 
+		fflush( stdout ) ;	
 		
 		// If the read only overlaps with the reference, we will add that to the seq.
 		for ( i = 0 ; i < overlapCnt ; ++i )
@@ -781,8 +806,13 @@ public:
 			{
 				for ( j = 0 ; j < k ; ++j )
 				{
+					// If is contained in extended sequence.
 					if ( overlaps[i].readStart >= extendedOverlaps[j].readStart - radius  
 						&& overlaps[i].readEnd <= extendedOverlaps[j].readEnd + radius )
+						break ;
+					// Some extended is a subset of this one.
+					if ( extendedOverlaps[j].readStart >= overlaps[i].readStart - radius 
+						&& extendedOverlaps[j].readEnd <= overlaps[i].readEnd + radius )
 						break ;
 				}
 				
@@ -794,6 +824,11 @@ public:
 				if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 					++k ;
 			}	
+			for ( i = 0 ; i < k ; ++i )
+				printf( "extended %d: %d %s. %d. %d %d %d %d\n", i, extendedOverlaps[i].seqIdx, 
+						seqs[ extendedOverlaps[i].seqIdx ].name, extendedOverlaps[i].strand, 
+						extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, extendedOverlaps[i].seqStart, 
+						extendedOverlaps[i].seqEnd ) ; 
 
 			if ( k > 1 )
 			{
@@ -801,7 +836,13 @@ public:
 				addNew = false ;		
 				// Merge sequences.
 				// Reorder the overlaps to the order on the read coordinate.
-				std::sort( extendedOverlaps, extendedOverlaps + ( k - 1 ), CompSortOverlapsOnReadCoord ) ;
+				std::sort( extendedOverlaps, extendedOverlaps + eOverlapCnt, CompSortOverlapsOnReadCoord ) ;
+				
+				for ( i = 0 ; i < k ; ++i )
+					printf( "sort extended %d: %d %s. %d. %d %d %d %d\n", i, extendedOverlaps[i].seqIdx, 
+							seqs[ extendedOverlaps[i].seqIdx ].name, extendedOverlaps[i].strand, 
+							extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, extendedOverlaps[i].seqStart, 
+							extendedOverlaps[i].seqEnd ) ; 
 				
 				// Compute the new consensus.
 				int sum = 0 ;
@@ -828,14 +869,15 @@ public:
 							+ ( extendedOverlaps[i].readStart - extendedOverlaps[i - 1].readEnd ) ;	
 					}
 				}
-				/*for ( i = 0 ; i < eOverlapCnt ; ++i )
-				{
-					printf( "%d: %d %d %d %d. %d\n", i, extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, 
-						extendedOverlaps[i].seqStart, extendedOverlaps[i].seqEnd,
-						seqOffset[i] ) ;
-				}*/
-				// Copy the original consensus in.
 				for ( i = 0 ; i < eOverlapCnt ; ++i )
+				{
+					printf( "merge %d: %d %d %d %d %d. %d\n", i, extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, 
+						extendedOverlaps[i].seqStart, extendedOverlaps[i].seqEnd, seqs[ extendedOverlaps[i].seqIdx ].consensusLen, 
+						seqOffset[i] ) ;
+				}
+				// Copy the original consensus in.
+				// The earlier seq has higher weight.
+				for ( i = eOverlapCnt - 1 ; i >= 0 ; --i )
 				{
 					memcpy( newConsensus + seqOffset[i], seqs[ extendedOverlaps[i].seqIdx ].consensus,
 						seqs[ extendedOverlaps[i].seqIdx ].consensusLen ) ;	
@@ -892,27 +934,43 @@ public:
 
 				// Update the index.
 				KmerCode kmerCode( kmerLength ) ;
-				if ( seqOffset[0] != 0 )
+				for ( i = 0 ; i < eOverlapCnt ; ++i )
+					seqIndex.RemoveIndexFromRead( kmerCode, seqs[ extendedOverlaps[i].seqIdx ].consensus,
+						seqs[ extendedOverlaps[i].seqIdx ].consensusLen, extendedOverlaps[i].seqIdx, 0 ) ;
+				seqIndex.BuildIndexFromRead( kmerCode, newConsensus, newConsensusLen, newSeqIdx ) ;
+				
+				/*if ( seqOffset[0] != 0 )
 				{
-					seqIndex.UpdateIndex( kmerCode, seqs[ extendedOverlaps[0].seqIdx ].consensus, 
+					seqIndex.UpdateIndexFromRead( kmerCode, seqs[ extendedOverlaps[0].seqIdx ].consensus, 
 							seqs[ extendedOverlaps[0].seqIdx].consensusLen, seqOffset[0], 
 							extendedOverlaps[0].seqIdx, newSeqIdx ) ; 
 				}
 				for ( i = 1 ; i < eOverlapCnt ; ++i )
 				{
-					seqIndex.UpdateIndex( kmerCode, seqs[ extendedOverlaps[i].seqIdx ].consensus, 
+					//printf( "%d->%d.\n", extendedOverlaps[i].seqIdx, newSeqIdx ) ;
+					// Don't use the overlapped portion, which will create duplicated entries in the index.
+					int start = 0 ;
+					if ( seqOffset[i] < seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen - kmerLength + 1 )
+					{
+						start = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen - kmerLength + 1 -
+								seqOffset[i] ;
+						printf( "start=%d\n", start ) ;
+						seqIndex.RemoveIndexFromRead( kmerCode, seqs[ extendedOverlaps[i].seqIdx ].consensus, 
+								start + kmerLength - 1, extendedOverlaps[i].seqIdx, 0 ) ;
+					}
+					seqIndex.UpdateIndexFromRead( kmerCode, seqs[ extendedOverlaps[i].seqIdx ].consensus, 
 							seqs[ extendedOverlaps[i].seqIdx].consensusLen, seqOffset[i], 
 							extendedOverlaps[i].seqIdx, newSeqIdx ) ;
 				}
 				
-				// Update the index for the gap.
+				// Update the index for the gaps.
 				if ( extendedOverlaps[0].readStart > 0 )
 				{
 					seqIndex.BuildIndexFromRead( kmerCode, r, extendedOverlaps[0].readStart + kmerLength - 1, newSeqIdx ) ;
 				}
 				for ( i = 1 ; i < eOverlapCnt ; ++i )
 				{
-					if ( extendedOverlaps[i].readStart > extendedOverlaps[i - 1].readEnd + 1 )
+					if ( extendedOverlaps[i].readStart > extendedOverlaps[i - 1].readEnd - kmerLength + 1 )
 					{
 						int start = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen 
 									- kmerLength + 1 ;
@@ -928,11 +986,13 @@ public:
 					int rstart = extendedOverlaps[i - 1].readEnd - kmerLength + 2 ;
 					seqIndex.BuildIndexFromRead( kmerCode, r + rstart, len - rstart, newSeqIdx, start ) ;
 				}
+				*/
+
 				// Update the name.
 				sum = 0 ;
 				for ( i = 0 ; i < eOverlapCnt ; ++i )
 					sum += strlen( seqs[ extendedOverlaps[i].seqIdx ].name ) ;
-				char* nameBuffer = new char[sum] ;
+				char* nameBuffer = new char[sum + eOverlapCnt + 1 ] ;
 				
 				strcpy( nameBuffer, seqs[ newSeqIdx ].name ) ;
 				sum = strlen( nameBuffer ) ;
@@ -1004,6 +1064,7 @@ public:
 							newConsensus[j] = r[i] ;
 					}
 					newConsensus[j] = '\0' ;
+					int newConsensusLen = strlen( newConsensus ) ;	
 					//printf( "new consensus %s %d. %s %d\n", seq.consensus, seq.consensusLen, newConsensus, j ) ;
 					
 					// Update index 
@@ -1011,15 +1072,15 @@ public:
 					KmerCode kmerCode( kmerLength ) ;
 					if ( shift > 0 )
 					{
-						seqIndex.BuildIndexFromRead( kmerCode, r, extendedOverlaps[0].readStart + kmerLength - 1, seqIdx ) ;
-						seqIndex.UpdateIndex( kmerCode, seq.consensus, seq.consensusLen, shift, seqIdx, seqIdx ) ; 
+						seqIndex.BuildIndexFromRead( kmerCode, newConsensus, extendedOverlaps[0].readStart + kmerLength - 1, seqIdx ) ;
+						seqIndex.UpdateIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, shift, seqIdx, seqIdx ) ; 
 					}
 					if ( extendedOverlaps[0].readEnd < len - 1 )
 					{
-						int rstart = extendedOverlaps[0].readEnd - kmerLength + 2 ;
-						seqIndex.BuildIndexFromRead( kmerCode, r + rstart , 
-							( len - rstart ), seqIdx, 
-							extendedOverlaps[0].readStart + seq.consensusLen - kmerLength + 1 ) ;
+						int start = extendedOverlaps[0].readStart + extendedOverlaps[0].seqEnd - kmerLength + 2 ;
+						seqIndex.BuildIndexFromRead( kmerCode, newConsensus + start , 
+							( newConsensusLen - start ), seqIdx, 
+							start ) ;
 					}
 					
 					// Rearrange the memory structure for posWeight.
@@ -1045,10 +1106,10 @@ public:
 
 					free( seq.consensus ) ;
 					seq.consensus = newConsensus ;
-					seq.consensusLen = strlen( newConsensus ) ;	
+					seq.consensusLen = newConsensusLen ;	
 					//printf( "new consensus len %d\n", seq.consensusLen ) ;
 				}
-				else
+				else // the read is inside of the seq.
 					readInConsensusOffset = extendedOverlaps[0].seqStart ;
 			}
 
@@ -1057,6 +1118,7 @@ public:
 			if ( !addNew )
 			{
 				struct _seqWrapper &seq = seqs[seqIdx] ;
+				//printf( "%d %d. %d %d\n%s\n%s\n", seqIdx, seq.posWeight.Size(), readInConsensusOffset, len, seq.consensus, r) ;
 				for ( i = 0 ; i < len ; ++i )
 					++seq.posWeight[i + readInConsensusOffset].count[ nucToNum[ r[i] - 'A' ] ] ;
 			}
@@ -1066,6 +1128,22 @@ public:
 		}
 
 		k = 0 ;
+		// See whether there is a reference seq match is sequence if it does not match any novel seq.
+		int refSeqIdx = 0 ;
+		if ( addNew )
+		{
+			for ( i = 0 ; i < overlapCnt ; ++i )
+			{
+				if ( seqs[ overlaps[i].seqIdx ].isRef )
+				{
+					refSeqIdx = overlaps[i].seqIdx ;
+					break ;
+				}
+			}
+			if ( i >= overlapCnt )
+				addNew = false ;
+		}
+
 		if ( addNew )
 		{
 			// A novel sequence
@@ -1078,14 +1156,13 @@ public:
 					;
 				}
 			}
-
 			// TODO: If overlaps on C-gene, it should not be truncated.  
-
+			
 			// Add the sequence to SeqSet
 			int idx = seqs.size() ;
 			struct _seqWrapper ns ;
 
-			ns.name = strdup( seqs[ overlaps[0].seqIdx ].name ) ;
+			ns.name = strdup( seqs[ refSeqIdx ].name ) ;
 			ns.consensus = strdup( read ) ;
 			ns.consensusLen = strlen( read ) ;
 			if ( overlaps[0].strand == -1 )
@@ -1100,6 +1177,7 @@ public:
 				//memset( ns.posWeight[i].count, 0, sizeof( ns.posWeight[i].count ) ) ;
 				++ns.posWeight[i].count[ nucToNum[ ns.consensus[i] - 'A' ] ] ;
 			}
+			//printf( "%d %s %lld\n", ns.posWeight.Size(), ns.consensus, ns.posWeight.BeginAddress() ) ;
 			seqs.push_back( ns ) ;
 
 			// Don't forget to update index.

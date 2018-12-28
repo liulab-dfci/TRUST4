@@ -42,6 +42,8 @@ public:
 		if ( capacity > 0 )
 		{
 			//s = in.s ;
+			if ( in.s == NULL )
+				printf( "null s. %d %d\n", in.size, in.capacity ) ;
 			s = (T *)malloc( sizeof( T ) * capacity ) ;
 			memcpy( s, in.s, sizeof( T ) * capacity ) ;
 		}
@@ -79,6 +81,8 @@ public:
 	{
 		if ( s != NULL )
 			free( s ) ;
+		capacity = 0 ;
+		size = 0 ;
 	}
 	
 	void Release()
@@ -86,6 +90,7 @@ public:
 		if ( s != NULL )
 			free( s ) ;
 		s = NULL ;
+		size = capacity = 0 ;
 	}
 
 	void Reserve( int sz )
