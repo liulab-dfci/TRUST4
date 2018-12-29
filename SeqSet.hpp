@@ -739,7 +739,7 @@ public:
 		if ( indelCnt > 0 )
 			return 0 ;
 
-		if ( (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
+		if ( mismatchCnt > 1 && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
 			return 0 ;
 
 		extendedOverlap.seqIdx = overlap.seqIdx ;
@@ -829,6 +829,19 @@ public:
 						seqs[ extendedOverlaps[i].seqIdx ].name, extendedOverlaps[i].strand, 
 						extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, extendedOverlaps[i].seqStart, 
 						extendedOverlaps[i].seqEnd ) ; 
+			if ( k > 1 )
+			{
+				// If we are merging multiple novel seqs, make sure they are different seqs.
+				for ( i = 0 ; i < k - 1 ; ++i )
+					for ( j = i + 1 ; j < k ; ++j )
+					{
+						if ( extendedOverlaps[i].seqIdx == extendedOverlaps[j].seqIdx )
+						{
+							k = 0 ;
+							break ;
+						}
+					}
+			}
 
 			if ( k > 1 )
 			{
@@ -1001,8 +1014,9 @@ public:
 					if ( strcmp( seqs[ extendedOverlaps[i].seqIdx ].name, seqs[ extendedOverlaps[i - 1].seqIdx ].name ) )
 					{
 						nameBuffer[ sum ] = '+' ;
-						strcat( nameBuffer + sum + 1, seqs[ extendedOverlaps[i - 1].seqIdx ].name ) ;
-						sum = sum + 1 + strlen( seqs[ extendedOverlaps[i - 1].seqIdx ].name ) ;
+						nameBuffer[ sum + 1 ] = '\0' ;
+						strcat( nameBuffer + sum + 1, seqs[ extendedOverlaps[i].seqIdx ].name ) ;
+						sum = sum + 1 + strlen( seqs[ extendedOverlaps[i].seqIdx ].name ) ;
 					}
 				}
 				free( seqs[ newSeqIdx ].name ) ;

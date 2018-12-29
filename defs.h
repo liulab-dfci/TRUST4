@@ -12,9 +12,15 @@ extern char numToNuc[26] ;
 
 typedef uint32_t index_t ; 
 
+#define MAX_SEG_COUNT 127
 struct _pair
 {
 	int a, b ;
+} ;
+
+struct _pair64
+{
+	int64_t a, b ;
 } ;
 
 /*struct _pair_b64

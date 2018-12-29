@@ -17,7 +17,7 @@ char usage[] = "./bcr [OPTIONS]:\n"
 		"\t-b STRING: path to BAM alignment file\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
-	-1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
 	-1, -1, -1, -1, -1, -1 } ;
 
