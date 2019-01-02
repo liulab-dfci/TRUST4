@@ -219,6 +219,26 @@ private:
 		}
 	}
 
+
+	bool IsOverlapLowComplex( char *r, struct _overlap &o )
+	{
+		int cnt[4] = {0, 0, 0, 0} ;
+		int i ;
+		for ( i = o.readStart ; i <= o.readEnd ; ++i )
+		{
+			if ( r[i] == 'N' )
+				continue ;
+			++cnt[ nucToNum[ r[i] - 'A' ] ] ;
+		}
+		int len = o.readEnd - o.readStart + 1 ;
+		int lowCnt = 0 ; 
+		for ( i = 0 ; i < 4 ; ++i )
+			if ( cnt[i] <= 2 )
+				++lowCnt ;
+		if ( lowCnt >= 2 )
+			return true ;
+		return false ;
+	}
 public:
 	SeqSet( int kl ) 
 	{
@@ -692,6 +712,9 @@ public:
 								overlaps[i].readEnd - overlaps[i].readStart + 1 ) ;
 			else
 				overlaps[i].similarity = 0 ;
+			
+			if ( IsOverlapLowComplex( r, overlaps[i]) )
+				overlaps[i].similarity = 0 ;
 		} // for i
 		delete[] rcRead ;
 
@@ -930,10 +953,10 @@ public:
 				int newSeqIdx = extendedOverlaps[0].seqIdx ;
 				SimpleVector<struct _posWeight> &posWeight = seqs[newSeqIdx].posWeight ;
 				posWeight.ExpandTo( newConsensusLen ) ;
-				posWeight.SetZero( 0, newConsensusLen ) ;
+				posWeight.SetZero( seqs[newSeqIdx].consensusLen, newConsensusLen - seqs[ newSeqIdx ].consensusLen ) ;
 				
 
-				for ( i = 0 ; i < eOverlapCnt ; ++i )
+				for ( i = 1 ; i < eOverlapCnt ; ++i )
 				{
 					// Though not the most efficient implementation, it seems very straightforward.
 					int seqIdx = extendedOverlaps[i].seqIdx ;
@@ -1002,6 +1025,7 @@ public:
 				*/
 
 				// Update the name.
+				// TODO: use array of names.
 				sum = 0 ;
 				for ( i = 0 ; i < eOverlapCnt ; ++i )
 					sum += strlen( seqs[ extendedOverlaps[i].seqIdx ].name ) ;
@@ -1009,13 +1033,14 @@ public:
 				
 				strcpy( nameBuffer, seqs[ newSeqIdx ].name ) ;
 				sum = strlen( nameBuffer ) ;
+				//printf( "%d\n", seqs.size() ) ;
 				for ( i = 1 ; i < eOverlapCnt ; ++i )
 				{
 					if ( strcmp( seqs[ extendedOverlaps[i].seqIdx ].name, seqs[ extendedOverlaps[i - 1].seqIdx ].name ) )
 					{
 						nameBuffer[ sum ] = '+' ;
 						nameBuffer[ sum + 1 ] = '\0' ;
-						strcat( nameBuffer + sum + 1, seqs[ extendedOverlaps[i].seqIdx ].name ) ;
+						strcpy( nameBuffer + sum + 1, seqs[ extendedOverlaps[i].seqIdx ].name ) ;
 						sum = sum + 1 + strlen( seqs[ extendedOverlaps[i].seqIdx ].name ) ;
 					}
 				}
@@ -1113,6 +1138,41 @@ public:
 						seq.posWeight.SetZero( start, len - extendedOverlaps[0].readEnd - 1 ) ;
 					}
 
+					// Adjust the name.
+					// Find the possible ref seq
+					int refIdx = -1 ;
+					for ( i = 0 ; i < overlapCnt ; ++i )
+					{
+						if ( !seqs[ overlaps[i].seqIdx ].isRef )
+							continue ;
+						// Use refIdx as the idx in the overlaps list.
+						if ( refIdx == -1 || 
+							( overlaps[i].readEnd - overlaps[i].readStart > 
+								overlaps[refIdx].readEnd - overlaps[refIdx].readStart ) )
+						{
+							refIdx = i ;
+						}
+					}
+					if ( refIdx != -1 )
+					{
+						// Use refIdx as the idx in the seqs 
+						refIdx = overlaps[ refIdx ].seqIdx ;
+						if ( strstr( seq.name, seqs[ refIdx ].name ) == NULL )
+						{
+							char *nameBuffer = new char[ strlen( seqs[ refIdx ].name) + strlen( seq.name ) + 2 ] ;
+							if ( extendedOverlaps[0].seqStart < seq.consensusLen / 2 )
+							{
+								sprintf( nameBuffer, "%s+%s", seqs[refIdx].name, seq.name ) ;
+							}
+							else
+							{
+								sprintf( nameBuffer, "%s+%s", seq.name, seqs[refIdx].name ) ;
+							}
+							free( seq.name ) ;
+							seq.name = strdup( nameBuffer ) ;
+							delete[] nameBuffer ;
+						}
+					}
 					// either one of the ends of read or seq should be 0.
 					readInConsensusOffset = 0 ;
 					if ( extendedOverlaps[0].seqStart > 0 )
@@ -1133,8 +1193,42 @@ public:
 			{
 				struct _seqWrapper &seq = seqs[seqIdx] ;
 				//printf( "%d %d. %d %d\n%s\n%s\n", seqIdx, seq.posWeight.Size(), readInConsensusOffset, len, seq.consensus, r) ;
+				SimpleVector<int> nPos ;
 				for ( i = 0 ; i < len ; ++i )
+				{
+					if ( r[i] == 'N' )
+						continue ;
 					++seq.posWeight[i + readInConsensusOffset].count[ nucToNum[ r[i] - 'A' ] ] ;
+			
+					if ( seq.consensus[i + readInConsensusOffset ] == 'N' )
+					{
+						nPos.PushBack( i ) ;
+					}
+				}
+
+				int size = nPos.Size() ;
+				for ( i = 0 ; i < size ;  )
+				{
+					for ( j = i + 1 ; j < size ; ++j )
+						if ( nPos[j] > nPos[j - 1] + kmerLength - 1 )
+							break ;
+
+					// [i,j) holds the N positions that are with kmer-length size.
+					int l ;
+					// Update the consensus
+					for ( l = i ; l < j ; ++l )
+						seq.consensus[ nPos[l] + readInConsensusOffset ] = r[ nPos[l] ] ;
+					// Update the index
+					KmerCode kmerCode( kmerLength ) ;
+					int start = nPos[i] - kmerLength + 1 + readInConsensusOffset ;
+					if ( start < 0 )
+						start = 0 ;
+					int end = nPos[j - 1] + kmerLength - 1 + readInConsensusOffset ;
+					if ( end >= seq.consensusLen )
+						end = seq.consensusLen - 1 ;
+					seqIndex.BuildIndexFromRead( kmerCode, seq.consensus + start, end - start + 1, seqIdx, start  ) ;
+					i = j ;
+				}
 			}
 			
 			free( rcRead ) ;
@@ -1206,9 +1300,20 @@ public:
 		return ret ;
 	}
 
-	void Output()
+	void ResetPosWeight()
 	{
 		int i ;
+		int seqCnt = seqs.size() ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int size = seqs[i].posWeight.Size() ;
+			seqs[i].posWeight.SetZero( 0, size ) ;
+		}
+	}
+
+	void Output()
+	{
+		int i, j, k ;
 		int size = seqs.size() ;
 		for ( i = 0 ; i < size ; ++i )
 		{
@@ -1216,8 +1321,16 @@ public:
 				continue ;
 
 			printf( ">%s\n%s\n", seqs[i].name, seqs[i].consensus ) ;
+			
+			for ( k = 0 ; k < 4 ; ++k )
+			{
+				for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
+					printf( "%d ", seqs[i].posWeight[j].count[k] ) ;
+				printf( "\n" ) ;
+			}
 		}
 	}
+
 } ;
 
 

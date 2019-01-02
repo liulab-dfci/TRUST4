@@ -80,6 +80,18 @@ int main( int argc, char *argv[] )
 		return EXIT_FAILURE ;
 	}
 	
+	/*while ( reads.Next() )
+	{
+		printf( "%s %s\n", reads.id, reads.seq ) ;
+		fflush( stdout ) ;
+		seqSet.AddRead( reads.seq ) ;
+		printf( "done\n" ) ;
+	}*/
+	
+	// Go through the second round.
+	// TODO: user-defined number of rounds.
+	seqSet.ResetPosWeight() ;
+	reads.Rewind() ;
 	while ( reads.Next() )
 	{
 		printf( "%s %s\n", reads.id, reads.seq ) ;
@@ -87,7 +99,6 @@ int main( int argc, char *argv[] )
 		seqSet.AddRead( reads.seq ) ;
 		printf( "done\n" ) ;
 	}
-
 	seqSet.Output() ;
 	return 0 ;
 }

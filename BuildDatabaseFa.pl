@@ -72,7 +72,7 @@ sub OutputGene
 		if ( $strand eq "-" )
 		{
 			$tmp = reverse( $tmp ) ;
-			$tmp =~ tr/ACGT/TCGA/ ;
+			$tmp =~ tr/ACGT/TGCA/ ;
 		}
 		$output .= $tmp ;
 	}

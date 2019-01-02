@@ -98,7 +98,8 @@ class KmerCode
 			code = ( ( code << 2ull ) & mask ) | 
 				( (uint64_t)( nucToNum[ c - 'A' ] & 3 ) ) ;
 
-			if ( nucToNum[c - 'A'] == -1 )
+			//if ( nucToNum[c - 'A'] == -1 )
+			if ( c == 'N' )
 			{
 				invalidPos = 0 ;	
 			}
