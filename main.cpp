@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "KmerCount.hpp"
 #include "SeqSet.hpp"
 #include "AlignAlgo.hpp"
 
@@ -29,8 +30,31 @@ static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
+struct _sortRead
+{
+	char *id ;
+	char *read ;
+	int minCnt ;
+	int medianCnt ;
+	double avgCnt ;
+
+	bool operator<( const struct _sortRead &b )
+	{
+		if ( minCnt != b.minCnt )
+			return minCnt > b.minCnt ;
+		else if ( medianCnt != b.medianCnt )
+			return medianCnt > b.medianCnt ;
+		else if ( avgCnt != b.avgCnt )
+			return avgCnt > b.avgCnt ;
+		else 
+			return strcmp( read, b.read ) < 0 ;
+	}
+} ;
+
 int main( int argc, char *argv[] )
 {
+	int i ;
+
 	if ( argc <= 1 )
 	{
 		fprintf( stderr, "%s", usage ) ;
@@ -40,6 +64,7 @@ int main( int argc, char *argv[] )
 	int c, option_index ;
 	option_index = 0 ;
 	SeqSet seqSet( 9 ) ;
+	KmerCount kmerCount( 21) ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
@@ -80,25 +105,54 @@ int main( int argc, char *argv[] )
 		return EXIT_FAILURE ;
 	}
 	
-	/*while ( reads.Next() )
+	std::vector< struct _sortRead > sortedReads ;
+	while ( reads.Next() )
 	{
-		printf( "%s %s\n", reads.id, reads.seq ) ;
+		struct _sortRead nr ;
+		nr.read = strdup( reads.seq ) ;
+		nr.id = strdup( reads.id ) ;
+
+		sortedReads.push_back( nr ) ;
+		kmerCount.AddCount( reads.seq ) ;
+	}
+	int readCnt = sortedReads.size() ;
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		kmerCount.GetCountStats( sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+	}
+	std::sort( sortedReads.begin(), sortedReads.end() ) ;
+
+	
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+#ifdef DEBUG
+		printf( "%s %s %d %lf\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
 		fflush( stdout ) ;
-		seqSet.AddRead( reads.seq ) ;
+#endif
+		seqSet.AddRead( sortedReads[i].read ) ;
+		
+#ifdef DEBUG
 		printf( "done\n" ) ;
-	}*/
+#endif
+	}
 	
 	// Go through the second round.
 	// TODO: user-defined number of rounds.
-	seqSet.ResetPosWeight() ;
+	/*seqSet.ResetPosWeight() ;
 	reads.Rewind() ;
 	while ( reads.Next() )
 	{
-		printf( "%s %s\n", reads.id, reads.seq ) ;
-		fflush( stdout ) ;
+		//printf( "%s %s\n", reads.id, reads.seq ) ;
+		//fflush( stdout ) ;
 		seqSet.AddRead( reads.seq ) ;
-		printf( "done\n" ) ;
-	}
+		//printf( "done\n" ) ;
+	}*/
 	seqSet.Output() ;
+
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		free( sortedReads[i].id ) ;
+		free( sortedReads[i].read ) ;
+	}
 	return 0 ;
 }

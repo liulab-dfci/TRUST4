@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define DEBUG
+
 extern char nucToNum[26] ; 
 extern char numToNuc[26] ;
 
