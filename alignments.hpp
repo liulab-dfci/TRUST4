@@ -510,7 +510,8 @@ public:
 		int lensCnt = 0 ;
 		int mateDiffCnt = 0 ;
 		bool end = false ;
-		
+		int hasMateCnt = 0 ;
+
 		while ( 1 )
 		{
 			while ( 1 )
@@ -524,8 +525,8 @@ public:
 					end = true ;
 					break ;
 				}
-				if ( b->core.flag & 0xC )
-					continue ;
+				//if ( b->core.flag & 0xC )
+				//	continue ;
 
 				if ( ( b->core.flag & 0x900 ) == 0 )
 					break ;
@@ -545,6 +546,10 @@ public:
 				mateDiff[ mateDiffCnt ] = b->core.mpos - b->core.pos ;
 				++mateDiffCnt ;
 			}
+
+			if ( b->core.flag & 0x1 )
+				++hasMateCnt ;
+
 			++totalReadCnt ; 
 			if ( totalReadCnt >= sampleMax && stopEarly )
 				break ;
@@ -576,7 +581,11 @@ public:
 			fragLen = readLen ;
 			fragStdev = 0 ;
 		}
-		//printf( "readLen = %d\nfragLen = %d, fragStdev = %d\n", readLen, fragLen, fragStdev ) ;		
+		//printf( "readLen = %d\nfragLen = %d, fragStdev = %d\n", readLen, fragLen, fragStdev ) ;	
+
+		if ( hasMateCnt > 0 && fragStdev == 0 )
+			fragStdev = 1 ;
+
 		delete[] lens ;
 		delete[] mateDiff ;
 	}
