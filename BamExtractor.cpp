@@ -149,7 +149,8 @@ int main( int argc, char *argv[] )
 				{
 					name.erase( len - 2, 2 ) ; // Haven't tested yet.
 				}
-				if ( candidates.find( name ) != candidates.end() )
+
+				if ( candidates.find( name ) == candidates.end() )
 				{
 					candidates[name].mate1 = NULL ;
 					candidates[name].mate2 = NULL ;

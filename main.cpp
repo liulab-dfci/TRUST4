@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <vector>
+
 #include "KmerCount.hpp"
 #include "SeqSet.hpp"
 #include "AlignAlgo.hpp"
@@ -15,7 +17,9 @@ char usage[] = "./bcr [OPTIONS]:\n"
 		"\t\tor\n"
 		"\t-1 STRING -2 STRING: path to paried-end read files\n"
 		"\t\tor\n"
-		"\t-b STRING: path to BAM alignment file\n" ;
+		"\t-b STRING: path to BAM alignment file\n"
+		"Optional:\n"
+		"\t-o STRING: prefix of the output file (default: batas)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -24,8 +28,9 @@ char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2,
 
 char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
+char buffer[1024] = "" ;
 
-static const char *short_options = "f:u:1:2:b:" ;
+static const char *short_options = "f:u:1:2:b:o:" ;
 static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
@@ -53,7 +58,7 @@ struct _sortRead
 
 int main( int argc, char *argv[] )
 {
-	int i ;
+	int i, j ;
 
 	if ( argc <= 1 )
 	{
@@ -65,6 +70,7 @@ int main( int argc, char *argv[] )
 	option_index = 0 ;
 	SeqSet seqSet( 9 ) ;
 	KmerCount kmerCount( 21) ;
+	char outputPrefix[200] = "batas" ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
@@ -82,15 +88,19 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 'u' )
 		{
-			reads.AddReadFile( optarg ) ;
+			reads.AddReadFile( optarg, false ) ;
 		}
 		else if ( c == '1' )
 		{
-			reads.AddReadFile( optarg ) ;
+			reads.AddReadFile( optarg, true ) ;
 		}
 		else if ( c == '2' )
 		{
-			mateReads.AddReadFile( optarg ) ;
+			mateReads.AddReadFile( optarg, true ) ;
+		}
+		else if ( c == 'o' )
+		{
+			strcpy( outputPrefix, optarg ) ;
 		}
 	}
 	/*char align[10000] ;
@@ -104,8 +114,8 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
-	
 	std::vector< struct _sortRead > sortedReads ;
+	i = 0 ;
 	while ( reads.Next() )
 	{
 		struct _sortRead nr ;
@@ -114,27 +124,78 @@ int main( int argc, char *argv[] )
 
 		sortedReads.push_back( nr ) ;
 		kmerCount.AddCount( reads.seq ) ;
+
+		++i ;
+		if ( i % 100000 == 0 )
+			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
 	}
+	
+	while ( mateReads.Next() )
+	{
+		struct _sortRead nr ;
+		nr.read = strdup( mateReads.seq ) ;
+		nr.id = strdup( mateReads.id ) ;
+
+		sortedReads.push_back( nr ) ;
+		kmerCount.AddCount( mateReads.seq ) ;
+
+		++i ;
+		if ( i % 100000 == 0 )
+			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
+	}
+
+	fprintf( stderr, "Found %i reads.\n", i ) ;
+
+#ifdef DEBUG
+	printf( "Finish read in the reads and kmer count.\n") ;
+#endif
 	int readCnt = sortedReads.size() ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		kmerCount.GetCountStats( sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
 	}
-	std::sort( sortedReads.begin(), sortedReads.end() ) ;
 
+#ifdef DEBUG
+	printf( "Finish put in the read kmer count.\n" ) ;
+#endif
 	
+	kmerCount.Release() ;
+	std::sort( sortedReads.begin(), sortedReads.end() ) ;
+#ifdef DEBUG
+	printf( "Finish sorting\n" ) ;
+#endif
+	
+	std::vector<int> rescueReadIdx ;
+	int assembledReadCnt = 0 ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 #ifdef DEBUG
 		printf( "%s %s %d %lf\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
 		fflush( stdout ) ;
 #endif
-		seqSet.AddRead( sortedReads[i].read ) ;
+		int addRet = -1 ;
+		if ( i == 0 || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) )
+		{
+			//printf( "new stuff\n" ) ;
+			addRet = seqSet.AddRead( sortedReads[i].read ) ;
+		}
+		else
+		{
+			//printf( "saved time\n" ) ;
+			addRet = seqSet.RepeatAddRead( sortedReads[i].read ) ;
+		}
+		if ( i > 0 && i % 100000 == 0 )
+			fprintf( stderr, "Processed %d reads.\n", i ) ;
 		
+		if ( addRet == -2 )
+			rescueReadIdx.push_back( i ) ;
+		else if ( addRet >= 0 )
+			++assembledReadCnt ;
 #ifdef DEBUG
 		printf( "done\n" ) ;
 #endif
 	}
+	fprintf( stderr, "Assembled %d reads.\n", assembledReadCnt ) ;
 	
 	// Go through the second round.
 	// TODO: user-defined number of rounds.
@@ -147,7 +208,44 @@ int main( int argc, char *argv[] )
 		seqSet.AddRead( reads.seq ) ;
 		//printf( "done\n" ) ;
 	}*/
-	seqSet.Output() ;
+
+	int rescueReadCnt = rescueReadIdx.size() ;
+	fprintf( stderr, "Try to rescue %d reads for assembly.\n", rescueReadCnt) ;
+	assembledReadCnt = 0 ;
+	for ( i = 0 ; i < rescueReadCnt ; ++i )
+	{
+#ifdef DEBUG
+		printf( "%s %s %d %lf\n", sortedReads[ rescueReadIdx[i] ].id, 
+			sortedReads[ rescueReadIdx[i] ].read, sortedReads[  rescueReadIdx[i]  ].medianCnt, 
+			sortedReads[ rescueReadIdx[i] ].avgCnt ) ;
+		fflush( stdout ) ;
+#endif
+		int addRet = -1 ;
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read ) ;
+		if ( addRet >= 0 )
+			++assembledReadCnt ;
+#ifdef DEBUG
+		printf( "done\n" ) ;
+#endif
+	}
+	fprintf( stderr, "Rescued %d reads.\n", assembledReadCnt ) ;
+	
+
+	// Output the preliminary assembly.
+	FILE *fp ;
+	if ( outputPrefix[0] != '-' )
+	{
+		sprintf( buffer, "%s_assembly.out", outputPrefix ) ;
+		fp = fopen( buffer, "w" ) ;
+	}
+	else
+		fp = stdout ;
+	seqSet.Output( fp ) ;
+
+	if ( outputPrefix[0] != '-' )
+		fclose( fp ) ;
+
+	fprintf( stderr, "Raw assembly finished.\nStart to merge raw assemblies.\n" ) ;
 
 	for ( i = 0 ; i < readCnt ; ++i )
 	{

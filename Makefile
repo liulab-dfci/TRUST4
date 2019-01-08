@@ -18,7 +18,7 @@ bam-extractor: BamExtractor.o
 	$(CXX) -o $@ $(LINKPATH) $(CXXFLAGS) $< $(LINKFLAGS) -lbam
 
 main.o: main.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerIndex.hpp SimpleVector.hpp defs.h StatsTests.h poa.hpp KmerCode.hpp KmerCount.hpp
-BamExtractor.o: BamExtractor.cpp alignments.hpp
+BamExtractor.o: BamExtractor.cpp alignments.hpp defs.h
 #Alignment.o: Alignment.cpp Alignment.h SimpleVector.h defs.h StatsTests.h KmerTree.h ReadSet.h KmerIndex.h poa.h
 
 clean:

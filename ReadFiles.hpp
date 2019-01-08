@@ -24,6 +24,7 @@ class ReadFiles
 	private:
 		gzFile gzFp[MAX_READ_FILE] ;
 		kseq_t *inSeq[MAX_READ_FILE] ;
+		bool hasMate[MAX_READ_FILE] ;
 		int FILE_TYPE[MAX_READ_FILE] ; // 0-FASTA, 1-FASTQ
 		int fpUsed ;
 		int currentFpInd ;
@@ -79,7 +80,7 @@ class ReadFiles
 		}
 
 
-		void AddReadFile( char *file )
+		void AddReadFile( char *file, bool fileHasMate )
 		{
 			if ( fpUsed >= MAX_READ_FILE )
 			{
@@ -114,7 +115,7 @@ class ReadFiles
 			//printf( "%s %s\n", inSeq[fpUsed]->name.s, inSeq[fpUsed]->comment.s ) ;
 			//gzrewind( gzFp[ fpUsed ]) ;
 			//kseq_rewind( inSeq[ fpUsed] ) ;
-			
+			hasMate[ fpUsed ] = fileHasMate ;	
 			++fpUsed ;
 		}
 
