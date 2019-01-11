@@ -135,8 +135,8 @@ int main( int argc, char *argv[] )
 	while ( alignments.Next())
 	{
 		// If not aligned, output it.
-		if ( !alignments.IsPrimary() )
-			continue ;
+		//if ( !alignments.IsPrimary() )
+		//	continue ;
 		
 		if ( !alignments.IsTemplateAligned() )
 		{

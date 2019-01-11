@@ -42,8 +42,8 @@ public:
 		if ( capacity > 0 )
 		{
 			//s = in.s ;
-			if ( in.s == NULL )
-				printf( "null s. %d %d\n", in.size, in.capacity ) ;
+			//if ( in.s == NULL )
+			//	printf( "null s. %d %d\n", in.size, in.capacity ) ;
 			s = (T *)malloc( sizeof( T ) * capacity ) ;
 			memcpy( s, in.s, sizeof( T ) * capacity ) ;
 		}

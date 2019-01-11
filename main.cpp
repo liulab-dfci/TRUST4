@@ -191,10 +191,14 @@ int main( int argc, char *argv[] )
 			rescueReadIdx.push_back( i ) ;
 		else if ( addRet >= 0 )
 			++assembledReadCnt ;
+
+		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
+			seqSet.UpdateAllConsensus() ;
 #ifdef DEBUG
 		printf( "done\n" ) ;
 #endif
 	}
+	seqSet.UpdateAllConsensus() ;
 	fprintf( stderr, "Assembled %d reads.\n", assembledReadCnt ) ;
 	
 	// Go through the second round.
@@ -228,9 +232,16 @@ int main( int argc, char *argv[] )
 		printf( "done\n" ) ;
 #endif
 	}
+	seqSet.UpdateAllConsensus() ;
 	fprintf( stderr, "Rescued %d reads.\n", assembledReadCnt ) ;
 	
-
+	seqSet.Clean( true ) ;
+	fprintf( stderr, "Found %d raw contigs.\nStart to merge raw contigs.\n", seqSet.GetSeqCnt() ) ;
+	
+	i = seqSet.Assemble() ;
+	seqSet.UpdateAllConsensus() ;
+	fprintf( stderr, "Reduce %d raw contigs.\n", i ) ;
+	
 	// Output the preliminary assembly.
 	FILE *fp ;
 	if ( outputPrefix[0] != '-' )
@@ -240,13 +251,12 @@ int main( int argc, char *argv[] )
 	}
 	else
 		fp = stdout ;
+	
 	seqSet.Output( fp ) ;
-
+	fflush( fp ) ;
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;
-
-	fprintf( stderr, "Raw assembly finished.\nStart to merge raw assemblies.\n" ) ;
-
+	
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		free( sortedReads[i].id ) ;
