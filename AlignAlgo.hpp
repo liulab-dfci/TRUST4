@@ -63,7 +63,8 @@ public:
 
 				// for m 
 				// Note that the index in the matrix is 1+the offset in the string.
-				score = m[ ( i - 1 ) * bmax + j - 1] + ( t[j - 1] == p[i - 1] ? SCORE_MATCH : SCORE_MISMATCH ) ;	
+				score = m[ ( i - 1 ) * bmax + j - 1] + ( ( t[j - 1] == p[i - 1] || t[j - 1] == 'N' 
+										|| p[i - 1] == 'N' )? SCORE_MATCH : SCORE_MISMATCH ) ;	
 				//printf( "%d %d: %d. %d %d %d\n", i, j, score, m[ (i - 1)*bmax + j - 1], e[ i * bmax + j], f[ i * bmax + j] ) ;
 				score = MAX( score, e[ i * bmax + j] ) ;
 				score = MAX( score, f[ i * bmax + j] ) ;
@@ -71,7 +72,8 @@ public:
 			}
 		}
 		
-		/*for ( i = 0 ; i <= lenp ; ++i )
+		/*printf( "m:\n" ) ;
+		for ( i = 0 ; i <= lenp ; ++i )
 		{
 			for ( j = 0 ; j <= lent ; ++j )
 				printf( "%d ", m[i * bmax + j ] ) ;
@@ -96,9 +98,10 @@ public:
 					a = EDIT_DELETE ;
 				if ( tagi > 0 && tagj > 0 
 					&& ( m[ ( tagi - 1 ) * bmax + tagj - 1] + 
-						( t[tagj - 1] == p[tagi - 1] ? SCORE_MATCH : SCORE_MISMATCH ) ) == m[tagi * bmax + tagj] )
+						( ( t[tagj - 1] == p[tagi - 1] || t[tagj - 1] == 'N' || p[tagi - 1] == 'N' ) ? 
+								SCORE_MATCH : SCORE_MISMATCH )  == m[tagi * bmax + tagj] ) )
 				{
-					if ( t[tagj - 1] == p[tagi - 1] )
+					if ( t[tagj - 1] == p[tagi - 1] || t[tagj - 1] == 'N' || p[tagi - 1] == 'N' )
 						a = EDIT_MATCH ;
 					else
 						a = EDIT_MISMATCH ;

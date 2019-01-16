@@ -120,7 +120,10 @@ private:
 		int i ;
 		for ( i = 0 ; i < len ; ++i )
 		{
-			rcSeq[i] = numToNuc[ 3 - nucToNum[seq[len - 1 - i] - 'A'] ];
+			if ( seq[len - 1 - i] != 'N' )
+				rcSeq[i] = numToNuc[ 3 - nucToNum[seq[len - 1 - i] - 'A'] ];
+			else
+				rcSeq[i] = 'N' ;
 		}
 		rcSeq[i] = '\0' ;
 	}
@@ -501,8 +504,8 @@ private:
 
 		int overlapCnt = GetOverlapsFromHits( hits,  overlaps ) ;
 
-		//for ( i = 0 ; i < overlapCnt ; ++i )
-		//	printf( "%d: %d %s. %d %d %d %d\n", i, overlaps[i].poaIdx, poas[ overlaps[i].poaIdx ].name, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].poaStart, overlaps[i].poaEnd ) ;
+		for ( i = 0 ; i < overlapCnt ; ++i )
+			printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
 		// Determine whether we want to add this reads by looking at the quality of overlap
 		if ( overlapCnt == 0 )
 			return 0 ;
@@ -577,8 +580,10 @@ private:
 								r + hitCoords[j - 1].a + kmerLength, 
 								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
 								align ) ;
-
-						GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;		
+						
+						int count[3] ;
+						GetAlignStats( align, false, count[0], count[1], count[2] ) ;
+						matchCnt += 2 * count[0] ;
 
 						if ( !seqs[ overlaps[i].seqIdx ].isRef && indelCnt > 0 )
 						{
@@ -627,7 +632,9 @@ private:
 								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength ) , 
 								align ) ;	
 						
-						GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;
+						int count[3] ;
+						GetAlignStats( align, false, count[0], count[1], count[2] ) ;
+						matchCnt += 2 * count[0] ;
 
 						if ( !seqs[ overlaps[i].seqIdx ].isRef && indelCnt > 0 )
 						{
@@ -640,7 +647,7 @@ private:
 			} // for j
 			delete[] align ;
 			
-			//printf( "%d %d %d\n", matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1 ) ;
+			//printf( "%d %d %d %lf\n", matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
 			overlaps[i].matchCnt = matchCnt ;
 			if ( similarity == 1 )
 				overlaps[i].similarity = (double)matchCnt / ( overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 
@@ -659,6 +666,10 @@ private:
 			assert( overlaps[i].similarity <= 1 ) ;*/
 		} // for i
 		delete[] rcRead ;
+
+		// Release the memory for hitCoords.
+		for ( i = 0 ; i < overlapCnt ; ++i )
+			overlaps[i].hitCoords.Release() ;
 
 		k = 0 ; 
 		for ( i = 0 ; i < overlapCnt ; ++i )
@@ -854,7 +865,13 @@ public:
 		if ( indelCnt > 0 )
 			return 0 ;
 
-		if ( mismatchCnt > 2 && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
+		int mismatchThreshold = 2 ;
+		if ( leftOverhangSize >= 2 )
+			++mismatchThreshold ;
+		if ( rightOverhangSize >= 2 )
+			++mismatchThreshold ;
+		
+		if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
 			return 0 ;
 
 		extendedOverlap.seqIdx = overlap.seqIdx ;
@@ -894,10 +911,12 @@ public:
 #ifdef DEBUG
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
-			printf( "%d: %d %s. %d. %d %d %d %d. %lf.\n", i, overlaps[i].seqIdx, seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
+			printf( "%d: %d %d %s. %d. %d %d %d %d. %lf.\n", i, overlaps[i].seqIdx, seqs[ overlaps[i].seqIdx ].consensusLen, 
+					seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
 					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd, 
 					overlaps[i].similarity ) ; 
-			//printf( " %s\n",seqs[  overlaps[i].seqIdx ].consensus ) ;
+			//if ( !seqs[ overlaps[i].seqIdx ].isRef )
+			//	printf( " %s\n",seqs[  overlaps[i].seqIdx ].consensus ) ;
 		}
 		fflush( stdout ) ;	
 #endif		
@@ -1880,9 +1899,95 @@ public:
 	}
 	
 	// Figure out the gene composition for the read. 
-	void AnnotateRead( char *read )
+	// Return successful or not.
+	int AnnotateRead( char *read, struct _overlap geneOverlap[4], char *buffer )
 	{
+		int i ;
 		
+		std::vector<struct _overlap> overlaps ;
+		int overlapCnt ;
+	
+		char BT = '\0' ;
+		char chain = '\0' ;
+
+		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
+		
+		sprintf( buffer, "%d", strlen( read ) ) ;
+		overlapCnt = GetOverlapsFromRead( read, overlaps ) ;		
+		if ( overlapCnt == 0 )
+			return 0 ;
+
+		std::sort( overlaps.begin(), overlaps.end() ) ;
+		// Get the coverage of the genes.
+		for ( i = 0 ; i < overlapCnt ; ++i )
+		{
+			char *name = seqs[ overlaps[i].seqIdx ].name ;
+			if ( BT && name[0] != BT )
+				continue ;
+			BT = name[0] ;
+			
+			if ( chain && name[2] != chain )
+				continue ;
+			chain = name[2] ;
+
+			int geneType = -1 ;
+			switch ( name[3] )
+			{
+				case 'V': geneType = 0 ; break ;
+				case 'D': geneType = 1 ; break ;
+				case 'J': geneType = 2 ; break ;
+				default: geneType = 3 ; break ;
+			}
+
+			if ( geneType < 0 || geneOverlap[ geneType ].seqIdx != -1 )
+				continue ;
+			
+			geneOverlap[ geneType ] = overlaps[i] ;
+		}
+		
+		// Extend overlap
+		for ( i = 0 ; i < 4 ; ++i )
+		{
+			;
+		}
+
+		// Infer CDR1,2,3.
+
+		// Compute the name
+		for ( i = 0 ; i < 4 ; ++i )
+		{
+			if ( geneOverlap[i].seqIdx == -1 )
+				continue ;
+
+			int offset = strlen( buffer ) ;
+			int seqIdx = geneOverlap[i].seqIdx ;
+			sprintf( buffer + offset, " %s(%d):(%d-%d):(%d-%d):%.2lf",
+				seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
+				geneOverlap[i].readStart, geneOverlap[i].readEnd, 
+				geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;	
+		}
+		return 1 ;
+	}
+	
+	// Use the refSet to annotate current set.
+	void Annotate( SeqSet &refSet )
+	{
+		int i ;
+		char *buffer = new char[1024] ;
+		int seqCnt = seqs.size() ;
+		struct _overlap geneOverlap[4];
+		
+		for ( i = 0 ; i < seqCnt  ; ++i )
+		{
+			if ( seqs[i].isRef || seqs[i].consensus == NULL )
+				continue ;
+		
+			free( seqs[i].name ) ;
+			refSet.AnnotateRead( seqs[i].consensus, geneOverlap, buffer ) ;
+			seqs[i].name = strdup( buffer ) ;
+		}
+
+		delete[] buffer ;
 	}
 
 	void Output( FILE *fp )
@@ -1894,7 +1999,7 @@ public:
 			if ( seqs[i].isRef || seqs[i].consensus == NULL )
 				continue ;
 
-			fprintf( fp, ">%s %d\n%s\n", seqs[i].name, i, seqs[i].consensus ) ;
+			fprintf( fp, ">contig%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
 			
 			for ( k = 0 ; k < 4 ; ++k )
 			{

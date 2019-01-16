@@ -28,7 +28,7 @@ char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2,
 
 char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
-char buffer[1024] = "" ;
+char buffer[10240] = "" ;
 
 static const char *short_options = "f:u:1:2:b:o:" ;
 static struct option long_options[] = {
@@ -69,12 +69,13 @@ int main( int argc, char *argv[] )
 	int c, option_index ;
 	option_index = 0 ;
 	SeqSet seqSet( 9 ) ;
+	SeqSet refSet( 9 ) ;
 	KmerCount kmerCount( 21) ;
 	char outputPrefix[200] = "batas" ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
-
+	
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -85,6 +86,7 @@ int main( int argc, char *argv[] )
 		if ( c == 'f' )
 		{
 			seqSet.InputRefFa( optarg ) ;
+			refSet.InputRefFa( optarg ) ;
 		}
 		else if ( c == 'u' )
 		{
@@ -167,6 +169,7 @@ int main( int argc, char *argv[] )
 	
 	std::vector<int> rescueReadIdx ;
 	int assembledReadCnt = 0 ;
+	int prevAddRet = -1 ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 #ifdef DEBUG
@@ -174,15 +177,23 @@ int main( int argc, char *argv[] )
 		fflush( stdout ) ;
 #endif
 		int addRet = -1 ;
+		
 		if ( i == 0 || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) )
 		{
 			//printf( "new stuff\n" ) ;
-			addRet = seqSet.AddRead( sortedReads[i].read ) ;
+			struct _overlap geneOverlap[4] ;
+			refSet.AnnotateRead( sortedReads[i].read, geneOverlap, buffer ) ;
+
+			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].seqStart >= 100 ) // From constant gene.
+				addRet = -1 ;
+			else	
+				addRet = seqSet.AddRead( sortedReads[i].read ) ;
 		}
 		else
 		{
 			//printf( "saved time\n" ) ;
-			addRet = seqSet.RepeatAddRead( sortedReads[i].read ) ;
+			if ( prevAddRet != -1 )
+				addRet = seqSet.RepeatAddRead( sortedReads[i].read ) ;
 		}
 		if ( i > 0 && i % 100000 == 0 )
 			fprintf( stderr, "Processed %d reads.\n", i ) ;
@@ -194,6 +205,8 @@ int main( int argc, char *argv[] )
 
 		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
 			seqSet.UpdateAllConsensus() ;
+
+		prevAddRet = addRet ;
 #ifdef DEBUG
 		printf( "done\n" ) ;
 #endif
@@ -235,13 +248,16 @@ int main( int argc, char *argv[] )
 	seqSet.UpdateAllConsensus() ;
 	fprintf( stderr, "Rescued %d reads.\n", assembledReadCnt ) ;
 	
-	seqSet.Clean( true ) ;
+	/*seqSet.Clean( true ) ;
 	fprintf( stderr, "Found %d raw contigs.\nStart to merge raw contigs.\n", seqSet.GetSeqCnt() ) ;
 	
 	i = seqSet.Assemble() ;
 	seqSet.UpdateAllConsensus() ;
 	fprintf( stderr, "Reduce %d raw contigs.\n", i ) ;
 	
+	fprintf( stderr, "Annotate the contigs.\n" ) ;
+	seqSet.Annotate( refSet ) ;*/
+
 	// Output the preliminary assembly.
 	FILE *fp ;
 	if ( outputPrefix[0] != '-' )
@@ -254,6 +270,7 @@ int main( int argc, char *argv[] )
 	
 	seqSet.Output( fp ) ;
 	fflush( fp ) ;
+	
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;
 	
