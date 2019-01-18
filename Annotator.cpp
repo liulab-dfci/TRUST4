@@ -39,7 +39,7 @@ int main( int argc, char *argv[] )
 		return 0 ;
 	}
 
-	SeqSet refSet( 5 ) ;
+	SeqSet refSet( 9 ) ;
 	int c, option_index ;
 	FILE *fpAssembly ;
 	struct _overlap geneOverlap[4] ;
@@ -84,7 +84,7 @@ int main( int argc, char *argv[] )
 		if ( seq[len - 1] == '\n' )
 			seq[len - 1] = '\0' ;
 		
-		refSet.AnnotateRead( seq, geneOverlap, buffer + i + 1 ) ;
+		refSet.AnnotateRead( seq, 2, geneOverlap, buffer + i + 1 ) ;
 		printf( "%s\n%s\n", buffer, seq ) ;
 	}
 

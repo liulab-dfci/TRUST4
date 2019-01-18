@@ -128,6 +128,14 @@ private:
 		rcSeq[i] = '\0' ;
 	}
 
+	void Reverse( char *r, char *seq, int len )
+	{
+		int i ;
+		for ( i = 0 ; i < len ; ++i )
+			r[i] = seq[len - 1 - i] ;  
+		r[i] = '\0' ;
+	}
+
 	// Return the first index whose hits.a is smaller or equal to valA
 	int BinarySearch_LIS( int top[], int size, int valA, SimpleVector<struct _pair> &hits )
 	{
@@ -504,8 +512,8 @@ private:
 
 		int overlapCnt = GetOverlapsFromHits( hits,  overlaps ) ;
 
-		for ( i = 0 ; i < overlapCnt ; ++i )
-			printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
+		/*for ( i = 0 ; i < overlapCnt ; ++i )
+			printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;*/ 
 		// Determine whether we want to add this reads by looking at the quality of overlap
 		if ( overlapCnt == 0 )
 			return 0 ;
@@ -881,7 +889,7 @@ public:
 		extendedOverlap.seqEnd = overlap.seqEnd + rightOverhangSize ;
 		extendedOverlap.strand = overlap.strand ;	
 		extendedOverlap.matchCnt = 2 * matchCnt + overlap.matchCnt ;
-		extendedOverlap.similarity = ( 2 * matchCnt + overlap.matchCnt ) / 
+		extendedOverlap.similarity = (double)( 2 * matchCnt + overlap.matchCnt ) / 
 			( extendedOverlap.readEnd - extendedOverlap.readStart + 1 + extendedOverlap.seqEnd - extendedOverlap.seqStart + 1 ) ;	
 		return 1 ;
 	}
@@ -995,6 +1003,20 @@ public:
 					}
 					if ( j < k )
 						continue ;
+
+					// Then check whether the extended porition is a subset of matched portion from other overlaps.
+					for ( j = 0 ; j < i ; ++j )
+					{
+						if ( seqs[ overlaps[j].seqIdx ].isRef )
+							continue ;
+
+						if ( extendedOverlaps[k].readStart >= overlaps[j].readStart &&
+							extendedOverlaps[k].readEnd <= overlaps[j].readEnd )
+							break ;
+					}
+					if ( j < i )
+						continue ;
+
 					tag = i ;
 					++k ;
 				}
@@ -1900,19 +1922,20 @@ public:
 	
 	// Figure out the gene composition for the read. 
 	// Return successful or not.
-	int AnnotateRead( char *read, struct _overlap geneOverlap[4], char *buffer )
+	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], char *buffer )
 	{
-		int i ;
+		int i, j ;
 		
 		std::vector<struct _overlap> overlaps ;
 		int overlapCnt ;
 	
 		char BT = '\0' ;
 		char chain = '\0' ;
+		int len = strlen( read ) ;
 
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
 		
-		sprintf( buffer, "%d", strlen( read ) ) ;
+		sprintf( buffer, "%d", len ) ;
 		overlapCnt = GetOverlapsFromRead( read, overlaps ) ;		
 		if ( overlapCnt == 0 )
 			return 0 ;
@@ -1934,7 +1957,12 @@ public:
 			switch ( name[3] )
 			{
 				case 'V': geneType = 0 ; break ;
-				case 'D': geneType = 1 ; break ;
+				case 'D': 
+					if ( name[4] >= '0' && name[4] <= '9' )
+						geneType = 1 ; 
+					else
+						geneType = 3 ;
+					break ;
 				case 'J': geneType = 2 ; break ;
 				default: geneType = 3 ; break ;
 			}
@@ -1946,9 +1974,59 @@ public:
 		}
 		
 		// Extend overlap
-		for ( i = 0 ; i < 4 ; ++i )
+		if ( detailLevel >= 1 )
 		{
-			;
+			char *align = new char[ 2 * len + 2 ] ;
+			char *rvr = new char[len + 1] ; 
+			for ( i = 0 ; i < 4 ; ++i )
+			{
+				// Extend right.
+				if ( geneOverlap[i].seqIdx == -1 )
+					continue ;
+				int seqIdx = geneOverlap[i].seqIdx ;				
+				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + geneOverlap[i].seqEnd + 1, seqs[ seqIdx ].consensusLen - geneOverlap[i].seqEnd, read + geneOverlap[i].readEnd + 1, len - geneOverlap[i].readEnd, align ) ;
+				
+				for ( j = 0 ; align[j] != -1 ; ++j )
+				{
+					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
+					{
+						++geneOverlap[i].readEnd ;
+						++geneOverlap[i].seqEnd ;
+						
+						geneOverlap[i].matchCnt += 2 ;
+					}
+					else if ( align[j] == EDIT_INSERT )
+						++geneOverlap[i].readEnd ;
+					else if ( align[j] == EDIT_DELETE )
+						++geneOverlap[i].seqEnd ;
+				}
+
+				// Extend left.
+				char *rvs = new char[seqs[ seqIdx ].consensusLen ] ;
+				Reverse( rvr, read, geneOverlap[i].readStart ) ;
+				Reverse( rvs, seqs[seqIdx].consensus, geneOverlap[i].seqStart ) ;
+				AlignAlgo::GlobalAlignment_OneEnd( rvs, geneOverlap[i].seqStart, rvr, geneOverlap[i].readStart, align ) ;
+				for ( j = 0 ; align[j] != -1 ; ++j )
+				{
+					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
+					{
+						--geneOverlap[i].readStart ;
+						--geneOverlap[i].seqStart ;
+						geneOverlap[i].matchCnt += 2 ;
+					}
+					else if ( align[j] == EDIT_INSERT )
+						--geneOverlap[i].readStart ;
+					else if ( align[j] == EDIT_DELETE )
+						--geneOverlap[i].seqStart ;
+				}
+				delete[] rvs ;
+
+				geneOverlap[i].similarity = (double)( geneOverlap[i].matchCnt ) / 
+						( geneOverlap[i].seqEnd - geneOverlap[i].seqStart + 1 + 
+							geneOverlap[i].readEnd - geneOverlap[i].readStart + 1 ) ;
+			}
+			delete[] align ;
+			delete[] rvr ;
 		}
 
 		// Infer CDR1,2,3.
@@ -1983,7 +2061,7 @@ public:
 				continue ;
 		
 			free( seqs[i].name ) ;
-			refSet.AnnotateRead( seqs[i].consensus, geneOverlap, buffer ) ;
+			refSet.AnnotateRead( seqs[i].consensus, 2, geneOverlap, buffer ) ;
 			seqs[i].name = strdup( buffer ) ;
 		}
 

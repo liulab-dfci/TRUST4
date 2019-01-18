@@ -173,7 +173,7 @@ int main( int argc, char *argv[] )
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 #ifdef DEBUG
-		printf( "%s %s %d %lf\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+		printf( "%s %s %d %lf\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].avgCnt ) ;
 		fflush( stdout ) ;
 #endif
 		int addRet = -1 ;
@@ -182,7 +182,7 @@ int main( int argc, char *argv[] )
 		{
 			//printf( "new stuff\n" ) ;
 			struct _overlap geneOverlap[4] ;
-			refSet.AnnotateRead( sortedReads[i].read, geneOverlap, buffer ) ;
+			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, buffer ) ;
 
 			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].seqStart >= 100 ) // From constant gene.
 				addRet = -1 ;

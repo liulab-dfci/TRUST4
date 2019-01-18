@@ -181,7 +181,193 @@ public:
 		
 		return ret ;
 	}
+	
+	// Semi-global alignment where one end is matched, the other side is free.
+	static int GlobalAlignment_OneEnd( char *t, int lent, char *p, int lenp, char *align )
+	{
+		int *m, *e, *f ;
+		if ( lent == 0 || lenp == 0 )
+		{
+			align[0] = -1 ;
+			return 0 ;
+		}
 
+		int i, j ;
+		int bmax = ( lent + 1 ) ;
+
+		m = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ;
+		e = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ; // insertion (to the text) gap
+		f = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ; // deletion (to the text) gap
+		
+		m[0] = e[0] = f[0] = 0 ;
+		for ( i = 1 ; i <= lenp ; ++i )
+		{
+			e[i * bmax + 0] = SCORE_GAPOPEN + i * SCORE_GAPEXTEND ; 
+	
+			f[i * bmax + 0] = SCORE_GAPOPEN + i * SCORE_GAPOPEN ; 
+			m[i * bmax + 0] = SCORE_GAPOPEN + i * SCORE_GAPOPEN ; 
+		}
+
+		for ( j = 1 ; j <= lent ; ++j  )
+		{
+			f[0 + j] = SCORE_GAPOPEN + j * SCORE_GAPEXTEND ;
+			
+			e[0 + j] = SCORE_GAPOPEN + i * SCORE_GAPOPEN ; 
+			m[0 + j] = SCORE_GAPOPEN + j * SCORE_GAPOPEN ;
+		}
+
+		for ( i = 1 ; i <= lenp ; ++i )
+		{
+			for ( j = 1 ; j <= lent ; ++j )
+			{
+				int score ;
+				// for e
+				score = e[ ( i - 1 ) * bmax + j ] + SCORE_GAPEXTEND ;
+				score = MAX( score, m[ ( i - 1) * bmax + j ] + SCORE_GAPOPEN + SCORE_GAPEXTEND ) ;
+				e[ i * bmax + j ] = score ;
+
+				// for f
+				score = f[ i * bmax + j - 1 ] + SCORE_GAPEXTEND ;
+				score = MAX( score, m[ i * bmax + j - 1 ] + SCORE_GAPOPEN + SCORE_GAPEXTEND ) ; 
+				f[ i * bmax + j ] = score ;
+
+				// for m 
+				// Note that the index in the matrix is 1+the offset in the string.
+				score = m[ ( i - 1 ) * bmax + j - 1] + ( ( t[j - 1] == p[i - 1] || t[j - 1] == 'N' 
+										|| p[i - 1] == 'N' )? SCORE_MATCH : SCORE_MISMATCH ) ;	
+				//printf( "%d %d: %d. %d %d %d\n", i, j, score, m[ (i - 1)*bmax + j - 1], e[ i * bmax + j], f[ i * bmax + j] ) ;
+				score = MAX( score, e[ i * bmax + j] ) ;
+				score = MAX( score, f[ i * bmax + j] ) ;
+				m[i * bmax + j ] = score ;
+			}
+		}
+		
+		/*printf( "m:\n" ) ;
+		for ( i = 0 ; i <= lenp ; ++i )
+		{
+			for ( j = 0 ; j <= lent ; ++j )
+				printf( "%d ", m[i * bmax + j ] ) ;
+			printf( "\n" ) ;
+		}*/
+
+		// Locate the ending point.
+		int max = 0 ;
+		int tagi = 0, tagj = 0 ;
+
+		for ( i = 0 ; i <= lenp ; ++i )
+			for ( j = 0 ; j <= lent ; ++j )
+			{
+				if ( m[i * bmax +j] > max )
+				{
+					max = m[i * bmax + j] ;
+					tagi = i ;
+					tagj = j ;
+				}
+			}
+		int ret = m[ tagi * bmax + tagj ] ;
+		
+		// Trace back.
+		int mat = 0 ; // 0-m,1-e,2-f, which matrix the backtrace is in.
+		int tag = 0 ;
+
+		while ( tagi > 0 || tagj > 0 )
+		{
+			//printf( "%d %d %d\n", tagi, tagj, mat ) ;
+			if ( mat == 0 )
+			{
+				int max = e[tagi * bmax + tagj] ;
+				int a = EDIT_INSERT ;
+
+				if ( f[tagi * bmax + tagj] >= m[tagi * bmax + tagj] )
+					a = EDIT_DELETE ;
+				if ( tagi > 0 && tagj > 0 
+					&& ( m[ ( tagi - 1 ) * bmax + tagj - 1] + 
+						( ( t[tagj - 1] == p[tagi - 1] || t[tagj - 1] == 'N' || p[tagi - 1] == 'N' ) ? 
+								SCORE_MATCH : SCORE_MISMATCH )  == m[tagi * bmax + tagj] ) )
+				{
+					if ( t[tagj - 1] == p[tagi - 1] || t[tagj - 1] == 'N' || p[tagi - 1] == 'N' )
+						a = EDIT_MATCH ;
+					else
+						a = EDIT_MISMATCH ;
+				}
+
+				if ( a == EDIT_MATCH || a == EDIT_MISMATCH )
+				{
+					align[tag] = a ;
+					++tag ;
+
+					--tagi ; --tagj ;
+				}
+				else if ( a == EDIT_INSERT )
+					mat = 1 ;
+				else if ( a == EDIT_DELETE )
+					mat = 2 ;
+			}
+			else if ( mat == 1 ) // insertion to the text
+			{
+				int a = EDIT_INSERT ;
+				align[tag] = a ;
+				++tag ;
+
+				if ( tagi > 0 )
+				{	
+					if ( m[ (tagi - 1) * bmax + tagj] + SCORE_GAPOPEN + SCORE_GAPEXTEND == e[tagi * bmax + tagj] )
+					{
+						--tagi ;
+						mat = 0 ;
+					}
+					else //if ( e[( tagi - 1 ) * bmax + tagj] + EDIT_GAPEXTEND == e[tagi * bmax + tagj] )
+					{
+						--tagi ;
+						mat = 1 ;
+					}
+				}
+				else
+				{
+					mat = 2 ;
+				}
+			}
+			else if ( mat == 2 ) // deletion to the text
+			{
+				int a = EDIT_DELETE ;
+				align[tag] = a ;
+				++tag ;
+
+				if ( tagj > 0 )
+				{
+					if ( m[ tagi * bmax + tagj - 1] + SCORE_GAPOPEN + SCORE_GAPEXTEND == f[tagi * bmax + tagj] )
+					{
+						--tagj ;
+						mat = 0 ;
+					}
+					else //if ( e[( tagi - 1 ) * bmax + tagj] + EDIT_GAPEXTEND == e[tagi * bmax + tagj] )
+					{
+						--tagj ;
+						mat = 2 ;
+					}
+				}
+				else
+				{
+					mat = 1 ;
+				}
+			}
+		}
+		align[tag] = -1 ;
+		for ( i = 0, j = tag - 1 ; i < j ; ++i, --j )
+		{	
+			char tmp = align[i] ;
+			align[i] = align[j] ;
+			align[j] = tmp ;
+		}
+		delete[] m ;
+		delete[] e ;
+		delete[] f ;
+		
+		return ret ;
+	}
+	
+	
+	
 	static double GlobalAlignment_classic( char *t, int lent, char *p, int lenp, char *align ) 
 	{
 		int i, j ;
