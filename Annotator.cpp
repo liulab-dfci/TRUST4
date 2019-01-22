@@ -9,7 +9,7 @@
 #include "SeqSet.hpp"
 #include "AlignAlgo.hpp"
 
-char usage[] = "./bcr [OPTIONS]:\n"
+char usage[] = "./annotator [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t-a STRING: path to the assembly file\n" ;
@@ -41,7 +41,7 @@ int main( int argc, char *argv[] )
 
 	SeqSet refSet( 9 ) ;
 	int c, option_index ;
-	FILE *fpAssembly ;
+	FILE *fpAssembly = NULL ;
 	struct _overlap geneOverlap[4] ;
 	option_index = 0 ;
 	
@@ -60,11 +60,22 @@ int main( int argc, char *argv[] )
 		{
 			fpAssembly = fopen( optarg, "r" ) ;
 		}
+		else
+		{
+			fprintf( stderr, "%s", usage ) ;
+			return EXIT_FAILURE ;
+		}
 	}
 
 	if ( refSet.Size() == 0 )
 	{
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
+		return EXIT_FAILURE ;
+	}
+
+	if ( fpAssembly == NULL )
+	{
+		fprintf( stderr, "Need to use -a to specify the assembly file.\n" ) ;
 		return EXIT_FAILURE ;
 	}
 
@@ -78,15 +89,18 @@ int main( int argc, char *argv[] )
 
 		fgets( seq, sizeof( seq ), fpAssembly ) ;
 		
-		for ( i = 0 ; buffer[i] && buffer[i] != ' ' ; ++i )
+		for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
 			;
+		if ( buffer[i] != ' ' )
+			buffer[i] = ' ' ;
+
 		int len = strlen( seq ) ;
 		if ( seq[len - 1] == '\n' )
 			seq[len - 1] = '\0' ;
-		
 		refSet.AnnotateRead( seq, 2, geneOverlap, buffer + i + 1 ) ;
 		printf( "%s\n%s\n", buffer, seq ) ;
 	}
+	fclose( fpAssembly ) ;
 
 	return 0 ;
 }

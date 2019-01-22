@@ -104,6 +104,11 @@ int main( int argc, char *argv[] )
 		{
 			strcpy( outputPrefix, optarg ) ;
 		}
+		else
+		{
+			fprintf( stderr, "%s", usage ) ;
+			return EXIT_FAILURE ;
+		}
 	}
 	/*char align[10000] ;
 	char t[] = "ACGGGGTTTTTT" ;

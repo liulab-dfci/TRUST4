@@ -46,6 +46,16 @@ struct _candidate
 	char *mate2 ;
 } ;
 
+bool ValidAlternativeChrom( char *chrom )
+{
+	if ( strstr( chrom, "_random" ) || strstr( chrom, "_alt" ) )
+	{
+		if ( chrom[0] == 'c' && chrom[3] >= '0' && chrom[3] <= '9' )
+			return true ;
+	}
+	return false ;
+}
+
 int main( int argc, char *argv[] )
 {
 	if ( argc <= 1 )
@@ -138,7 +148,8 @@ int main( int argc, char *argv[] )
 		//if ( !alignments.IsPrimary() )
 		//	continue ;
 		
-		if ( !alignments.IsTemplateAligned() )
+		if ( !alignments.IsTemplateAligned() 
+			|| ValidAlternativeChrom( alignments.GetChromName( alignments.GetChromId() ) ) )
 		{
 			if ( alignments.fragStdev != 0 )
 			{

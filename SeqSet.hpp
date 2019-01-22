@@ -13,18 +13,6 @@
 #include "ReadFiles.hpp"
 #include "AlignAlgo.hpp"
 
-struct _posWeight
-{
-	int count[4] ;
-
-	struct _posWeight &operator+=( const struct _posWeight &rhs )
-	{
-		count[0] += rhs.count[0] ;
-		count[1] += rhs.count[1] ;
-		count[2] += rhs.count[2] ;
-		count[3] += rhs.count[3] ;
-	}
-} ;
 
 struct _seqWrapper
 {
@@ -33,6 +21,8 @@ struct _seqWrapper
 	int consensusLen ;
 	SimpleVector<struct _posWeight> posWeight ;
 	bool isRef ; // this is from reference.
+
+	int minLeftExtAnchor, minRightExtAnchor ; // only overlap with size larger than this can be counted as valid extension.
 } ;
 
 struct _hit
@@ -279,7 +269,7 @@ private:
 	
 	
 	// Use the hits to extract overlaps from SeqSet
-	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, std::vector<struct _overlap> &overlaps )
+	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, std::vector<struct _overlap> &overlaps )
 	{
 		int i, j, k ;
 		int hitSize = hits.Size() ;
@@ -289,8 +279,6 @@ private:
 		SimpleVector<struct _pair> concordantHitCoord ;
 		SimpleVector<struct _pair> hitCoordLIS ;
 		SimpleVector<struct _hit> finalHits ;
-
-		int hitLenRequired = 31  ;
 
 		for ( i = 0 ; i < hitSize ; )
 		{
@@ -399,7 +387,8 @@ private:
 				no.strand = finalHits[0].strand ;
 				no.seqStart = finalHits[0].indexHit.offset ;
 				no.seqEnd = finalHits[ lisSize - 1 ].indexHit.offset + kmerLength - 1 ;
-
+				no.matchCnt = hitLen ;
+				no.similarity = 0 ;
 
 				if ( hitLen * 2 < no.seqEnd - no.seqStart + 1 )
 				{
@@ -420,10 +409,89 @@ private:
 			} // iterate through concordant hits.
 			i = j ;
 		}
+		
 		return overlaps.size() ;
 	}
+	
+	// Find the overlaps from hits if it possibly span the CDR3 region and anchor paritally on V and J gene 
+	int GetVJOverlapsFromHits( SimpleVector<struct _hit> &hits, std::vector<struct _overlap> &overlaps )
+	{
+		int i, j, k ;
+		SimpleVector<struct _hit> VJhits ; 		
+		
+		int hitSize = hits.Size() ;
+		
+		// Filter hits that are out of VJ junction region.
+		VJhits.Reserve( hitSize ) ;
+		for ( i = 0 ; i < hitSize ; ++i )
+		{
+			int seqIdx = hits[i].indexHit.idx ;
+			if ( !seqs[ seqIdx ].isRef )
+				continue ;
 
+			if ( seqs[ seqIdx ].name[3] == 'V' && hits[i].indexHit.offset >= seqs[ seqIdx ].consensusLen - 31 )
+			{
+				VJhits.PushBack( hits[i] ) ;
+			}
+			else if ( seqs[ seqIdx ].name[3] == 'J' && hits[i].indexHit.offset < 31 )
+			{
+				VJhits.PushBack( hits[i] ) ;
+			}
+		}
 
+		GetOverlapsFromHits( VJhits, 17, overlaps ) ;
+		
+		// Extract the best VJ pair 
+		int overlapCnt = overlaps.size() ;
+		int maxMatchCnt = 0 ;
+		int tagi = 0, tagj = 0 ;
+		for ( i = 0 ; i < overlapCnt ; ++i )
+		{
+			for ( j = i + 1 ; j < overlapCnt ; ++j )
+			{
+				int seqIdxI = overlaps[i].seqIdx ;
+				int seqIdxJ = overlaps[j].seqIdx ;
+
+				if ( seqs[ seqIdxI ].name[0] != seqs[ seqIdxJ ].name[0] ||
+					seqs[ seqIdxI ].name[1] != seqs[ seqIdxJ ].name[1] ||
+					seqs[ seqIdxI ].name[2] != seqs[ seqIdxJ ].name[2] ||
+					seqs[ seqIdxI ].name[3] == seqs[ seqIdxJ ].name[3] )
+					continue ;			
+
+				if ( seqs[ seqIdxI ].name[3] == 'V' )
+				{
+					if ( overlaps[i].readStart > overlaps[j].readStart )
+						continue ;
+				}
+				else 
+				{
+					if ( overlaps[i].readStart < overlaps[j].readStart )
+						continue ;
+				}
+
+				if ( overlaps[i].matchCnt + overlaps[j].matchCnt > maxMatchCnt )
+				{
+					maxMatchCnt = overlaps[i].matchCnt + overlaps[j].matchCnt ;
+					tagi = i ;
+					tagj = j ;
+				}
+			}
+		}
+
+		if ( maxMatchCnt == 0 )
+		{
+			overlaps.clear() ;
+			return 0 ;
+		}
+
+		std::vector<struct _overlap> ret ;
+		ret.push_back( overlaps[ tagi ] ) ;
+		ret.push_back( overlaps[ tagj ] ) ;
+		
+		overlaps = ret ;
+
+		return 2 ;
+	}
 
 	// Obtain the overlaps, each overlap further contains the hits induce the overlap. 
 	// Return: the number of overlaps.
@@ -510,14 +578,17 @@ private:
 		//for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
 		//	printf( "- %d %d %d %d\n", it->readOffset, it->indexHit.idx, it->indexHit.offset, it->strand ) ;
 
-		int overlapCnt = GetOverlapsFromHits( hits,  overlaps ) ;
+		int overlapCnt = GetOverlapsFromHits( hits, 31, overlaps ) ;
 
 		/*for ( i = 0 ; i < overlapCnt ; ++i )
 			printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;*/ 
 		// Determine whether we want to add this reads by looking at the quality of overlap
 		if ( overlapCnt == 0 )
-			return 0 ;
-
+		{
+			overlapCnt = GetVJOverlapsFromHits( hits, overlaps ) ;
+			if ( overlapCnt == 0 )
+				return 0 ;
+		}
 		// Filter out overlaps that is not a real overlap. 
 		/*k = 0 ; 
 		for ( i = 0 ; i < overlapCnt ; ++i )
@@ -582,13 +653,27 @@ private:
 					else
 					{
 						matchCnt += 2 * kmerLength ; 
-								
-						AlignAlgo::GlobalAlignment( seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
+						
+						if ( seqs[ overlaps[i].seqIdx ].isRef  )
+						{
+							AlignAlgo::GlobalAlignment( 
+								seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
 								hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ) ,
 								r + hitCoords[j - 1].a + kmerLength, 
 								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
 								align ) ;
-						
+						}
+						else
+						{
+						//AlignAlgo::GlobalAlignment( seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
+							AlignAlgo::GlobalAlignment_PosWeight( 
+								seqs[ overlaps[i].seqIdx ].posWeight.BeginAddress() + hitCoords[j - 1].b + kmerLength,
+								hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ) ,
+								r + hitCoords[j - 1].a + kmerLength, 
+								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
+								align ) ;
+						}
+
 						int count[3] ;
 						GetAlignStats( align, false, count[0], count[1], count[2] ) ;
 						matchCnt += 2 * count[0] ;
@@ -633,12 +718,26 @@ private:
 					else
 					{
 						matchCnt += 2 * kmerLength ;
-						
-						AlignAlgo::GlobalAlignment( seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
+						 
+						if ( seqs[ overlaps[i].seqIdx ].isRef )
+						{
+							AlignAlgo::GlobalAlignment( 
+								seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
 								hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ),
 								r + hitCoords[j - 1].a + kmerLength, 
 								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength ) , 
 								align ) ;	
+						}
+						else
+						{
+							//AlignAlgo::GlobalAlignment( seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
+							AlignAlgo::GlobalAlignment_PosWeight( 
+								seqs[ overlaps[i].seqIdx ].posWeight.BeginAddress() + hitCoords[j - 1].b + kmerLength,
+								hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ),
+								r + hitCoords[j - 1].a + kmerLength, 
+								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength ) , 
+								align ) ;	
+						}
 						
 						int count[3] ;
 						GetAlignStats( align, false, count[0], count[1], count[2] ) ;
@@ -857,7 +956,9 @@ public:
 		int matchCnt, mismatchCnt, indelCnt ;
 		int leftOverhangSize = MIN( overlap.readStart, overlap.seqStart ) ;
 
-		AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqStart - leftOverhangSize, leftOverhangSize, 
+		//AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqStart - leftOverhangSize, 
+		AlignAlgo::GlobalAlignment_PosWeight( seq.posWeight.BeginAddress() + overlap.seqStart - leftOverhangSize, 
+				leftOverhangSize, 
 				r + overlap.readStart - leftOverhangSize, leftOverhangSize, align ) ;
 
 		GetAlignStats( align, false, matchCnt, mismatchCnt, indelCnt ) ;
@@ -867,7 +968,9 @@ public:
 		// Extension to 3'-end ( right end )
 		int rightOverhangSize = MIN( len - 1 - overlap.readEnd, seq.consensusLen - 1 - overlap.seqEnd ) ;
 
-		AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqEnd + 1, rightOverhangSize,
+		//AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqEnd + 1, 
+		AlignAlgo::GlobalAlignment_PosWeight( seq.posWeight.BeginAddress() + overlap.seqEnd + 1, 
+				rightOverhangSize,
 				r + overlap.readEnd + 1, rightOverhangSize, align ) ;
 		GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;
 		if ( indelCnt > 0 )
@@ -1012,10 +1115,38 @@ public:
 
 						if ( extendedOverlaps[k].readStart >= overlaps[j].readStart &&
 							extendedOverlaps[k].readEnd <= overlaps[j].readEnd )
+						{
+							if ( extendedOverlaps[k].readStart > 0 )
+							{
+								if ( seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor < 
+										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
+									seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor = 
+										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 ;
+							}
+							if ( extendedOverlaps[k].readEnd < len - 1 )
+							{
+								if ( seqs[ extendedOverlaps[k].seqIdx ].minRightExtAnchor < 
+										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
+									seqs[ extendedOverlaps[k].seqIdx ].minRightExtAnchor = 
+										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 ;
+							}
 							break ;
+						}
 					}
 					if ( j < i )
 						continue ;
+					
+					if ( extendedOverlaps[k].readStart > 0 )
+					{
+						if ( seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor >= extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
+							continue ;
+					}
+					if ( extendedOverlaps[k].readEnd < len - 1 )
+					{
+						if ( seqs[ extendedOverlaps[k].seqIdx ].minRightExtAnchor >= extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
+							continue ;
+					}
+
 
 					tag = i ;
 					++k ;
@@ -1313,6 +1444,9 @@ public:
 				UpdateConsensus( newSeqIdx, false ) ;
 				seqIndex.BuildIndexFromRead( kmerCode, newConsensus, newConsensusLen, newSeqIdx ) ;
 				
+				// Update the anchor requirement.
+				seqs[ newSeqIdx ].minLeftExtAnchor = seqs[ extendedOverlaps[0].seqIdx ].minLeftExtAnchor ;
+				seqs[ newSeqIdx ].minRightExtAnchor = seqs[ extendedOverlaps[ eOverlapCnt - 1 ].seqIdx ].minRightExtAnchor ;
 				
 				// either one of the ends of read or seq should be 0.
 				readInConsensusOffset = 0 ;
@@ -1387,6 +1521,12 @@ public:
 						int start = extendedOverlaps[0].readStart + seq.consensusLen ;
 						seq.posWeight.SetZero( start, len - extendedOverlaps[0].readEnd - 1 ) ;
 					}
+					
+					// Update the anchor requirement
+					if ( shift > 0 )
+						seq.minLeftExtAnchor = 0 ;
+					if ( extendedOverlaps[0].readEnd < len - 1 )
+						seq.minRightExtAnchor = 0 ;
 
 					// Adjust the name.
 					// Find the possible ref seq
@@ -1556,9 +1696,13 @@ public:
 			for ( i = 0 ; i < len ; ++i )
 			{
 				//memset( ns.posWeight[i].count, 0, sizeof( ns.posWeight[i].count ) ) ;
+				if ( ns.consensus[i] == 'N' )
+					continue ;
+				
 				++ns.posWeight[i].count[ nucToNum[ ns.consensus[i] - 'A' ] ] ;
 			}
 			//printf( "%d %s %lld\n", ns.posWeight.Size(), ns.consensus, ns.posWeight.BeginAddress() ) ;
+			ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
 			seqs.push_back( ns ) ;
 
 			// Don't forget to update index.
@@ -1939,7 +2083,6 @@ public:
 		overlapCnt = GetOverlapsFromRead( read, overlaps ) ;		
 		if ( overlapCnt == 0 )
 			return 0 ;
-
 		std::sort( overlaps.begin(), overlaps.end() ) ;
 		// Get the coverage of the genes.
 		for ( i = 0 ; i < overlapCnt ; ++i )
@@ -1984,7 +2127,7 @@ public:
 				if ( geneOverlap[i].seqIdx == -1 )
 					continue ;
 				int seqIdx = geneOverlap[i].seqIdx ;				
-				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + geneOverlap[i].seqEnd + 1, seqs[ seqIdx ].consensusLen - geneOverlap[i].seqEnd, read + geneOverlap[i].readEnd + 1, len - geneOverlap[i].readEnd, align ) ;
+				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + geneOverlap[i].seqEnd + 1, seqs[ seqIdx ].consensusLen - geneOverlap[i].seqEnd, read + geneOverlap[i].readEnd + 1, len - geneOverlap[i].readEnd, 0, align ) ;
 				
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
@@ -2005,7 +2148,11 @@ public:
 				char *rvs = new char[seqs[ seqIdx ].consensusLen ] ;
 				Reverse( rvr, read, geneOverlap[i].readStart ) ;
 				Reverse( rvs, seqs[seqIdx].consensus, geneOverlap[i].seqStart ) ;
-				AlignAlgo::GlobalAlignment_OneEnd( rvs, geneOverlap[i].seqStart, rvr, geneOverlap[i].readStart, align ) ;
+				//rvr[geneOverlap[i].readStart] = '\0' ;
+				//rvs[geneOverlap[i].seqStart] = '\0' ;
+				
+				AlignAlgo::GlobalAlignment_OneEnd( rvs, geneOverlap[i].seqStart, rvr, geneOverlap[i].readStart, 0, align ) ;
+				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
 					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
@@ -2030,6 +2177,41 @@ public:
 		}
 
 		// Infer CDR1,2,3.
+		char *cdr3 = NULL ;
+		if ( detailLevel >= 2 )
+		{
+			// Infer CDR3.
+			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
+			{
+				// The case that we have anchor.
+				// Find the motif for anchor.
+				if ( geneOverlap[0].readEnd < geneOverlap[2].readStart )
+				{
+					int s = geneOverlap[0].readEnd + 1 ;
+					int e = geneOverlap[2].readStart - 1 ;
+
+					for ( i = s ; i >= 0 ; --i )
+					{
+						if ( read[i] == 'T' && read[i + 1] == 'G' && read[i + 2] == 'T' )
+							break ;
+					}
+					if ( i >= 0 )
+						s = i ;
+
+					for ( i = e ; i < len - 2 ; ++i )
+					{
+						if ( read[i] == 'T' && read[i + 1] == 'G' && read[i + 2] == 'G' )
+							break ;
+					}
+					if ( i < len - 2 )
+						e = i + 2 ;
+
+					cdr3 = new char[e - s + 2  + 1 ] ;
+					memcpy( cdr3, read + s, e - s + 1 ) ;
+					cdr3[e - s + 1] = '\0' ;
+				}
+			}
+		}
 
 		// Compute the name
 		for ( i = 0 ; i < 4 ; ++i )
@@ -2044,6 +2226,11 @@ public:
 				geneOverlap[i].readStart, geneOverlap[i].readEnd, 
 				geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;	
 		}
+		
+		sprintf( buffer + strlen( buffer ), " CDR3=%s", cdr3 == NULL ? "null" : cdr3 ) ;
+
+		if ( cdr3 != NULL )
+			delete[] cdr3 ;
 		return 1 ;
 	}
 	
