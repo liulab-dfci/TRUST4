@@ -56,6 +56,13 @@ struct _sortRead
 	}
 } ;
 
+
+bool CompSortReadById( const struct _Read &a, const struct _Read &b )
+{
+	return strcmp( a.id, b.id ) < 0 ;
+}
+
+
 int main( int argc, char *argv[] )
 {
 	int i, j ;
@@ -173,6 +180,7 @@ int main( int argc, char *argv[] )
 #endif
 	
 	std::vector<int> rescueReadIdx ;
+	std::vector<int> assembledReadIdx ;
 	int assembledReadCnt = 0 ;
 	int prevAddRet = -1 ;
 	for ( i = 0 ; i < readCnt ; ++i )
@@ -206,7 +214,10 @@ int main( int argc, char *argv[] )
 		if ( addRet == -2 )
 			rescueReadIdx.push_back( i ) ;
 		else if ( addRet >= 0 )
+		{
 			++assembledReadCnt ;
+			assembledReadIdx.push_back( i ) ;
+		}
 
 		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
 			seqSet.UpdateAllConsensus() ;
@@ -245,7 +256,10 @@ int main( int argc, char *argv[] )
 		int addRet = -1 ;
 		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read ) ;
 		if ( addRet >= 0 )
+		{
 			++assembledReadCnt ;
+			assembledReadIdx.push_back( rescueReadIdx[i] ) ;
+		}
 #ifdef DEBUG
 		printf( "done\n" ) ;
 #endif
@@ -267,7 +281,7 @@ int main( int argc, char *argv[] )
 	FILE *fp ;
 	if ( outputPrefix[0] != '-' )
 	{
-		sprintf( buffer, "%s_assembly.out", outputPrefix ) ;
+		sprintf( buffer, "%s_raw_assembly.out", outputPrefix ) ;
 		fp = fopen( buffer, "w" ) ;
 	}
 	else
@@ -278,6 +292,59 @@ int main( int argc, char *argv[] )
 	
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;
+
+	//sprintf( buffer, "%s_assembled_reads.fa", outputPrefix ) ;
+
+	std::vector<struct _Read> assembledReads ;
+	assembledReadCnt = assembledReadIdx.size() ;
+	for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		struct _Read nr ;
+		nr.id = sortedReads[ assembledReadIdx[i] ].id ;
+		nr.seq = sortedReads[ assembledReadIdx[i] ].read ;
+		assembledReads.push_back( nr ) ;
+	}
+	std::sort( assembledReads.begin(), assembledReads.end(), CompSortReadById ) ;	
+	SeqSet extendedSeq( 17 ) ;
+	extendedSeq.InputSeqSet( seqSet, false ) ;
+	/*extendedSeq.BreakFalseAssembly( assembledReads ) ;
+	
+	if ( outputPrefix[0] != '-' )
+	{
+		sprintf( buffer, "%s_contig.out", outputPrefix ) ;
+		fp = fopen( buffer, "w" ) ;
+	}
+	else
+		fp = stdout ;
+
+	extendedSeq.Output( fp ) ;
+	fflush( fp ) ;
+	
+	if ( outputPrefix[0] != '-' )
+		fclose( fp ) ;*/
+	
+	
+	extendedSeq.ExtendSeqFromReads( assembledReads ) ;
+	
+	if ( outputPrefix[0] != '-' )
+	{
+		sprintf( buffer, "%s_extended.out", outputPrefix ) ;
+		fp = fopen( buffer, "w" ) ;
+	}
+	else
+		fp = stdout ;
+
+	extendedSeq.Output( fp ) ;
+	fflush( fp ) ;
+	
+	if ( outputPrefix[0] != '-' )
+		fclose( fp ) ;
+	
+	/*for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		fprintf( fp, ">%s\n%s\n", assembledReads[i].id, assembledReads[i].read ) ;
+	}
+	fclose( fp ) ;*/
 	
 	for ( i = 0 ; i < readCnt ; ++i )
 	{

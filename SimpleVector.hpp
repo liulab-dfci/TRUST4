@@ -164,6 +164,12 @@ public:
 	{
 		return size ;
 	}
+
+	int Resize( int s ) 
+	{
+		size = s ;
+	}
+
 	int Capacity()
 	{
 		return capacity ;

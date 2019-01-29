@@ -161,6 +161,13 @@ class ReadFiles
 				free( qual ) ;
 
 			id = strdup( inSeq[ currentFpInd ]->name.s ) ;
+			int len = strlen( id ) ;
+			if ( ( id[len - 1] == '1' || id[len - 1] == '2' )
+					&& id[len - 2] == '/' )
+			{
+				id[len - 2] = '\0' ;
+			}
+			
 			seq = strdup( inSeq[ currentFpInd ]->seq.s ) ;
 			if ( inSeq[ currentFpInd ]->qual.l )
 				qual = strdup( inSeq[ currentFpInd]->qual.s ) ;

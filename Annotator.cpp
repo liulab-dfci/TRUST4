@@ -24,7 +24,7 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 char buffer[10241] = "" ;
 char seq[10241] = "" ;
 
-static const char *short_options = "f:a:" ;
+static const char *short_options = "f:a:r:" ;
 static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
@@ -32,6 +32,7 @@ static struct option long_options[] = {
 int main( int argc, char *argv[] )
 {
 	int i ;
+	int radius = 10 ;
 
 	if ( argc <= 1 )
 	{
@@ -39,7 +40,7 @@ int main( int argc, char *argv[] )
 		return 0 ;
 	}
 
-	SeqSet refSet( 9 ) ;
+	SeqSet refSet( 7 ) ;
 	int c, option_index ;
 	FILE *fpAssembly = NULL ;
 	struct _overlap geneOverlap[4] ;
@@ -60,6 +61,10 @@ int main( int argc, char *argv[] )
 		{
 			fpAssembly = fopen( optarg, "r" ) ;
 		}
+		else if ( c == 'r' )
+		{
+			radius = atoi( optarg ) ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -78,7 +83,7 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -a to specify the assembly file.\n" ) ;
 		return EXIT_FAILURE ;
 	}
-
+	refSet.SetRadius( radius ) ;
 	while ( fgets( buffer, sizeof( buffer ), fpAssembly ) != NULL )
 	{
 		if ( buffer[0] != '>' )
