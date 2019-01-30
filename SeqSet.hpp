@@ -567,8 +567,8 @@ private:
 		if ( rightOverhangSize >= 2 )
 			++mismatchThreshold ;
 		
-		//if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
-		//	ret = 0 ;
+		if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
+			ret = 0 ;
 
 		extendedOverlap.seqIdx = overlap.seqIdx ;
 		extendedOverlap.readStart = overlap.readStart - leftOverhangSize ;
@@ -1051,7 +1051,10 @@ private:
 				extendedOverlap.similarity = (double)extendedOverlap.matchCnt / 
 					( extendedOverlap.readEnd - extendedOverlap.readStart + 1 +
 					  extendedOverlap.seqEnd - extendedOverlap.seqStart + 1 ) ;
-				//printf( "%d %d: %d %lf %lf\n", i, j, overlaps[j]overlaps[j].similarity, extendedOverlap.similarity ) ;
+				printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
+						extendedOverlap.readStart, extendedOverlap.readEnd,
+						extendedOverlap.seqStart, extendedOverlap.seqEnd,
+						extendedOverlap.similarity ) ;
 				
 				if ( extendedOverlap.similarity >= repeatSimilarity )
 					adj[i].push_back( extendedOverlap ) ;
@@ -2697,15 +2700,15 @@ public:
 			if ( direction == 1 )
 			{
 				if ( branchAdj[from][i].seqIdx == to 
-						&& branchAdj[from][i].readEnd >= seqs[from].consensusLen - 5 
-						&& branchAdj[from][i].seqStart <= 5 - 1 )
+						&& branchAdj[from][i].readEnd >= seqs[from].consensusLen - 5 ) 
+						//&& branchAdj[from][i].seqStart <= 5 - 1 )
 					break ;
 			}
 			else if ( direction == -1 )
 			{
 				if ( branchAdj[from][i].seqIdx == to 
-						&& branchAdj[from][i].readStart >= 5 - 1
-						&& branchAdj[from][i].seqEnd <= seqs[to].consensusLen - 5 )
+						&& branchAdj[from][i].readStart <= 5 - 1 )
+						//&& branchAdj[from][i].seqEnd <= seqs[to].consensusLen - 5 )
 					break ;
 			}
 		}
@@ -2989,25 +2992,24 @@ public:
 			offset += seqs[i].consensusLen ;
 			if ( rightExtend.seqIdx != -1 )
 			{
-				memcpy( newConsensus + offset, seqs[ nextAdj[i][prevTag].seqIdx ].consensus + rightExtend.seqStart, 
+				memcpy( newConsensus + offset, seqs[ nextAdj[i][nextTag].seqIdx ].consensus + rightExtend.seqStart, 
 					rightExtend.seqEnd - rightExtend.seqStart + 1 ) ;
 				offset += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
 			}
 			memcpy( newConsensus + shift, seqs[i].consensus, seqs[i].consensusLen ) ;
 			newConsensus[offset] = '\0' ;
 
+			
 			struct _seqWrapper ns ;
+			ns.isRef = false ;
 			ns.consensus = newConsensus ;
 			ns.consensusLen = newConsensusLen ;
 			ns.name = strdup( seqs[i].name ) ;
 			ns.posWeight.ExpandTo( newConsensusLen ) ;
 			ns.posWeight.SetZero( 0, newConsensusLen - 1 ) ;
-			offset = 0 ;
-			if ( leftExtend.seqIdx != -1 )
-				offset += leftExtend.seqEnd - leftExtend.seqStart + 1 ; 
 			for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
-				ns.posWeight[i + offset] = seqs[i].posWeight[j] ;
-
+				ns.posWeight[j + shift] = seqs[i].posWeight[j] ;
+			printf( "%d new %s\n", i, newConsensus) ;	
 			seqs.push_back( ns ) ;
 			toRemoveSeqIdx.PushBack( i ) ;
 		}
@@ -3031,7 +3033,7 @@ public:
 			if ( seqs[i].isRef || seqs[i].consensus == NULL )
 				continue ;
 
-			fprintf( fp, ">contig%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
+			fprintf( fp, ">seq%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
 			
 			for ( k = 0 ; k < 4 ; ++k )
 			{
