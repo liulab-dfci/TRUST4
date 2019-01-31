@@ -150,6 +150,15 @@ private:
 		return false ;	
 	}
 
+	bool IsOverlapIntersect( const struct _overlap &a, const struct _overlap &b )
+	{
+		if ( a.seqIdx == b.seqIdx && 
+			( ( a.seqStart <= b.seqStart && a.seqEnd >= b.seqStart ) 
+			|| ( b.seqStart <= a.seqStart && b.seqEnd >= a.seqStart ) ) )
+			return true ;
+		return false ;
+	}
+
 	// Return the first index whose hits.a is smaller or equal to valA
 	int BinarySearch_LIS( int top[], int size, int valA, SimpleVector<struct _pair> &hits )
 	{
@@ -2707,7 +2716,7 @@ public:
 			else if ( direction == -1 )
 			{
 				if ( branchAdj[from][i].seqIdx == to 
-						&& branchAdj[from][i].readStart <= 5 - 1 )
+						&& branchAdj[from][i].readStart <= 5 - 1 ) 
 						//&& branchAdj[from][i].seqEnd <= seqs[to].consensusLen - 5 )
 					break ;
 			}
@@ -2722,8 +2731,17 @@ public:
 		}*/
 		
 		coord.seqIdx = to ;
-		coord.readStart = 0 ;
-		coord.readEnd = seqs[from].consensusLen - 1 ;
+
+		if ( direction == 1 )
+		{
+			coord.readStart = 0 ;
+			coord.readEnd = branchAdj[from][k].readEnd ;
+		}
+		else
+		{
+			coord.readStart = branchAdj[from][k].readStart ;
+			coord.readEnd = seqs[from].consensusLen - 1 ;
+		}
 
 		if ( direction == 1 )
 		{
@@ -2744,7 +2762,7 @@ public:
 		int i, j, k ;
 		int readCnt = 0 ;
 		int seqCnt = seqs.size() ;
-		novelSeqSimilarity = 0.95 ;
+		novelSeqSimilarity = 1.0 ;
 
 		int ret = 0 ;
 
@@ -2972,31 +2990,46 @@ public:
 				GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, rightExtend ) ;
 			
 			// Compute the sequence for new 
-			int newConsensusLen = seqs[i].consensusLen ; 
+			int newConsensusLen = 0 ; 
+			int shift = 0, offset = 0 ;
+			
+			int start, end ; // we might chop the endings of the current seq.
+			start = 0 ;
+			end = seqs[i].consensusLen - 1 ;
 			if ( leftExtend.seqIdx != -1 )
+			{
+				shift = leftExtend.seqEnd - leftExtend.seqStart + 1 ;
+				start = leftExtend.readStart ;
 				newConsensusLen += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
+			}
 			if ( rightExtend.seqIdx != -1 )
+			{
 				newConsensusLen += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
+				end = rightExtend.readEnd ;
+			}
+			newConsensusLen += end - start + 1 ;
 			if ( newConsensusLen == seqs[i].consensusLen )
 				continue ;
 
 			char *newConsensus = (char *)malloc( sizeof( char ) * ( newConsensusLen + 1 ) ) ;
-			int shift = 0, offset = 0 ;
+			
+			// The ending of current seq might be some random extensions, so
+			//    it has lower priority.
+			memcpy( newConsensus + shift, seqs[i].consensus + start, end - start + 1 ) ;
+			
 			if ( leftExtend.seqIdx != -1 )
 			{
 				memcpy( newConsensus, seqs[ prevAdj[i][prevTag].seqIdx ].consensus + leftExtend.seqStart, 
 					leftExtend.seqEnd - leftExtend.seqStart + 1 ) ;
 				offset += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
-				shift = offset ;
 			}
-			offset += seqs[i].consensusLen ;
+			offset += end - start + 1 ;
 			if ( rightExtend.seqIdx != -1 )
 			{
 				memcpy( newConsensus + offset, seqs[ nextAdj[i][nextTag].seqIdx ].consensus + rightExtend.seqStart, 
 					rightExtend.seqEnd - rightExtend.seqStart + 1 ) ;
 				offset += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
 			}
-			memcpy( newConsensus + shift, seqs[i].consensus, seqs[i].consensusLen ) ;
 			newConsensus[offset] = '\0' ;
 
 			
@@ -3007,8 +3040,14 @@ public:
 			ns.name = strdup( seqs[i].name ) ;
 			ns.posWeight.ExpandTo( newConsensusLen ) ;
 			ns.posWeight.SetZero( 0, newConsensusLen - 1 ) ;
-			for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
-				ns.posWeight[j + shift] = seqs[i].posWeight[j] ;
+			for ( j = 0 ; j < end - start + 1 ; ++j )
+				ns.posWeight[j + shift] = seqs[i].posWeight[j + start] ;
+
+			if ( leftExtend.seqIdx != -1 )
+				printf( "prev: %d %s\n", prevAdj[i][prevTag].seqIdx, seqs[ prevAdj[i][prevTag].seqIdx ].consensus ) ;
+			printf( "my: %d %s\n", i, seqs[i].consensus ) ;
+			if ( rightExtend.seqIdx != -1 )
+				printf( "next: %d %s\n", nextAdj[i][nextTag].seqIdx, seqs[ nextAdj[i][nextTag].seqIdx ].consensus ) ;
 			printf( "%d new %s\n", i, newConsensus) ;	
 			seqs.push_back( ns ) ;
 			toRemoveSeqIdx.PushBack( i ) ;
@@ -3033,7 +3072,7 @@ public:
 			if ( seqs[i].isRef || seqs[i].consensus == NULL )
 				continue ;
 
-			fprintf( fp, ">seq%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
+			fprintf( fp, ">assemble%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
 			
 			for ( k = 0 ; k < 4 ; ++k )
 			{
