@@ -33,6 +33,13 @@ public:
 		//printf( "%s: %d %d %d\n", __func__, hashSize, sizeof( hash[0] ), hash[0].Memory() ) ;
 	}
 
+	void Clear()
+	{
+		//index.clear() ;	
+	
+		std::map<uint64_t, SimpleVector<struct _indexInfo> >().swap( index ) ;
+	}
+
 	void Insert( KmerCode &kmerCode, index_t idx, index_t offset, int strand )
 	{
 		if ( !kmerCode.IsValid() )

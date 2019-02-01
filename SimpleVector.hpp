@@ -187,6 +187,10 @@ public:
 
 	T &operator[]( int i )
 	{
+		/*if ( i >= size )
+		{
+			printf( "ERROR\n" ) ;
+		}*/
 		assert( i < size ) ;
 		if ( i >= size )
 		{

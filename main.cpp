@@ -324,6 +324,7 @@ int main( int argc, char *argv[] )
 		fclose( fp ) ;*/
 	
 	
+	fprintf( stderr, "Extend assemblies by mate pair information and their overlaps.\n" ) ;
 	extendedSeq.ExtendSeqFromReads( assembledReads ) ;
 	
 	if ( outputPrefix[0] != '-' )
@@ -339,6 +340,24 @@ int main( int argc, char *argv[] )
 	
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;
+	
+	
+	/*if ( outputPrefix[0] != '-' )
+	{
+		sprintf( buffer, "%s_final.out", outputPrefix ) ;
+		fp = fopen( buffer, "w" ) ;
+	}
+	else
+		fp = stdout ;
+	
+	i = extendedSeq.ExtendSeqFromSeqOverlap() ;
+	extendedSeq.UpdateAllConsensus() ;
+	
+	extendedSeq.Output( fp ) ;
+	fflush( fp ) ;
+	
+	if ( outputPrefix[0] != '-' )
+		fclose( fp ) ;*/
 	
 	/*for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
