@@ -2136,7 +2136,32 @@ public:
 	
 		//BuildSeqOverlapGraph( 100, adj ) ;
 		BuildBranchGraph( adj ) ;
-		// Keep only the connections that representing 
+		// Keep only the connections that representing overlapping information.
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int size = adj[i].size() ;
+			for ( j = 0 ; j < size ; ++j )
+			{
+				if ( adj[i][j].readEnd < seqs[i].consensusLen - 1 ||
+					adj[i][j].seqStart > 0 )
+					adj[i][j].seqIdx = -1 ;
+				else if ( adj[i][j].readStart == 0 && adj[i][j].readEnd == seqs[i].consensusLen - 1
+					&& adj[i][j].seqStart == 0 && adj[i][j].seqEnd == seqs[ adj[i][j].seqIdx ].consensusLen - 1 
+					&& i > adj[i][j].seqIdx )
+					adj[i][j].seqIdx = -1 ;
+			}
+			
+			k = 0 ;
+			for ( j = 0 ; j < size ; ++j )
+			{
+				if ( adj[i][j].seqIdx != -1 )
+				{
+					adj[i][k] = adj[i][j] ;
+					++k ;
+				}
+			}
+			adj[i].resize( k ) ;
+		}
 
 		memset( next, -1, sizeof( struct _pair ) * seqCnt ) ;
 		memset( prev, -1, sizeof( struct _pair ) * seqCnt ) ;
@@ -2184,6 +2209,9 @@ public:
 			if ( size == 0 )
 				continue ;
 			k = 0 ;
+			if ( containedIn[i] != -1 )
+				continue ;
+
 			if ( containedIn[ adj[i][0].seqIdx ] != -1 )
 			{
 				for ( j = 0 ; j < size ; ++j )
@@ -2207,6 +2235,9 @@ public:
 				prev[ adj[i][k].seqIdx ].a = -2 ;
 			}
 		}
+		
+		//for ( i = 0 ; i < seqCnt ; ++i )
+		//	printf( "%d next %d prev %d contained %d\n", i, next[i].a, prev[i].a, containedIn[i] ) ;
 		
 		// Use the paths to merge seqs.
 		for ( i = 0 ; i < seqCnt ; ++i )
@@ -2276,12 +2307,12 @@ public:
 				// Update index	
 				//int newSeqIdx = seqs.size() ;
 				seqs.push_back( ns ) ;
-				/*for ( j = 0 ; j < k ; ++j )
+				for ( j = 0 ; j < k ; ++j )
 				{
-					seqIndex.RemoveIndexFromRead( kmerCode, seqs[ path[j] ].consensus, seqs[ path[j] ].consensusLen, path[j], 0 ) ;						
+					//seqIndex.RemoveIndexFromRead( kmerCode, seqs[ path[j] ].consensus, seqs[ path[j] ].consensusLen, path[j], 0 ) ;						
 					ReleaseSeq( path[j] ) ;
 				}
-				seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, newSeqIdx ) ;*/
+				//seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, newSeqIdx ) ;
 			
 				ret += k - 1 ;
 			}

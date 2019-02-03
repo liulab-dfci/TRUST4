@@ -342,7 +342,7 @@ int main( int argc, char *argv[] )
 		fclose( fp ) ;
 	
 	
-	/*if ( outputPrefix[0] != '-' )
+	if ( outputPrefix[0] != '-' )
 	{
 		sprintf( buffer, "%s_final.out", outputPrefix ) ;
 		fp = fopen( buffer, "w" ) ;
@@ -357,7 +357,7 @@ int main( int argc, char *argv[] )
 	fflush( fp ) ;
 	
 	if ( outputPrefix[0] != '-' )
-		fclose( fp ) ;*/
+		fclose( fp ) ;
 	
 	/*for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
