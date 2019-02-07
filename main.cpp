@@ -19,7 +19,8 @@ char usage[] = "./bcr [OPTIONS]:\n"
 		"\t\tor\n"
 		"\t-b STRING: path to BAM alignment file\n"
 		"Optional:\n"
-		"\t-o STRING: prefix of the output file (default: batas)\n" ;
+		"\t-o STRING: prefix of the output file (default: batas)\n"
+		"\t-c STRING: the path to the kmer count file\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -30,7 +31,7 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10240] = "" ;
 
-static const char *short_options = "f:u:1:2:b:o:" ;
+static const char *short_options = "f:u:1:2:b:o:c:" ;
 static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
@@ -62,6 +63,29 @@ bool CompSortReadById( const struct _Read &a, const struct _Read &b )
 	return strcmp( a.id, b.id ) < 0 ;
 }
 
+bool IsLowComplexity( char *seq )
+{
+	int cnt[5] = {0, 0, 0, 0, 0} ;
+	int i ;
+	for ( i = 0 ; seq[i] ; ++i )
+	{
+		if ( seq[i] == 'N' )
+			++cnt[4] ;
+		else
+			++cnt[ nucToNum[ seq[i] - 'A' ] ] ;
+	}
+
+	if ( cnt[0] >= i / 2 || cnt[1] >= i / 2 || cnt[2] >= i / 2 || cnt[3] >= i / 2 || cnt[4] >= i / 10 )
+		return true ;
+
+	int lowCnt = 0 ; 
+	for ( i = 0 ; i < 4 ; ++i )
+		if ( cnt[i] <= 2 )
+			++lowCnt ;
+	if ( lowCnt >= 2 )
+		return true ;
+	return false ;
+}
 
 int main( int argc, char *argv[] )
 {
@@ -77,12 +101,14 @@ int main( int argc, char *argv[] )
 	option_index = 0 ;
 	SeqSet seqSet( 9 ) ;
 	SeqSet refSet( 9 ) ;
-	KmerCount kmerCount( 21) ;
+	KmerCount kmerCount( 21 ) ;
 	char outputPrefix[200] = "batas" ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
-	
+	bool countMyself = true ;
+	int maxReadLen = -1 ;
+
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -111,6 +137,11 @@ int main( int argc, char *argv[] )
 		{
 			strcpy( outputPrefix, optarg ) ;
 		}
+		else if ( c == 'c' )
+		{
+			kmerCount.AddCountFromFile( optarg ) ;
+			countMyself = false ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -132,38 +163,73 @@ int main( int argc, char *argv[] )
 	i = 0 ;
 	while ( reads.Next() )
 	{
+		/*struct _overlap geneOverlap[4] ;
+		refSet.AnnotateRead( reads.seq, 1, geneOverlap, buffer ) ;
+	
+		if ( geneOverlap[0].seqIdx + geneOverlap[1].seqIdx + geneOverlap[2].seqIdx + geneOverlap[3].seqIdx == -4 )
+		{
+			continue ;
+		}*/
+
+		if ( IsLowComplexity( reads.seq ) )
+			continue ;
+
 		struct _sortRead nr ;
 		nr.read = strdup( reads.seq ) ;
 		nr.id = strdup( reads.id ) ;
 
 		sortedReads.push_back( nr ) ;
-		kmerCount.AddCount( reads.seq ) ;
+		if ( countMyself )
+			kmerCount.AddCount( reads.seq ) ;
 
 		++i ;
-		if ( i % 100000 == 0 )
+
+		int len = strlen( reads.seq ) ;
+		if ( len > maxReadLen )
+			maxReadLen = len ;
+	
+		if ( countMyself && i % 100000 == 0 )
 			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
 	}
 	
 	while ( mateReads.Next() )
 	{
+		/*struct _overlap geneOverlap[4] ;
+		refSet.AnnotateRead( mateReads.seq, 0, geneOverlap, buffer ) ;
+		
+		if ( geneOverlap[0].seqIdx + geneOverlap[1].seqIdx + geneOverlap[2].seqIdx + geneOverlap[3].seqIdx == -4 )
+			continue ;*/
+		if ( IsLowComplexity( reads.seq ) )
+			continue ;
+
 		struct _sortRead nr ;
 		nr.read = strdup( mateReads.seq ) ;
 		nr.id = strdup( mateReads.id ) ;
 
 		sortedReads.push_back( nr ) ;
-		kmerCount.AddCount( mateReads.seq ) ;
+		if ( countMyself )
+			kmerCount.AddCount( mateReads.seq ) ;
 
 		++i ;
-		if ( i % 100000 == 0 )
+		
+		int len = strlen( reads.seq ) ;
+		if ( len > maxReadLen )
+			maxReadLen = len ;
+		
+		if ( countMyself && i % 100000 == 0 )
 			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
 	}
 
 	fprintf( stderr, "Found %i reads.\n", i ) ;
-
+	if ( maxReadLen <= 0 )
+	{
+		return 0 ;
+	}
 #ifdef DEBUG
 	printf( "Finish read in the reads and kmer count.\n") ;
 #endif
 	int readCnt = sortedReads.size() ;
+	kmerCount.SetBuffer( maxReadLen ) ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		kmerCount.GetCountStats( sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;

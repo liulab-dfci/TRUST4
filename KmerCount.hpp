@@ -58,6 +58,10 @@ public:
 			{
 				uint64_t kcode = kmerCode.GetCanonicalKmerCode() ;
 				++count[ GetHash(kcode) ][ kcode ] ;
+				/*if ( count[ GetHash( kcode ) ][ kcode ] >= 500 )
+				{
+					printf( "%s\n", read + i - kmerLength + 1 ) ;
+				}*/
 			}
 		}
 		
@@ -83,9 +87,16 @@ public:
 			for ( i = 0 ; buffer[i] ; ++i )
 				kmerCode.Append( buffer[i] ) ;
 			uint64_t kcode = kmerCode.GetCode() ;
-			count[ GetHash( kcode ) ][ kcode ] += c ;
+			count[ GetHash( kcode ) ][ kcode ] = c ;
 		}
 		fclose( fp ) ;
+	}
+
+	void SetBuffer( int sz )
+	{
+		maxReadLen = sz ;
+		if ( c == NULL )
+			 c = new int[ sz ] ;
 	}
 
 	int GetCountStats( char *read, int &minCount, int &medianCount, double &avgCount )
@@ -116,6 +127,8 @@ public:
 			{
 				uint64_t kcode = kmerCode.GetCanonicalKmerCode() ;
 				c[k] = count[ GetHash( kcode ) ][ kcode ] ;
+				if ( c[k] <= 0 )
+					c[k] = 1 ;
 				sum += c[k] ;
 				++k ;
 			}
@@ -136,7 +149,6 @@ public:
 					--minCount ;
 			}
 
-		
 		return 1 ;
 	}
 

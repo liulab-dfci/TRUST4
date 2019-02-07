@@ -102,7 +102,10 @@ private:
 
 	static bool CompSortPairBInc( const struct _pair &p1, const struct _pair &p2 )
 	{
-		return p1.b < p2.b ;
+		if ( p1.b != p2.b )
+			return p1.b < p2.b ;
+		else
+			return p1.a < p2.a ;
 	}
 	
 	static bool CompSortPairAInc( const struct _pair &p1, const struct _pair &p2 )
@@ -202,8 +205,8 @@ private:
 		record[0] = 0 ;
 		for ( i = 1 ; i < size ; ++i )
 		{
-			if ( hits[i].b == hits[i - 1].b )
-				continue ;
+			//if ( hits[i].b == hits[i - 1].b )
+			//	continue ;
 			record[rcnt] = i ;
 			++rcnt ;
 		}
@@ -242,6 +245,20 @@ private:
 			k = link[k] ;	
 		}
 		LIS.Reverse() ;
+		
+		// Remove elements with same b.
+		if ( ret > 0 )
+		{
+			k = 1 ;
+			for ( i = 1 ; i < ret ; ++i )
+			{
+				if ( LIS[i].b == LIS[k - 1].b )
+					continue ;
+				LIS[k] = LIS[i] ;
+				++k ;
+			}
+			ret = k ;
+		}
 
 		delete []top ;
 		delete []record ;
@@ -386,7 +403,6 @@ private:
 					nh.b = hits[ hitId ].indexHit.offset ;
 					concordantHitCoord.PushBack( nh ) ;
 				}
-
 				std::sort( concordantHitCoord.BeginAddress(), concordantHitCoord.EndAddress(), CompSortPairBInc ) ;
 				//for ( k = 0 ; k < e - s ; ++k )	
 				//	printf( "%d (%d-%d): %d %d %d\n", i, s, e, hits[i].indexHit.idx, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
@@ -695,8 +711,8 @@ private:
 
 		int overlapCnt = GetOverlapsFromHits( hits, 31, overlaps ) ;
 
-		/*for ( i = 0 ; i < overlapCnt ; ++i )
-			printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;*/ 
+		//for ( i = 0 ; i < overlapCnt ; ++i )
+		//	printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
 		// Determine whether we want to add this reads by looking at the quality of overlap
 		if ( overlapCnt == 0 )
 		{
@@ -821,12 +837,13 @@ private:
 				}
 				else
 				{
-					if ( radius == 0 || seqs[ overlaps[i].seqIdx ].isRef )
+					if ( radius == 0 || !seqs[ overlaps[i].seqIdx ].isRef )
 					{
 						similarity = 0 ;
 						break ;
 					}
 
+					//printf( "%d %d=>%d %d\n", hitCoords[j - 1].a, hitCoords[j - 1].b, hitCoords[j].a, hitCoords[j].b ) ;
 					if ( hitCoords[j - 1].a + kmerLength - 1 >= hitCoords[j].a && 
 						hitCoords[j - 1].b + kmerLength - 1 < hitCoords[j].b )
 					{
@@ -1068,11 +1085,12 @@ private:
 				extendedOverlap.similarity = (double)extendedOverlap.matchCnt / 
 					( extendedOverlap.readEnd - extendedOverlap.readStart + 1 +
 					  extendedOverlap.seqEnd - extendedOverlap.seqStart + 1 ) ;
+#ifdef DEBUG
 				printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
 						extendedOverlap.readStart, extendedOverlap.readEnd,
 						extendedOverlap.seqStart, extendedOverlap.seqEnd,
 						extendedOverlap.similarity ) ;
-				
+#endif				
 				if ( extendedOverlap.similarity >= repeatSimilarity )
 					adj[i].push_back( extendedOverlap ) ;
 			}
@@ -2214,8 +2232,15 @@ public:
 
 			if ( containedIn[ adj[i][0].seqIdx ] != -1 )
 			{
+				int father = containedIn[ adj[i][0].seqIdx ] ;
+				while ( 1 )
+				{
+					if ( containedIn[ father ] == -1 )
+						break ;
+					father = containedIn[ father ] ;
+				}
 				for ( j = 0 ; j < size ; ++j )
-					if ( adj[i][j].seqIdx == containedIn[ adj[i][0].seqIdx ] )
+					if ( adj[i][j].seqIdx == father )
 						break ;
 				if ( j < size )
 					k = j ;
@@ -2279,7 +2304,7 @@ public:
 				ns.posWeight.ExpandTo( newConsensusLen ) ;
 				
 				// Update posweight
-				ns.posWeight.SetZero( 0, newConsensusLen - 1 ) ;
+				ns.posWeight.SetZero( 0, newConsensusLen ) ;
 				for ( j = 0 ; j < k ; ++j )
 				{
 					int l, c ;
@@ -2968,9 +2993,9 @@ public:
 				UpdateMateAdjGraph( from, fromStart, fromEnd, to, toStart, toEnd, nextAdj ) ;
 				UpdateMateAdjGraph( to, toStart, toEnd, from, fromStart, fromEnd, prevAdj ) ;
 				
-				printf( "%d(%d %d) %d(%d %d)\n", 
-					from, fromStart, fromEnd,
-					to, toStart, toEnd ) ;
+				//printf( "%d(%d %d) %d(%d %d)\n", 
+				//	from, fromStart, fromEnd,
+				//	to, toStart, toEnd ) ;
 			
 				delete[] rc ;
 				delete[] mrc ;
@@ -3014,9 +3039,11 @@ public:
 							prevAdj[i][ prevTag ].seqEnd - prevAdj[i][prevTag].seqStart )
 						prevTag = j ;
 				}
+#ifdef DEBUG				
 				printf( "<= %d: %d %d. %d %d %d %d\n", i, prevAdj[i][j].seqIdx, prevAdj[i][j].matchCnt, 
 						prevAdj[i][j].readStart, prevAdj[i][j].readEnd,
 						prevAdj[i][j].seqStart, prevAdj[i][j].seqEnd ) ;
+#endif
 			}
 
 			int nextAdjCnt = nextAdj[i].size() ;
@@ -3039,10 +3066,11 @@ public:
 						nextTag = j ;
 				}
 
-
+#ifdef DEBUG
 				printf( "=> %d: %d %d. %d %d %d %d\n", i, nextAdj[i][j].seqIdx, nextAdj[i][j].matchCnt, 
 						nextAdj[i][j].readStart, nextAdj[i][j].readEnd,
 						nextAdj[i][j].seqStart, nextAdj[i][j].seqEnd ) ;
+#endif
 			}
 			
 			matePrevNext[i].a = prevTag ;
@@ -3178,13 +3206,15 @@ public:
 			for ( j = 0 ; j < end - start + 1 ; ++j )
 				ns.posWeight[j + shift] = seqs[i].posWeight[j + start] ;
 		
-	
+#ifdef DEBUG	
 			if ( leftExtend.seqIdx != -1 )
 				printf( "prev: %d %s\n", prevAdj[i][prevTag].seqIdx, seqs[ prevAdj[i][prevTag].seqIdx ].consensus ) ;
 			printf( "my: %d %s\n", i, seqs[i].consensus ) ;
 			if ( rightExtend.seqIdx != -1 )
 				printf( "next: %d %s\n", nextAdj[i][nextTag].seqIdx, seqs[ nextAdj[i][nextTag].seqIdx ].consensus ) ;
 			printf( "%d new %s\n", i, newConsensus) ;	
+#endif 
+
 			seqs.push_back( ns ) ;
 			toRemoveSeqIdx.PushBack( i ) ;
 		}

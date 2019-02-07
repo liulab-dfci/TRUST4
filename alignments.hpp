@@ -80,6 +80,8 @@ public:
 	}
 	~Alignments() 
 	{
+		if ( fpSam )
+			samclose( fpSam ) ;
 		if ( b )
 			bam_destroy1( b ) ;
 	}

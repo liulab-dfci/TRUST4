@@ -141,16 +141,17 @@ int main( int argc, char *argv[] )
 		sprintf( buffer, "%s.fa", prefix ) ;
 		fp1 = fopen( buffer, "w" ) ;
 	}
+
 	// assuming the input is sorted by coordinate.
-	while ( alignments.Next())
+	while ( alignments.Next() )
 	{
 		// If not aligned, output it.
 		//if ( !alignments.IsPrimary() )
 		//	continue ;
-		
 		if ( !alignments.IsTemplateAligned() 
-			|| ValidAlternativeChrom( alignments.GetChromName( alignments.GetChromId() ) ) )
+			|| ( alignments.IsAligned() && ValidAlternativeChrom( alignments.GetChromName( alignments.GetChromId() ) ) ) )
 		{
+			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
 			{
 				std::string name( alignments.GetReadId() ) ;
@@ -177,7 +178,7 @@ int main( int argc, char *argv[] )
 
 		if ( !alignments.IsAligned() ) // when reach here, it is parie-end case, and the other mate is aligned.
 			continue ;
-
+		
 		// The aligned reads can reach here.
 		int chrId = alignments.GetChromId() ;
 		int start = (int)alignments.segments[0].a ;
