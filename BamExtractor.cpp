@@ -14,14 +14,22 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t-b STRING: path to BAM file\n"
-		"\t-o STRING: prefix to the output file\n" ;
+		"Optional:\n"
+		"\t-o STRING: prefix to the output file\n"
+		"\t-u: filter unaligned read-pair (default: no filter)\n" ;
 
-static const char *short_options = "f:b:o:" ;
+static const char *short_options = "f:b:o:u" ;
 static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
 char buffer[100001] ;
+char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
+	-1, -1, -1, -1, -1, -1, 0,
+	-1, -1, -1, -1, -1, 3,
+	-1, -1, -1, -1, -1, -1 } ;
+
+char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 
 struct _interval
@@ -56,6 +64,30 @@ bool ValidAlternativeChrom( char *chrom )
 	return false ;
 }
 
+bool IsLowComplexity( char *seq )
+{
+	int cnt[5] = {0, 0, 0, 0, 0} ;
+	int i ;
+	for ( i = 0 ; seq[i] ; ++i )
+	{
+		if ( seq[i] == 'N' )
+			++cnt[4] ;
+		else
+			++cnt[ nucToNum[ seq[i] - 'A' ] ] ;
+	}
+
+	if ( cnt[0] >= i / 2 || cnt[1] >= i / 2 || cnt[2] >= i / 2 || cnt[3] >= i / 2 || cnt[4] >= i / 10 )
+		return true ;
+
+	int lowCnt = 0 ; 
+	for ( i = 0 ; i < 4 ; ++i )
+		if ( cnt[i] <= 2 )
+			++lowCnt ;
+	if ( lowCnt >= 2 )
+		return true ;
+	return false ;
+}
+
 int main( int argc, char *argv[] )
 {
 	if ( argc <= 1 )
@@ -69,6 +101,7 @@ int main( int argc, char *argv[] )
 	FILE *fpRef = NULL ;
 	char prefix[127] = "toassemble" ;
 	Alignments alignments ;
+	bool filterUnalignedFragment = false ;
 
 	std::map<std::string, struct _candidate> candidates ; 
 
@@ -90,6 +123,15 @@ int main( int argc, char *argv[] )
 		else if ( c == 'o' )
 		{
 			strcpy( prefix, optarg ) ;
+		}
+		else if ( c == 'u' )
+		{
+			filterUnalignedFragment = true ;
+		}
+		else
+		{
+			fprintf( stderr, "Unknown parameter %s\n", optarg ) ;
+			return EXIT_FAILURE ;
 		}
 	}
 
@@ -148,9 +190,16 @@ int main( int argc, char *argv[] )
 		// If not aligned, output it.
 		//if ( !alignments.IsPrimary() )
 		//	continue ;
+		alignments.GetReadSeq( buffer ) ;
+		if ( IsLowComplexity( buffer ) ) 
+			continue ;
+
 		if ( !alignments.IsTemplateAligned() 
 			|| ( alignments.IsAligned() && ValidAlternativeChrom( alignments.GetChromName( alignments.GetChromId() ) ) ) )
 		{
+			if ( filterUnalignedFragment && !alignments.IsTemplateAligned() )
+				continue ;
+			
 			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
 			{
@@ -170,7 +219,7 @@ int main( int argc, char *argv[] )
 			}
 			else
 			{
-				alignments.GetReadSeq( buffer ) ;
+				//alignments.GetReadSeq( buffer ) ;
 				fprintf( fp1, ">%s\n%s\n", alignments.GetReadId(), buffer ) ;
 			}
 			continue ;

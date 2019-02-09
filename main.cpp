@@ -141,6 +141,7 @@ int main( int argc, char *argv[] )
 		{
 			kmerCount.AddCountFromFile( optarg ) ;
 			countMyself = false ;
+			fprintf( stderr, "Read in the kmer count information from %s", optarg ) ;
 		}
 		else
 		{
@@ -190,6 +191,8 @@ int main( int argc, char *argv[] )
 	
 		if ( countMyself && i % 100000 == 0 )
 			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
+		else if ( !countMyself && i % 1000000 == 0 )
+			fprintf( stderr, "Read in %d reads.\n", i ) ;
 	}
 	
 	while ( mateReads.Next() )
@@ -218,6 +221,8 @@ int main( int argc, char *argv[] )
 		
 		if ( countMyself && i % 100000 == 0 )
 			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
+		else if ( !countMyself && i % 1000000 == 0 )
+			fprintf( stderr, "Read in %d reads.\n", i ) ;
 	}
 
 	fprintf( stderr, "Found %i reads.\n", i ) ;
@@ -361,16 +366,24 @@ int main( int argc, char *argv[] )
 
 	//sprintf( buffer, "%s_assembled_reads.fa", outputPrefix ) ;
 
-	std::vector<struct _Read> assembledReads ;
+	std::vector<struct _assignRead> assembledReads ;
 	assembledReadCnt = assembledReadIdx.size() ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
-		struct _Read nr ;
+		struct _assignRead nr ;
 		nr.id = sortedReads[ assembledReadIdx[i] ].id ;
-		nr.seq = sortedReads[ assembledReadIdx[i] ].read ;
+		nr.read = sortedReads[ assembledReadIdx[i] ].read ;
+		nr.overlap.seqIdx = -1 ;
 		assembledReads.push_back( nr ) ;
 	}
-	std::sort( assembledReads.begin(), assembledReads.end(), CompSortReadById ) ;	
+	//std::sort( assembledReads.begin(), assembledReads.end(), CompSortReadById ) ;	
+	
+	sprintf( buffer, "%s_assembled_reads.fa", outputPrefix ) ;
+	fp = fopen( buffer, "w" ) ;
+	for ( i = 0 ; i < assembledReadCnt ; ++i )
+		fprintf( fp, ">%s\n%s\n", assembledReads[i].id, assembledReads[i].read ) ;
+	fclose( fp ) ;
+	
 	SeqSet extendedSeq( 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
 	/*extendedSeq.BreakFalseAssembly( assembledReads ) ;
@@ -390,7 +403,7 @@ int main( int argc, char *argv[] )
 		fclose( fp ) ;*/
 	
 	
-	fprintf( stderr, "Extend assemblies by mate pair information and their overlaps.\n" ) ;
+	fprintf( stderr, "Extend assemblies by mate pair information.\n" ) ;
 	extendedSeq.ExtendSeqFromReads( assembledReads ) ;
 	
 	if ( outputPrefix[0] != '-' )
@@ -408,6 +421,9 @@ int main( int argc, char *argv[] )
 		fclose( fp ) ;
 	
 	
+	fprintf( stderr, "Extend assemblies by their overlap.\n" ) ;
+	i = extendedSeq.ExtendSeqFromSeqOverlap() ;
+	extendedSeq.UpdateAllConsensus() ;
 	if ( outputPrefix[0] != '-' )
 	{
 		sprintf( buffer, "%s_final.out", outputPrefix ) ;
@@ -415,9 +431,6 @@ int main( int argc, char *argv[] )
 	}
 	else
 		fp = stdout ;
-	
-	i = extendedSeq.ExtendSeqFromSeqOverlap() ;
-	extendedSeq.UpdateAllConsensus() ;
 	
 	extendedSeq.Output( fp ) ;
 	fflush( fp ) ;

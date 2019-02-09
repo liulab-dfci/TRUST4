@@ -84,6 +84,15 @@ struct _overlap
 	}
 } ;
 
+struct _assignRead
+{
+	char *id ;
+	char *read ;
+
+	struct _overlap overlap ;
+} ;
+
+
 class SeqSet
 {
 private:
@@ -199,7 +208,7 @@ private:
 
 		int *record = new int[size] ; // The index of the selected hits
 		int *top = new int[size] ; // record the index of the hits with smallest valB of the corresponding LIS length. kind of the top element.
-		int *link = new int[size] ; // used to retrieve the LIS
+		//int *link = new int[size] ; // used to retrieve the LIS
 
 		int rcnt = 1 ;
 		record[0] = 0 ;
@@ -211,15 +220,20 @@ private:
 			++rcnt ;
 		}
 		top[0] = 0 ;
-		link[0] = -1 ;
+		//link[0] = -1 ;
 		ret = 1 ;
 		for ( i = 1 ; i < rcnt ; ++i )
 		{
-			int tag = BinarySearch_LIS( top, ret, hits[ record[i] ].a, hits ) ;				
+			int tag = 0 ;
+			if ( hits[ top[ ret - 1 ] ].a <= hits[ record[i] ].a )
+				tag = ret - 1 ;
+			else
+				tag = BinarySearch_LIS( top, ret, hits[ record[i] ].a, hits ) ;			
+			
 			if ( tag == -1 )
 			{
 				top[0] = record[i] ;
-				link[ record[i] ] = -1 ;
+				//link[ record[i] ] = -1 ;
 			}
 			else if ( hits[ record[i] ].a > hits[ top[tag] ].a )
 			{
@@ -227,24 +241,26 @@ private:
 				{
 					top[ret] = record[i] ;
 					++ret ;
-					link[ record[i] ] = top[tag] ;
+					//link[ record[i] ] = top[tag] ;
 				}
 				else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
 				{
 					top[ tag + 1 ] = record[i] ;
-					link[ record[i] ] = top[tag] ;
+					//link[ record[i] ] = top[tag] ;
 				}
 			}
 		}
 
 
-		k = top[ret - 1] ;
+		/*k = top[ret - 1] ;
 		for ( i = ret - 1 ; i >= 0 ; --i )
 		{
 			LIS.PushBack( hits[k] ) ;
 			k = link[k] ;	
 		}
-		LIS.Reverse() ;
+		LIS.Reverse() ;*/
+		for ( i = 0 ; i < ret ; ++i )
+			LIS.PushBack( hits[ top[i] ] ) ;
 		
 		// Remove elements with same b.
 		if ( ret > 0 )
@@ -262,7 +278,7 @@ private:
 
 		delete []top ;
 		delete []record ;
-		delete []link ;
+		//delete []link ;
 
 		return ret ;
 	}
@@ -340,7 +356,6 @@ private:
 		SimpleVector<struct _pair> concordantHitCoord ;
 		SimpleVector<struct _pair> hitCoordLIS ;
 		SimpleVector<struct _hit> finalHits ;
-
 		for ( i = 0 ; i < hitSize ; )
 		{
 			for ( j = i + 1 ; j < hitSize ; ++j )
@@ -406,7 +421,6 @@ private:
 				std::sort( concordantHitCoord.BeginAddress(), concordantHitCoord.EndAddress(), CompSortPairBInc ) ;
 				//for ( k = 0 ; k < e - s ; ++k )	
 				//	printf( "%d (%d-%d): %d %d %d\n", i, s, e, hits[i].indexHit.idx, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
-
 
 				// Compute the longest increasing subsequence.
 				hitCoordLIS.Clear() ;
@@ -705,10 +719,38 @@ private:
 		delete[] rcRead ;
 
 		// Find the overlaps.
-		std::sort( hits.BeginAddress(), hits.EndAddress() ) ;
+		// Sort the hits
+		if ( hits.Size() > 2 * seqs.size() ) 
+		{
+			// Bucket sort.
+			int hitCnt = hits.Size() ;
+			int seqCnt = seqs.size() ;
+			SimpleVector<struct _hit> *buckets[2] ;
+			buckets[0] = new SimpleVector<struct _hit>[seqCnt] ;
+			buckets[1] = new SimpleVector<struct _hit>[seqCnt] ;
+
+			for ( i = 0 ; i < hitCnt ; ++i )
+			{
+				int tag = hits[i].strand == 1 ? 1 : 0 ;
+				buckets[tag][ hits[i].indexHit.idx ].PushBack( hits[i] ) ;
+			}
+			
+			hits.Clear() ;
+			for ( k = 0 ; k <= 1 ; ++k )
+			{
+				for ( i = 0 ; i < seqCnt ; ++i )
+				{
+					hits.PushBack( buckets[k][i] ) ;
+				}
+			}
+
+			delete[] buckets[0] ;
+			delete[] buckets[1] ;
+		}
+		else
+			std::sort( hits.BeginAddress(), hits.EndAddress() ) ;
 		//for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
 		//	printf( "- %d %d %d %d\n", it->readOffset, it->indexHit.idx, it->indexHit.offset, it->strand ) ;
-
 		int overlapCnt = GetOverlapsFromHits( hits, 31, overlaps ) ;
 
 		//for ( i = 0 ; i < overlapCnt ; ++i )
@@ -2139,6 +2181,79 @@ public:
 		seqs.resize( k ) ;
 	}
 	
+	// Find the seq id this read belongs to.
+	int AssignRead( char *read, double similarity, struct _overlap &assign )
+	{
+		int i ;
+
+		std::vector<struct _overlap> overlaps ;
+		double backupSimilarity = novelSeqSimilarity ;
+		novelSeqSimilarity = similarity ;
+		
+		int overlapCnt = GetOverlapsFromRead( read, overlaps ) ;
+		//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
+		//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
+		assign.seqIdx = -1 ;
+
+		if ( overlapCnt == 0 )
+		{
+			novelSeqSimilarity = backupSimilarity ;
+			return -1 ;
+		}
+			
+		std::sort( overlaps.begin(), overlaps.end() ) ;
+
+		int len = strlen( read ) ;
+		char *rc = new char[len + 1] ;
+
+		ReverseComplement( rc, read, len ) ;
+
+		char *r = read ;
+		if ( overlaps[0].strand == -1 )
+			r = rc ;
+
+		struct _overlap extendedOverlap ;
+		char *align = new char[ 2 * len + 2 ] ;
+		/*for ( j = 0 ; j < overlapCnt ; ++j )
+		  {
+		  printf( "+ %d %d: %d %d %d %lf\n", i, j, overlaps[j].seqIdx, overlaps[j].seqStart, overlaps[j].seqEnd, overlaps[j].similarity) ;
+		  }
+		  for ( j = 0 ; j < mateOverlapCnt ; ++j )
+		  {
+		  printf( "- %d %d: %d %d %d %lf\n", i + 1, j, mateOverlaps[j].seqIdx, mateOverlaps[j].seqStart, mateOverlaps[j].seqEnd, mateOverlaps[j].similarity) ;
+		  }*/
+		int extendCnt = 0 ;
+		bool valid = true ;
+		for ( i = 0 ; i < overlapCnt ; ++i )
+		{
+			if ( ExtendOverlap( r, len, seqs[ overlaps[i].seqIdx ], align, 
+						overlaps[i], extendedOverlap ) == 1 )
+			{
+				/*if ( extendCnt == 0 )
+				  {
+				  extendedOverlap = tmpExtendedOverlap ;
+				  ++extendCnt ;
+				  }
+				  else if ( tmpExtendedOverlap.similarity == extend) */
+
+				break ;
+			}
+		}
+
+		novelSeqSimilarity = backupSimilarity ;
+		if ( i >= overlapCnt )
+		{
+			delete[] rc ;
+			delete[] align ;
+			return -1 ;
+		}
+	
+		delete[] rc ;
+		delete[] align ;
+		assign = extendedOverlap ;
+		return assign.seqIdx ;
+	}
+	
 	// Return:the number of connections made.
 	int ExtendSeqFromSeqOverlap()
 	{
@@ -2847,7 +2962,7 @@ public:
 	}
 
 	// Use this set of reads to extend,rearrange the seq 
-	void ExtendSeqFromReads( std::vector<struct _Read> reads )
+	void ExtendSeqFromReads( std::vector<struct _assignRead> reads )
 	{
 		int i, j, k ;
 		int readCnt = 0 ;
@@ -2884,11 +2999,11 @@ public:
 			if ( i < readCnt - 1 && !strcmp( reads[i].id, reads[i + 1].id ) )
 				paired = true ; 
 			std::vector<struct _overlap> overlaps ;
-			int overlapCnt = GetOverlapsFromRead( reads[i].seq, overlaps ) ;
+			int overlapCnt = GetOverlapsFromRead( reads[i].read, overlaps ) ;
 			if ( paired )
 			{
 				std::vector<struct _overlap> mateOverlaps ;
-				int mateOverlapCnt = GetOverlapsFromRead( reads[i + 1].seq, mateOverlaps ) ;
+				int mateOverlapCnt = GetOverlapsFromRead( reads[i + 1].read, mateOverlaps ) ;
 				//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
 				//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
 
@@ -2902,16 +3017,16 @@ public:
 				std::sort( overlaps.begin(), overlaps.end() ) ;
 				std::sort( mateOverlaps.begin(), mateOverlaps.end() ) ;	
 				
-				int len = strlen( reads[i].seq ) ;
-				int mlen = strlen( reads[i + 1].seq ) ;
+				int len = strlen( reads[i].read ) ;
+				int mlen = strlen( reads[i + 1].read ) ;
 				rc = new char[len + 1] ;
 				mrc = new char[mlen + 1] ;
 
-				ReverseComplement( rc, reads[i].seq, len ) ;
-				ReverseComplement( mrc, reads[i + 1].seq, mlen ) ;
+				ReverseComplement( rc, reads[i].read, len ) ;
+				ReverseComplement( mrc, reads[i + 1].read, mlen ) ;
 				
-				r = reads[i].seq ;
-				mr = reads[i + 1].seq ;
+				r = reads[i].read ;
+				mr = reads[i + 1].read ;
 				if ( overlaps[0].strand == 1 )
 					mr = mrc ;
 				else
@@ -3008,6 +3123,11 @@ public:
 			
 			if ( paired )
 				++i ;
+		
+			if ( i > 0 && i % 100000 == 0 )
+			{
+				fprintf( stderr, "Processed %d reads for extension.\n", i ) ;
+			}
 		}
 		
 

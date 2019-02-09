@@ -131,6 +131,31 @@ public:
 		return size ;
 	}
 
+	int PushBack( const SimpleVector<T> &in )
+	{
+		int newsize = size + in.size ;
+		if ( newsize > capacity )
+		{
+			//int tmp = capacity ;
+			capacity = newsize + inc ;
+			inc *= 2 ;
+			if ( maxInc > 0 && inc > maxInc )
+				inc = maxInc ;
+			if ( size == 0 )
+				s = (T *)malloc( sizeof( T ) * capacity ) ;
+			else
+				s = (T *)realloc( s, sizeof( T ) * capacity ) ;
+			if ( s == NULL ) 
+			{
+				fprintf( stderr, "%s: Failed to allocate memory.\n", __func__ ) ;
+				exit( 1 ) ;
+			}
+		}
+		memcpy( s + size, in.s, sizeof( T ) * in.size ) ;
+		size = newsize ;
+		return size ;
+	}
+
 	T PopBack()
 	{
 		if ( size == 0 )
