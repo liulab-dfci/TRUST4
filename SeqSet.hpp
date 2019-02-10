@@ -2992,8 +2992,7 @@ public:
 			bool paired = false ;
 			if ( i < readCnt - 1 && !strcmp( reads[i].id, reads[i + 1].id ) )
 				paired = true ; 
-			std::vector<struct _overlap> overlaps ;
-			int overlapCnt = GetOverlapsFromRead( reads[i].read, overlaps ) ;
+			
 			if ( paired )
 			{
 				if ( reads[i].overlap.seqIdx == -1 || reads[i + 1].overlap.seqIdx == -1 
