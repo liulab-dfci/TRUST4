@@ -126,6 +126,11 @@ private:
 	{
 		return a.readStart < b.readStart ; 
 	}
+
+	static bool CompSortAssignedReadById( const struct _assignRead &a, const struct _assignRead &b )
+	{
+		return strcmp( a.id, b.id ) < 0 ;
+	}
 		
 	void ReverseComplement( char *rcSeq, char *seq, int len )
 	{
@@ -2223,7 +2228,6 @@ public:
 		  printf( "- %d %d: %d %d %d %lf\n", i + 1, j, mateOverlaps[j].seqIdx, mateOverlaps[j].seqStart, mateOverlaps[j].seqEnd, mateOverlaps[j].similarity) ;
 		  }*/
 		int extendCnt = 0 ;
-		bool valid = true ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
 			if ( ExtendOverlap( r, len, seqs[ overlaps[i].seqIdx ], align, 
@@ -2978,21 +2982,11 @@ public:
 		std::vector<struct _overlap> *nextAdj = new std::vector<struct _overlap>[ seqCnt ] ; 
 		std::vector<struct _overlap> *prevAdj = new std::vector<struct _overlap>[ seqCnt ] ; 
 		readCnt = reads.size() ;
-		char *rc ;
-		char *mrc ;
-		char *r ;
-		char *mr ;
-		char *align ;
 		
-		k = 0 ;
-		for ( i = 0 ; i < seqCnt ; ++i )
-			if ( seqs[i].consensusLen > k )
-				k = seqs[i].consensusLen ;
-		align = new char[2 * k + 2] ;
-
 		BuildBranchGraph( branchAdj ) ;
-		
+			
 		// Build the mate adj graph.
+		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
 		for ( i = 0 ; i < readCnt ; ++i )
 		{
 			bool paired = false ;
@@ -3002,89 +2996,18 @@ public:
 			int overlapCnt = GetOverlapsFromRead( reads[i].read, overlaps ) ;
 			if ( paired )
 			{
-				std::vector<struct _overlap> mateOverlaps ;
-				int mateOverlapCnt = GetOverlapsFromRead( reads[i + 1].read, mateOverlaps ) ;
-				//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
-				//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
-
-				if ( overlapCnt == 0 || mateOverlapCnt == 0 
-					|| overlaps[0].strand == mateOverlaps[0].strand )
+				if ( reads[i].overlap.seqIdx == -1 || reads[i + 1].overlap.seqIdx == -1 
+					|| reads[i].overlap.strand == reads[i + 1].overlap.strand )				
 				{
 					++i ;
 					continue ;
 				}
-				
-				std::sort( overlaps.begin(), overlaps.end() ) ;
-				std::sort( mateOverlaps.begin(), mateOverlaps.end() ) ;	
-				
-				int len = strlen( reads[i].read ) ;
-				int mlen = strlen( reads[i + 1].read ) ;
-				rc = new char[len + 1] ;
-				mrc = new char[mlen + 1] ;
-
-				ReverseComplement( rc, reads[i].read, len ) ;
-				ReverseComplement( mrc, reads[i + 1].read, mlen ) ;
-				
-				r = reads[i].read ;
-				mr = reads[i + 1].read ;
-				if ( overlaps[0].strand == 1 )
-					mr = mrc ;
-				else
-					r = rc ;
-
-				struct _overlap extendedOverlap, mateExtendedOverlap ;
-				struct _overlap tmpExtendOverlap ;
-				/*for ( j = 0 ; j < overlapCnt ; ++j )
-				{
-					printf( "+ %d %d: %d %d %d %lf\n", i, j, overlaps[j].seqIdx, overlaps[j].seqStart, overlaps[j].seqEnd, overlaps[j].similarity) ;
-				}
-				for ( j = 0 ; j < mateOverlapCnt ; ++j )
-				{
-					printf( "- %d %d: %d %d %d %lf\n", i + 1, j, mateOverlaps[j].seqIdx, mateOverlaps[j].seqStart, mateOverlaps[j].seqEnd, mateOverlaps[j].similarity) ;
-				}*/
-				int extendCnt = 0 ;
-				bool valid = true ;
-				for ( j = 0 ; j < overlapCnt ; ++j )
-				{
-					if ( ExtendOverlap( r, len, seqs[ overlaps[j].seqIdx ], align, 
-						overlaps[j], extendedOverlap ) == 1 )
-					{
-						/*if ( extendCnt == 0 )
-						{
-							extendedOverlap = tmpExtendedOverlap ;
-							++extendCnt ;
-						}
-						else if ( tmpExtendedOverlap.similarity == extend) */
-
-						break ;
-					}
-				}
-				if ( j >= overlapCnt )
-				{
-					delete[] rc ;
-					delete[] mrc ;
-					++i ;
-					continue ;
-				}
-				
-				for ( j = 0 ; j < mateOverlapCnt ; ++j )
-				{
-					if ( ExtendOverlap( mr, mlen, seqs[ mateOverlaps[j].seqIdx ], align, 
-						mateOverlaps[j], mateExtendedOverlap ) == 1 )
-						break ;
-				}
-				if ( j >= mateOverlapCnt )
-				{
-					delete[] rc ;
-					delete[] mrc ;
-					++i ;
-					continue ;
-				}
-
-
 				int from, to ;
 				int fromStart, fromEnd, toStart, toEnd ;
-				if ( overlaps[0].strand == 1 )
+				struct _overlap extendedOverlap = reads[i].overlap ;
+				struct _overlap mateExtendedOverlap = reads[i + 1].overlap ;
+
+				if ( extendedOverlap.strand == 1 )
 				{
 					from = extendedOverlap.seqIdx ;
 					fromStart = extendedOverlap.seqStart ;
@@ -3111,9 +3034,6 @@ public:
 				//printf( "%d(%d %d) %d(%d %d)\n", 
 				//	from, fromStart, fromEnd,
 				//	to, toStart, toEnd ) ;
-			
-				delete[] rc ;
-				delete[] mrc ;
 			}
 			else
 			{
@@ -3124,10 +3044,6 @@ public:
 			if ( paired )
 				++i ;
 		
-			if ( i > 0 && i % 100000 == 0 )
-			{
-				fprintf( stderr, "Processed %d reads for extension.\n", i ) ;
-			}
 		}
 		
 
@@ -3346,7 +3262,6 @@ public:
 		delete[] branchAdj ;
 		delete[] nextAdj ;
 		delete[] prevAdj ;
-		delete[] align ;
 	}
 
 	void Output( FILE *fp )

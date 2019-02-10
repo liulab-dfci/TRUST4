@@ -386,6 +386,19 @@ int main( int argc, char *argv[] )
 	
 	SeqSet extendedSeq( 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
+	struct _overlap assign ;
+	for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
+			extendedSeq.AssignRead( assembledReads[i].read, 1.0, assign ) ;
+		assembledReads[i].overlap = assign ;
+			
+		if ( i > 0 && i % 100000 == 0 )
+		{
+			fprintf( stderr, "Processed %d reads for extension.\n", i ) ;
+		}
+	}
+	
 	/*extendedSeq.BreakFalseAssembly( assembledReads ) ;
 	
 	if ( outputPrefix[0] != '-' )
