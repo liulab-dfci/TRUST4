@@ -99,7 +99,6 @@ private:
 	std::vector<struct _seqWrapper> seqs ;
 	KmerIndex seqIndex ;
 	int kmerLength ;
-	int minHitRequired ;
 	int radius ;
 	
 	// Some threshold
@@ -213,7 +212,7 @@ private:
 
 		int *record = new int[size] ; // The index of the selected hits
 		int *top = new int[size] ; // record the index of the hits with smallest valB of the corresponding LIS length. kind of the top element.
-		//int *link = new int[size] ; // used to retrieve the LIS
+		int *link = new int[size] ; // used to retrieve the LIS
 
 		int rcnt = 1 ;
 		record[0] = 0 ;
@@ -225,7 +224,7 @@ private:
 			++rcnt ;
 		}
 		top[0] = 0 ;
-		//link[0] = -1 ;
+		link[0] = -1 ;
 		ret = 1 ;
 		for ( i = 1 ; i < rcnt ; ++i )
 		{
@@ -238,7 +237,7 @@ private:
 			if ( tag == -1 )
 			{
 				top[0] = record[i] ;
-				//link[ record[i] ] = -1 ;
+				link[ record[i] ] = -1 ;
 			}
 			else if ( hits[ record[i] ].a > hits[ top[tag] ].a )
 			{
@@ -246,26 +245,26 @@ private:
 				{
 					top[ret] = record[i] ;
 					++ret ;
-					//link[ record[i] ] = top[tag] ;
+					link[ record[i] ] = top[tag] ;
 				}
 				else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
 				{
 					top[ tag + 1 ] = record[i] ;
-					//link[ record[i] ] = top[tag] ;
+					link[ record[i] ] = top[tag] ;
 				}
 			}
 		}
 
 
-		/*k = top[ret - 1] ;
+		k = top[ret - 1] ;
 		for ( i = ret - 1 ; i >= 0 ; --i )
 		{
 			LIS.PushBack( hits[k] ) ;
 			k = link[k] ;	
 		}
-		LIS.Reverse() ;*/
-		for ( i = 0 ; i < ret ; ++i )
-			LIS.PushBack( hits[ top[i] ] ) ;
+		LIS.Reverse() ;
+		//for ( i = 0 ; i < ret ; ++i )
+		//	LIS.PushBack( hits[ top[i] ] ) ;
 		
 		// Remove elements with same b.
 		if ( ret > 0 )
@@ -283,7 +282,7 @@ private:
 
 		delete []top ;
 		delete []record ;
-		//delete []link ;
+		delete []link ;
 
 		return ret ;
 	}
@@ -351,7 +350,7 @@ private:
 	}
 	
 	// Use the hits to extract overlaps from SeqSet
-	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, std::vector<struct _overlap> &overlaps )
+	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, int filter, std::vector<struct _overlap> &overlaps )
 	{
 		int i, j, k ;
 		int hitSize = hits.Size() ;
@@ -361,11 +360,35 @@ private:
 		SimpleVector<struct _pair> concordantHitCoord ;
 		SimpleVector<struct _pair> hitCoordLIS ;
 		SimpleVector<struct _hit> finalHits ;
+		
+		// Compute the minHitRequired.
+		int novelMinHitRequired = 3 ;
+		int refMinHitRequired = 3 ;
+		if ( filter == 1 )
+		{
+			for ( i = 0 ; i < hitSize ; ++i )
+			{
+				for ( j = i + 1 ; j < hitSize ; ++j )
+					if ( hits[j].strand != hits[i].strand || hits[j].indexHit.idx != hits[i].indexHit.idx )
+						break ;
+				if ( !seqs[ hits[i].indexHit.idx].isRef && ( j - i ) / 3 > novelMinHitRequired )
+					novelMinHitRequired = ( j - i ) / 3 ;
+				i = j ;
+			}
+		}
+		//if ( novelMinHitRequired > 3 )
+		//	printf( "novelMinHitRequired=%d\n", novelMinHitRequired ) ;
+
 		for ( i = 0 ; i < hitSize ; )
 		{
 			for ( j = i + 1 ; j < hitSize ; ++j )
 				if ( hits[j].strand != hits[i].strand || hits[j].indexHit.idx != hits[i].indexHit.idx )
 					break ;
+
+			int minHitRequired = novelMinHitRequired ;
+			if ( seqs[ hits[i].indexHit.idx].isRef )
+				minHitRequired = refMinHitRequired ;
+
 			//[i,j) holds the hits onto the same seq on the same strand.	
 			if ( j - i < minHitRequired )
 			{
@@ -406,7 +429,7 @@ private:
 				//printf( "%d %d: %d %d\n", i, j, s, e ) ;
 
 
-				if ( e - s < minHitRequired
+				if ( e - s < minHitRequired 
 					|| ( e - s ) * kmerLength < hitLenRequired )
 				{
 					s = e ;
@@ -466,7 +489,7 @@ private:
 				no.strand = finalHits[0].strand ;
 				no.seqStart = finalHits[0].indexHit.offset ;
 				no.seqEnd = finalHits[ lisSize - 1 ].indexHit.offset + kmerLength - 1 ;
-				no.matchCnt = hitLen ;
+				no.matchCnt = 2 * hitLen ;
 				no.similarity = 0 ;
 
 				if ( hitLen * 2 < no.seqEnd - no.seqStart + 1 )
@@ -518,7 +541,7 @@ private:
 			}
 		}
 
-		GetOverlapsFromHits( VJhits, 17, overlaps ) ;
+		GetOverlapsFromHits( VJhits, 17, 0, overlaps ) ;
 		
 		// Extract the best VJ pair 
 		int overlapCnt = overlaps.size() ;
@@ -644,8 +667,9 @@ private:
 	}
 
 	// Obtain the overlaps, each overlap further contains the hits induce the overlap. 
+	// readType: 0(default): sqeuencing read. 1:seqs, no need filter.
 	// Return: the number of overlaps.
-	int GetOverlapsFromRead( char *read, std::vector<struct _overlap> &overlaps )
+	int GetOverlapsFromRead( char *read, int readType, std::vector<struct _overlap> &overlaps )
 	{
 		int i, j, k ;
 		int len = strlen( read ) ;
@@ -756,7 +780,15 @@ private:
 			std::sort( hits.BeginAddress(), hits.EndAddress() ) ;
 		//for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
 		//	printf( "- %d %d %d %d\n", it->readOffset, it->indexHit.idx, it->indexHit.offset, it->strand ) ;
-		int overlapCnt = GetOverlapsFromHits( hits, 31, overlaps ) ;
+
+		int hitLenRequired = 31 ;
+		int filterHits = 0 ;
+		if ( readType == 0 )
+		{
+			hitLenRequired = ( len / 3 < hitLenRequired ? hitLenRequired : ( len / 3 ) ) ;
+			filterHits = 1 ;
+		}
+		int overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
 
 		//for ( i = 0 ; i < overlapCnt ; ++i )
 		//	printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
@@ -805,7 +837,7 @@ private:
 		// Compute similarity overlaps
 		//std::sort( overlaps.begin(), overlaps.end() ) ;
 		int firstRef = -1 ;
-
+		int bestNovelOverlap = -1 ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
 			char *r ;
@@ -815,25 +847,50 @@ private:
 				r = rcRead ;
 
 			SimpleVector<struct _pair> &hitCoords = overlaps[i].hitCoords ; 	
+			int hitCnt = hitCoords.Size() ;
+			int matchCnt = 0, mismatchCnt = 0, indelCnt = 0  ;
+			double similarity = 1 ;
 			
+			// Some fast pre-filters
 			if ( seqs[ overlaps[i].seqIdx ].isRef )
 			{
 				if ( firstRef == -1 )
 					firstRef = i ;
 				/*else
 				{
-					if ( overlaps[i].matchCnt < 0.95 * overlaps[ firstRef ].matchCnt )
+					if ( overlaps[i].matchCnt < 0.9 * overlaps[ firstRef ].matchCnt )
 					{
 						overlaps[i].similarity = 0 ;  // No need to look into this.
 						continue ;
 					}
 				}*/
 			}
+			else if ( bestNovelOverlap != -1 )
+			{
+				// If we already found a perfect match.
+				if ( overlaps[ bestNovelOverlap ].readStart == 0 && overlaps[ bestNovelOverlap ].readEnd == len - 1 
+					&& overlaps[ bestNovelOverlap ].similarity == 1 )
+				{
+					//printf( "fast perfect filter\n" ) ;
+					overlaps[i].similarity = 0 ;
+					continue ;
+				}
+				
+				// Directly filter the bad overlaps if it is inside of a novel seq and worse than the best one. 
+				if ( hitCoords[0].b - hitCoords[0].a >= radius 
+						&& hitCoords[ hitCnt - 1 ].b + ( len - 1 - hitCoords[ hitCnt - 1 ].a ) + radius < 
+							seqs[ overlaps[i].seqIdx ].consensusLen 
+						&& overlaps[ bestNovelOverlap ].matchCnt > 0.97 * ( 2 * len ) 
+						&& overlaps[ bestNovelOverlap ].similarity > 0.95 
+						&& overlaps[i].matchCnt < 0.9 * overlaps[ bestNovelOverlap ].matchCnt )
+				{
+					//printf( "fast filter\n" ) ;
+					overlaps[i].similarity = 0 ;	
+					continue ;
+				}
+			}
 
-			int hitCnt = hitCoords.Size() ;
-			int matchCnt = 0, mismatchCnt = 0, indelCnt = 0  ;
-			double similarity = 1 ;
-			
+
 			matchCnt += 2 * kmerLength ;
 			char *align = new char[ overlaps[i].readEnd - overlaps[i].readStart + 1 + 
 				overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 1] ;
@@ -964,6 +1021,14 @@ private:
 			if ( IsOverlapLowComplex( r, overlaps[i]) )
 				overlaps[i].similarity = 0 ;
 			
+
+			if ( !seqs[ overlaps[i].seqIdx ].isRef && overlaps[i].similarity > 0 )
+			{
+				if ( bestNovelOverlap == -1 || overlaps[ bestNovelOverlap ] < overlaps[i] )
+				{
+					bestNovelOverlap = i ;
+				}
+			}
 			/*if ( overlaps[i].similarity > 1 )
 			{
 				printf( "%d: %d %d %d %d\n", matchCnt, overlaps[i].readStart, overlaps[i].readEnd, 
@@ -1016,7 +1081,7 @@ private:
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
 
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, overlaps ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, overlaps ) ;
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
 				if ( overlaps[j].strand == -1 ) // Note that all the seqs are from 5'->3' on its strand.
@@ -1054,7 +1119,7 @@ private:
 		return 1 ;
 	}
 
-	int BuildBranchGraph( std::vector<struct _overlap> *adj )
+	int BuildBranchGraph( std::vector<struct _overlap> *adj, int leastOverlapLen )
 	{
 		// Build overlap graph.
 		int i, j, k ;
@@ -1073,7 +1138,7 @@ private:
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
 
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, overlaps ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, overlaps ) ;
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
 				if ( overlaps[j].strand == -1 ) // Note that all the seqs are from 5'->3' on its strand.
@@ -1132,6 +1197,11 @@ private:
 				extendedOverlap.similarity = (double)extendedOverlap.matchCnt / 
 					( extendedOverlap.readEnd - extendedOverlap.readStart + 1 +
 					  extendedOverlap.seqEnd - extendedOverlap.seqStart + 1 ) ;
+				
+				if ( extendedOverlap.readEnd - extendedOverlap.readStart + 1 < leastOverlapLen )
+					continue ;
+
+
 #ifdef DEBUG
 				printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
 						extendedOverlap.readStart, extendedOverlap.readEnd,
@@ -1152,7 +1222,6 @@ public:
 	SeqSet( int kl ) 
 	{
 		kmerLength = kl ;
-		minHitRequired = 3 ;
 		radius = 10 ;
 		
 		novelSeqSimilarity = 0.9 ;
@@ -1236,6 +1305,51 @@ public:
 			seqs.push_back( ns ) ;
 		}
 	}
+	
+	// Test whether the read share a kmer hit on the seqs.
+	bool HasHitInSet( char *read )
+	{
+		int i ;
+		int len = strlen( read ) ;
+		if ( len < kmerLength )
+			return false ;
+
+		KmerCode kmerCode( kmerLength ) ;
+
+		for ( i = 0 ; i < kmerLength - 1 ; ++i )
+			kmerCode.Append( read[i] ) ;
+		for ( ; i < len ; ++i )
+		{
+			kmerCode.Append( read[i] ) ;
+			SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+			int size = indexHit.Size() ;
+			if ( size > 0 )
+				return true ;
+		}
+		
+		// Locate the hits from the opposite-strand case.
+		char *rcRead =  new char[len + 1] ;
+		ReverseComplement( rcRead, read, len ) ;		
+		kmerCode.Restart() ;
+		for ( i = 0 ; i < kmerLength - 1 ; ++i )
+			kmerCode.Append( rcRead[i] ) ;
+		
+		for ( ; i < len ; ++i )
+		{
+			kmerCode.Append( rcRead[i] ) ;
+			SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+
+			int size = indexHit.Size() ;
+			if ( size > 0 )
+			{
+				delete[] rcRead ;
+				return true ;
+			}
+		}
+
+		delete[] rcRead ;
+		return false ;
+	}
 
 	// Compute the length of hit from the read, take the overlaps of kmer into account 
 	int GetTotalHitLengthOnRead( SimpleVector<struct _hit> &hits )
@@ -1295,7 +1409,7 @@ public:
 		std::vector<struct _overlap> overlaps ;
 		int overlapCnt ;
 		
-		overlapCnt = GetOverlapsFromRead( read, overlaps ) ;
+		overlapCnt = GetOverlapsFromRead( read, 0, overlaps ) ;
 				
 		if ( overlapCnt <= 0 )
 			return -1 ;
@@ -2195,7 +2309,7 @@ public:
 		double backupSimilarity = novelSeqSimilarity ;
 		novelSeqSimilarity = similarity ;
 		
-		int overlapCnt = GetOverlapsFromRead( read, overlaps ) ;
+		int overlapCnt = GetOverlapsFromRead( read, 0, overlaps ) ;
 		//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
 		//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
 		assign.seqIdx = -1 ;
@@ -2259,12 +2373,12 @@ public:
 	}
 	
 	// Return:the number of connections made.
-	int ExtendSeqFromSeqOverlap()
+	int ExtendSeqFromSeqOverlap( int leastOverlapLen )
 	{
 		int i, j, k ;
 		int seqCnt = seqs.size() ;
 		int ret = 0 ;
-		novelSeqSimilarity = 0.97 ;
+		repeatSimilarity = 1.00 ;
 
 		std::vector<struct _overlap> *adj = new std::vector<struct _overlap>[ seqCnt ] ;
 		struct _pair *next = new struct _pair[ seqCnt ] ; // a-index, b-the index in adj[i] 
@@ -2272,7 +2386,7 @@ public:
 		int *containedIn = new int[seqCnt] ;
 	
 		//BuildSeqOverlapGraph( 100, adj ) ;
-		BuildBranchGraph( adj ) ;
+		BuildBranchGraph( adj, leastOverlapLen ) ;
 		// Keep only the connections that representing overlapping information.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -2529,7 +2643,7 @@ public:
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
 		
 		sprintf( buffer, "%d", len ) ;
-		overlapCnt = GetOverlapsFromRead( read, overlaps ) ;		
+		overlapCnt = GetOverlapsFromRead( read, 1, overlaps ) ;		
 		if ( overlapCnt == 0 )
 			return 0 ;
 		std::sort( overlaps.begin(), overlaps.end() ) ;
@@ -2720,7 +2834,7 @@ public:
 		int i, j, k ;
 		int seqCnt = seqs.size() ;
 		std::vector<struct _overlap> *adj = new std::vector<struct _overlap>[ seqCnt ] ;
-		BuildBranchGraph( adj ) ;
+		BuildBranchGraph( adj, 31 ) ;
 		
 		int readCnt = reads.size() ;
 		
@@ -2728,7 +2842,7 @@ public:
 		for ( i = 0 ; i < readCnt ; ++i )
 		{
 			std::vector<struct _overlap> overlaps ;
-			int overlapCnt = GetOverlapsFromRead( reads[i].seq, overlaps ) ;
+			int overlapCnt = GetOverlapsFromRead( reads[i].seq, 1, overlaps ) ;
 			if ( overlapCnt == 0 )
 				continue ;
 
@@ -2966,7 +3080,7 @@ public:
 	}
 
 	// Use this set of reads to extend,rearrange the seq 
-	void ExtendSeqFromReads( std::vector<struct _assignRead> reads )
+	void ExtendSeqFromReads( std::vector<struct _assignRead> reads, int leastOverlapLen )
 	{
 		int i, j, k ;
 		int readCnt = 0 ;
@@ -2983,7 +3097,7 @@ public:
 		std::vector<struct _overlap> *prevAdj = new std::vector<struct _overlap>[ seqCnt ] ; 
 		readCnt = reads.size() ;
 		
-		BuildBranchGraph( branchAdj ) ;
+		BuildBranchGraph( branchAdj, leastOverlapLen ) ;
 			
 		// Build the mate adj graph.
 		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;

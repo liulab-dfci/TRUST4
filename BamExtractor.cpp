@@ -9,6 +9,7 @@
 #include <string>
 
 #include "alignments.hpp"
+#include "SeqSet.hpp"
 
 char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"Required:\n"
@@ -24,6 +25,7 @@ static struct option long_options[] = {
 			} ;
 
 char buffer[100001] ;
+char buffer2[100001] ;
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
@@ -88,6 +90,16 @@ bool IsLowComplexity( char *seq )
 	return false ;
 }
 
+void TrimName( std::string &name )
+{
+	int len = name.length() ;
+	if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 
+			&& name[len - 2] == '/' )
+	{
+		name.erase( len - 2, 2 ) ; // Haven't tested yet.
+	}
+}
+
 int main( int argc, char *argv[] )
 {
 	if ( argc <= 1 )
@@ -102,6 +114,7 @@ int main( int argc, char *argv[] )
 	char prefix[127] = "toassemble" ;
 	Alignments alignments ;
 	bool filterUnalignedFragment = false ;
+	SeqSet refSet( 21 ) ;
 
 	std::map<std::string, struct _candidate> candidates ; 
 
@@ -115,6 +128,7 @@ int main( int argc, char *argv[] )
 		if ( c == 'f' )
 		{
 			fpRef = fopen( optarg, "r" ) ;
+			refSet.InputRefFa( optarg ) ;	
 		}
 		else if ( c == 'b' )
 		{
@@ -178,10 +192,18 @@ int main( int argc, char *argv[] )
 	int tag = 0 ;
 	
 	FILE *fp1 ;
+	FILE *fp2 ;
 	if ( alignments.fragStdev == 0 )
 	{
 		sprintf( buffer, "%s.fa", prefix ) ;
 		fp1 = fopen( buffer, "w" ) ;
+	}
+	else
+	{
+		sprintf( buffer, "%s_1.fa", prefix ) ;
+		fp1 = fopen( buffer, "w" ) ;
+		sprintf( buffer, "%s_2.fa", prefix ) ;
+		fp2 = fopen( buffer, "w" ) ;
 	}
 
 	// assuming the input is sorted by coordinate.
@@ -191,7 +213,7 @@ int main( int argc, char *argv[] )
 		//if ( !alignments.IsPrimary() )
 		//	continue ;
 		alignments.GetReadSeq( buffer ) ;
-		if ( IsLowComplexity( buffer ) ) 
+		if ( IsLowComplexity( buffer ) )
 			continue ;
 
 		if ( !alignments.IsTemplateAligned() 
@@ -200,16 +222,51 @@ int main( int argc, char *argv[] )
 			if ( filterUnalignedFragment && !alignments.IsTemplateAligned() )
 				continue ;
 			
+			if ( !alignments.IsTemplateAligned() && !refSet.HasHitInSet( buffer ) ) 
+				continue ;
+			
+			/*if ( !alignments.IsTemplateAligned() && alignments.fragStdev != 0 )
+			{
+				//printf( "filtered\n" ) ;
+				std::string name( alignments.GetReadId() ) ;
+				strcpy( buffer2, buffer ) ;
+
+				if ( !alignments.Next() )
+				{
+					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
+					return EXIT_FAILURE ;
+				}
+				std::string mateName( alignments.GetReadId() ) ;
+				alignments.GetReadSeq( buffer ) ;
+				
+				if ( name.compare( mateName ) != 0 )
+				{
+					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
+					return EXIT_FAILURE ;
+				}
+
+				if ( ( refSet.HasHitInSet( buffer2 ) || refSet.HasHitInSet( buffer ) ) 
+					&& ( !IsLowComplexity( buffer2 ) && !IsLowComplexity( buffer ) ) )
+				{
+					if ( !alignments.IsFirstMate() )
+					{
+						fprintf( fp1, ">%s\n%s\n", name.c_str(), buffer2 ) ;
+						fprintf( fp2, ">%s\n%s\n", name.c_str(), buffer ) ;
+					}
+					else
+					{
+						fprintf( fp1, ">%s\n%s\n", name.c_str(), buffer ) ;
+						fprintf( fp2, ">%s\n%s\n", name.c_str(), buffer2 ) ;
+					}
+				}
+				continue ;
+			}*/
+			
 			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
 			{
 				std::string name( alignments.GetReadId() ) ;
-				int len = name.length() ;
-				if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 
-						&& name[len - 2] == '/' )
-				{
-					name.erase( len - 2, 2 ) ; // Haven't tested yet.
-				}
+				TrimName( name ) ;	
 
 				if ( candidates.find( name ) == candidates.end() )
 				{
@@ -248,12 +305,8 @@ int main( int argc, char *argv[] )
 		if ( alignments.fragStdev != 0 )
 		{
 			std::string name( alignments.GetReadId() ) ;
-			int len = name.length() ;
-			if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 
-					&& name[len - 2] == '/' )
-			{
-				name.erase( len - 2, 2 ) ; // Haven't tested yet.
-			}
+			TrimName( name ) ;
+
 			if ( candidates.find( name ) == candidates.end() )
 			{
 				candidates[name].mate1 = NULL ;
@@ -275,12 +328,8 @@ int main( int argc, char *argv[] )
 	}
 	// Case of pair-end data set.
 	// Go through the BAM file again to output the candidates 
-	FILE *fp2 ;
+	fprintf( stderr, "Finish obtaining the candidate read ids.\n" ) ;
 
-	sprintf( buffer, "%s_1.fa", prefix ) ;
-	fp1 = fopen( buffer, "w" ) ;
-	sprintf( buffer, "%s_2.fa", prefix ) ;
-	fp2 = fopen( buffer, "w" ) ;
 
 	while ( alignments.Next() )
 	{
@@ -316,5 +365,6 @@ int main( int argc, char *argv[] )
 	fclose( fp1 ) ;
 	fclose( fp2 ) ;
 
+	fclose( fpRef ) ;
 	return 0 ;
 }

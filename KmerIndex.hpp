@@ -79,7 +79,11 @@ public:
 			return &nullHit ;
 		uint64_t kcode = kmerCode.GetCode() ;
 		
-		return &index[kcode] ;
+		std::map< uint64_t, SimpleVector<struct _indexInfo> >::iterator it = index.find( kcode ) ;
+		if ( it == index.end() )
+			return &nullHit ;
+		else
+			return &(it->second) ;
 	}
 
 	void BuildIndexFromRead( KmerCode &kmerCode, char *s, int len, int id, int shift = 0 )

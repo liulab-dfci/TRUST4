@@ -414,10 +414,14 @@ int main( int argc, char *argv[] )
 	
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;*/
-	
+
+	int avgReadLen = 0 ;
+	for ( i = 0 ; i < assembledReadCnt && i < 1000 ; ++i )
+		avgReadLen += strlen( assembledReads[i].read ) ;
+	avgReadLen /= i ;
 	
 	fprintf( stderr, "Extend assemblies by mate pair information.\n" ) ;
-	extendedSeq.ExtendSeqFromReads( assembledReads ) ;
+	extendedSeq.ExtendSeqFromReads( assembledReads, ( avgReadLen / 3 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
 	
 	if ( outputPrefix[0] != '-' )
 	{
@@ -435,7 +439,7 @@ int main( int argc, char *argv[] )
 	
 	
 	fprintf( stderr, "Extend assemblies by their overlap.\n" ) ;
-	i = extendedSeq.ExtendSeqFromSeqOverlap() ;
+	i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
 	extendedSeq.UpdateAllConsensus() ;
 	if ( outputPrefix[0] != '-' )
 	{
