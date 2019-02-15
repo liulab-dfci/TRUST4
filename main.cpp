@@ -2,6 +2,8 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
+#include <stdarg.h>
 
 #include <vector>
 
@@ -33,6 +35,7 @@ char buffer[10240] = "" ;
 
 static const char *short_options = "f:u:1:2:b:o:c:" ;
 static struct option long_options[] = {
+			{ "debug-ns", required_argument, 0, 10000 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -87,6 +90,19 @@ bool IsLowComplexity( char *seq )
 	return false ;
 }
 
+void PrintLog( const char *fmt, ... )
+{
+	va_list args ;
+	va_start( args, fmt ) ;
+	vsprintf( buffer, fmt, args ) ;
+
+	time_t mytime = time(NULL) ;
+	struct tm *localT = localtime( &mytime ) ;
+	char stime[500] ;
+	strftime( stime, sizeof( stime ), "%c", localT ) ;
+	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+}
+
 int main( int argc, char *argv[] )
 {
 	int i, j ;
@@ -99,7 +115,7 @@ int main( int argc, char *argv[] )
 
 	int c, option_index ;
 	option_index = 0 ;
-	SeqSet seqSet( 9 ) ;
+	SeqSet seqSet( 9 ) ; // Only hold the novel seq.
 	SeqSet refSet( 9 ) ;
 	KmerCount kmerCount( 21 ) ;
 	char outputPrefix[200] = "batas" ;
@@ -143,6 +159,10 @@ int main( int argc, char *argv[] )
 			countMyself = false ;
 			fprintf( stderr, "Read in the kmer count information from %s", optarg ) ;
 		}
+		else if ( c == 10000 )
+		{
+			seqSet.InputNovelFa( optarg ) ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -155,7 +175,7 @@ int main( int argc, char *argv[] )
 	AlignAlgo::GlobalAlignment( t, strlen( t ), p, strlen( p ), align ) ;
 	AlignAlgo::VisualizeAlignment( t, strlen( t ), p, strlen( p ), align ) ; */
 	
-	if ( seqSet.Size() == 0 )
+	if ( refSet.Size() == 0 )
 	{
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
@@ -173,8 +193,9 @@ int main( int argc, char *argv[] )
 		}*/
 
 		if ( IsLowComplexity( reads.seq ) )
+		{
 			continue ;
-
+		}
 		struct _sortRead nr ;
 		nr.read = strdup( reads.seq ) ;
 		nr.id = strdup( reads.id ) ;
@@ -190,9 +211,9 @@ int main( int argc, char *argv[] )
 			maxReadLen = len ;
 	
 		if ( countMyself && i % 100000 == 0 )
-			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
+			PrintLog( "Read in and count kmers for %d reads.", i ) ;
 		else if ( !countMyself && i % 1000000 == 0 )
-			fprintf( stderr, "Read in %d reads.\n", i ) ;
+			PrintLog( "Read in %d reads.", i ) ;
 	}
 	
 	while ( mateReads.Next() )
@@ -202,7 +223,7 @@ int main( int argc, char *argv[] )
 		
 		if ( geneOverlap[0].seqIdx + geneOverlap[1].seqIdx + geneOverlap[2].seqIdx + geneOverlap[3].seqIdx == -4 )
 			continue ;*/
-		if ( IsLowComplexity( reads.seq ) )
+		if ( IsLowComplexity( mateReads.seq ) )
 			continue ;
 
 		struct _sortRead nr ;
@@ -220,12 +241,12 @@ int main( int argc, char *argv[] )
 			maxReadLen = len ;
 		
 		if ( countMyself && i % 100000 == 0 )
-			fprintf( stderr, "Read in and count kmers for %d reads.\n", i ) ;
+			PrintLog( "Read in and count kmers for %d reads.", i ) ;
 		else if ( !countMyself && i % 1000000 == 0 )
-			fprintf( stderr, "Read in %d reads.\n", i ) ;
+			PrintLog( "Read in %d reads.", i ) ;
 	}
 
-	fprintf( stderr, "Found %i reads.\n", i ) ;
+	PrintLog( "Found %i reads.", i ) ;
 	if ( maxReadLen <= 0 )
 	{
 		return 0 ;
@@ -270,8 +291,20 @@ int main( int argc, char *argv[] )
 
 			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].seqStart >= 100 ) // From constant gene.
 				addRet = -1 ;
-			else	
+			else
+			{
 				addRet = seqSet.AddRead( sortedReads[i].read ) ;
+				/*if ( addRet == -1 )
+				{
+					for ( j = 0 ; j < 4 ; ++j )
+						if ( geneOverlap[j].seqIdx != -1 )
+							break ;
+
+					if ( j < 4 )
+						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
+							sortedReads[i].read, geneOverlap[j].strand ) ;
+				}*/
+			}
 		}
 		else
 		{
@@ -279,8 +312,6 @@ int main( int argc, char *argv[] )
 			if ( prevAddRet != -1 )
 				addRet = seqSet.RepeatAddRead( sortedReads[i].read ) ;
 		}
-		if ( i > 0 && i % 100000 == 0 )
-			fprintf( stderr, "Processed %d reads.\n", i ) ;
 		
 		if ( addRet == -2 )
 			rescueReadIdx.push_back( i ) ;
@@ -293,13 +324,16 @@ int main( int argc, char *argv[] )
 		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
 			seqSet.UpdateAllConsensus() ;
 
+		if ( i > 0 && i % 100000 == 0 )
+			PrintLog( "Processed %d reads (%d are used for assembly).", i, assembledReadCnt ) ;
+		
 		prevAddRet = addRet ;
 #ifdef DEBUG
 		printf( "done\n" ) ;
 #endif
 	}
 	seqSet.UpdateAllConsensus() ;
-	fprintf( stderr, "Assembled %d reads.\n", assembledReadCnt ) ;
+	PrintLog(  "Assembled %d reads.", assembledReadCnt ) ;
 	
 	// Go through the second round.
 	// TODO: user-defined number of rounds.
@@ -314,7 +348,7 @@ int main( int argc, char *argv[] )
 	}*/
 
 	int rescueReadCnt = rescueReadIdx.size() ;
-	fprintf( stderr, "Try to rescue %d reads for assembly.\n", rescueReadCnt) ;
+	PrintLog( "Try to rescue %d reads for assembly.", rescueReadCnt) ;
 	assembledReadCnt = 0 ;
 	for ( i = 0 ; i < rescueReadCnt ; ++i )
 	{
@@ -336,8 +370,8 @@ int main( int argc, char *argv[] )
 #endif
 	}
 	seqSet.UpdateAllConsensus() ;
-	fprintf( stderr, "Rescued %d reads.\n", assembledReadCnt ) ;
-	
+	PrintLog( "Rescued %d reads.", assembledReadCnt ) ;
+	//exit( 1 ) ;
 	/*seqSet.Clean( true ) ;
 	fprintf( stderr, "Found %d raw contigs.\nStart to merge raw contigs.\n", seqSet.GetSeqCnt() ) ;
 	
@@ -381,9 +415,13 @@ int main( int argc, char *argv[] )
 	sprintf( buffer, "%s_assembled_reads.fa", outputPrefix ) ;
 	fp = fopen( buffer, "w" ) ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
-		fprintf( fp, ">%s\n%s\n", assembledReads[i].id, assembledReads[i].read ) ;
+	{
+		fprintf( fp, ">%s %d %d\n%s\n", assembledReads[i].id, sortedReads[ assembledReadIdx[i] ].minCnt, 
+			sortedReads[ assembledReadIdx[i] ].medianCnt,
+			assembledReads[i].read ) ;
+	}
 	fclose( fp ) ;
-	
+
 	SeqSet extendedSeq( 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
 	struct _overlap assign ;
@@ -395,7 +433,7 @@ int main( int argc, char *argv[] )
 			
 		if ( i > 0 && i % 100000 == 0 )
 		{
-			fprintf( stderr, "Processed %d reads for extension.\n", i ) ;
+			PrintLog( "Processed %d reads for extension.", i ) ;
 		}
 	}
 	
@@ -420,8 +458,8 @@ int main( int argc, char *argv[] )
 		avgReadLen += strlen( assembledReads[i].read ) ;
 	avgReadLen /= i ;
 	
-	fprintf( stderr, "Extend assemblies by mate pair information.\n" ) ;
-	extendedSeq.ExtendSeqFromReads( assembledReads, ( avgReadLen / 3 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
+	PrintLog( "Extend assemblies by mate pair information." ) ;
+	extendedSeq.ExtendSeqFromReads( assembledReads, 31 ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
 	
 	if ( outputPrefix[0] != '-' )
 	{
@@ -438,7 +476,8 @@ int main( int argc, char *argv[] )
 		fclose( fp ) ;
 	
 	
-	fprintf( stderr, "Extend assemblies by their overlap.\n" ) ;
+	PrintLog( "Extend assemblies by their overlap." ) ;
+	extendedSeq.ChangeKmerSize( 31 ) ;
 	i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
 	extendedSeq.UpdateAllConsensus() ;
 	if ( outputPrefix[0] != '-' )
@@ -466,5 +505,7 @@ int main( int argc, char *argv[] )
 		free( sortedReads[i].id ) ;
 		free( sortedReads[i].read ) ;
 	}
+
+	PrintLog( "Finished." ) ;
 	return 0 ;
 }
