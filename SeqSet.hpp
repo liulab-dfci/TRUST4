@@ -1438,8 +1438,9 @@ public:
 				sw.posWeight[i].count[ nucToNum[ sw.consensus[i] - 'A' ] ] = 1 ;
 		}
 		KmerCode kmerCode( kmerLength ) ;
-		seqIndex.BuildIndexFromRead( kmerCode, read, seqLen, seqIdx ) ;
+		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
 	
+		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, strand ) ;
 		return seqIdx ;
 	}

@@ -134,7 +134,7 @@ int main( int argc, char *argv[] )
 
 		if ( c == 'f' )
 		{
-			seqSet.InputRefFa( optarg ) ;
+			//seqSet.InputRefFa( optarg ) ;
 			refSet.InputRefFa( optarg ) ;
 		}
 		else if ( c == 'u' )
@@ -267,9 +267,7 @@ int main( int argc, char *argv[] )
 	
 	kmerCount.Release() ;
 	std::sort( sortedReads.begin(), sortedReads.end() ) ;
-#ifdef DEBUG
-	printf( "Finish sorting\n" ) ;
-#endif
+	PrintLog( "Finish sorting the reads." ) ;
 	
 	std::vector<int> rescueReadIdx ;
 	std::vector<int> assembledReadIdx ;
@@ -294,16 +292,21 @@ int main( int argc, char *argv[] )
 			else
 			{
 				addRet = seqSet.AddRead( sortedReads[i].read ) ;
-				/*if ( addRet == -1 )
+				if ( addRet < 0 )
 				{
 					for ( j = 0 ; j < 4 ; ++j )
 						if ( geneOverlap[j].seqIdx != -1 )
 							break ;
 
 					if ( j < 4 )
+					{
 						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
 							sortedReads[i].read, geneOverlap[j].strand ) ;
-				}*/
+
+					}
+					//printf( "hello %d %d. %d %d %d %d\n", i, addRet, geneOverlap[0].seqIdx,
+					//		geneOverlap[1].seqIdx, geneOverlap[2].seqIdx, geneOverlap[3].seqIdx ) ;
+				}
 			}
 		}
 		else
@@ -453,10 +456,11 @@ int main( int argc, char *argv[] )
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;*/
 
-	int avgReadLen = 0 ;
+	int avgReadLen = 1 ;
 	for ( i = 0 ; i < assembledReadCnt && i < 1000 ; ++i )
 		avgReadLen += strlen( assembledReads[i].read ) ;
-	avgReadLen /= i ;
+	if ( i > 0 )
+		avgReadLen /= i ;
 	
 	PrintLog( "Extend assemblies by mate pair information." ) ;
 	extendedSeq.ExtendSeqFromReads( assembledReads, 31 ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
