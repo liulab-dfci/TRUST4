@@ -134,7 +134,10 @@ public:
 			}
 		}
 		if ( k == 0 )
+		{
+			minCount = -len ;
 			return 0 ;
+		}
 
 		std::sort( c, c + k ) ; 
 		minCount = c[0] ;

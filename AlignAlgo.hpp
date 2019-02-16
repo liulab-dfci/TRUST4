@@ -39,6 +39,140 @@ private:
 		return false ;
 	}
 public:
+	static double GlobalAlignment_PosWeight( struct _posWeight *tWeights, int lent, char *p, int lenp, char *align ) 
+	{
+		if ( lent == 0 || lenp == 0 )
+		{
+			align[0] = -1 ;
+			return 0 ;
+		}
+		else if ( lent == 1 && lenp == 1 )
+		{
+			if ( IsBaseEqual( tWeights[0], p[0] ) )
+			{
+				align[0] = EDIT_MATCH ;
+				align[1] = -1 ;
+				return SCORE_MATCH ;
+			}
+			else
+			{
+				align[0] = EDIT_MISMATCH ;
+				align[1] = -1 ;
+				return SCORE_MISMATCH ;
+			}
+		}
+
+
+		int leftBand = 5 ;
+		int rightBand = 5 ;
+		if ( lent > lenp )
+			rightBand += lent - lenp ;
+		else if ( lent < lenp ) // more rows than column.
+			leftBand += lenp - lent ;
+		
+		int i, j ;
+		int negInf = ( lent + 1 ) * ( lenp + 1 ) * SCORE_INDEL ;
+		int bmax = ( lent + 1 ) ;
+
+		int *m = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ;
+		
+		m[0] = 0 ;
+		for ( i = 1 ; i <= lenp ; ++i )
+		{
+			m[i * bmax + 0] = SCORE_INDEL + i * SCORE_INDEL; 
+		}
+
+		for ( j = 1 ; j <= lent ; ++j  )
+		{
+			m[0 + j] = SCORE_INDEL + j * SCORE_INDEL ;
+		}
+
+		for ( i = 1 ; i <= lenp ; ++i )
+		{
+			int start = ( i - leftBand < 1 ) ? 1 : ( i - leftBand ) ;
+			int end = ( i + rightBand > lent ) ? lent : ( i + rightBand ) ;
+
+			if ( start > 1 )
+			{
+				j = start - 1 ;
+				m[i * bmax + j] = negInf ;
+			}
+			if ( end < lent )
+			{
+				j = end + 1 ;
+				m[i * bmax + j] = negInf ;
+			}
+			
+			for ( j = start ; j <= end ; ++j )
+			//for ( j = 1 ; j <= lent ; ++j )
+			{
+				int score ;
+				score = m[ ( i - 1 ) * bmax + j - 1] + ( IsBaseEqual( tWeights[j - 1], p[i - 1] )? SCORE_MATCH : SCORE_MISMATCH ) ;	
+				//printf( "%d %d: %d. %d %d %d\n", i, j, score, m[ (i - 1)*bmax + j - 1], e[ i * bmax + j], f[ i * bmax + j] ) ;
+				score = MAX( score, m[ i * bmax + ( j - 1 ) ] + SCORE_INDEL ) ;
+				score = MAX( score, m[ ( i - 1 ) * bmax + j ] + SCORE_INDEL ) ;
+				m[i * bmax + j ] = score ;
+			}
+		}
+		
+		/*printf( "m:\n" ) ;
+		for ( i = 0 ; i <= lenp ; ++i )
+		{
+			for ( j = 0 ; j <= lent ; ++j )
+				printf( "%d ", m[i * bmax + j ] ) ;
+			printf( "\n" ) ;
+		}*/
+		int ret = m[ lenp * bmax + lent ] ;
+		
+		// Trace back.
+		int tagi = lenp, tagj = lent ;
+		int tag = 0 ;
+		
+		while ( tagi > 0 || tagj > 0 )
+		{
+			int max = m[tagi * bmax + tagj] ;
+			int a = 0 ;
+			if ( tagj > 0 && m[tagi * bmax + tagj - 1] + SCORE_INDEL == max )
+				a = EDIT_DELETE ;	
+			if ( tagi > 0 && m[ ( tagi - 1 ) * bmax + tagj] + SCORE_INDEL == max )
+				a = EDIT_INSERT ; 
+			if ( tagj > 0 && tagi > 0 )
+			{
+				int diff = ( IsBaseEqual( tWeights[ tagj - 1], p[tagi - 1] ) ? SCORE_MATCH : SCORE_MISMATCH ) ;
+				if ( m[ ( tagi - 1) * bmax + tagj - 1 ] + diff == max )
+				{
+					if ( diff == SCORE_MATCH )
+						a = EDIT_MATCH ;
+					else
+						a = EDIT_MISMATCH ;
+				}
+			}
+
+			align[ tag ] = a ;
+			++tag ;
+			if ( a == EDIT_DELETE )
+				--tagj ;
+			else if ( a == EDIT_INSERT )
+				--tagi ;
+			else
+			{
+				--tagi ;
+				--tagj ;
+			}
+		}
+
+		align[tag] = -1 ;
+		for ( i = 0, j = tag - 1 ; i < j ; ++i, --j )
+		{	
+			char tmp = align[i] ;
+			align[i] = align[j] ;
+			align[j] = tmp ;
+		}
+		delete[] m ;
+		
+		return ret ;
+	}
+		
 	static int GlobalAlignment( char *t, int lent, char *p, int lenp, char *align )
 	{
 		if ( lent == 0 || lenp == 0 )
@@ -247,7 +381,7 @@ public:
 		return ret ;
 	}
 	
-	static int GlobalAlignment_PosWeight( struct _posWeight *tWeights, int lent, char *p, int lenp, char *align )
+	static int GlobalAlignment_PosWeight_Affine( struct _posWeight *tWeights, int lent, char *p, int lenp, char *align )
 	{
 		if ( lent == 0 || lenp == 0 )
 		{

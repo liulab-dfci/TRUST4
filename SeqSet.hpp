@@ -740,6 +740,10 @@ private:
 		KmerCode prevKmerCode( kmerLength ) ;
 
 		// Locate the hits from the same-strand case.
+		int skipLimit = 0 ;
+		if ( readType == 0 )
+			skipLimit = kmerLength / 2 ; // Only filter hits when we are aligning reads
+		int skipCnt = 0 ;
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( read[i] ) ;
 		
@@ -751,9 +755,16 @@ private:
 				SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
 
 				int size = indexHit.Size() ;
-
-				//if ( size >= 40 )
-				//	continue ;
+				if ( size >= 100 )
+				{
+					if ( skipCnt < skipLimit )
+					{
+						++skipCnt ;
+						continue ;
+					}
+					else
+						skipCnt = 0 ;
+				}
 
 				for ( j = 0 ; j < size ; ++j )
 				{
@@ -774,6 +785,7 @@ private:
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( rcRead[i] ) ;
 		
+		skipCnt = 0 ; 
 		for ( ; i < len ; ++i )
 		{
 			kmerCode.Append( rcRead[i] ) ;
@@ -783,8 +795,16 @@ private:
 
 				int size = indexHit.Size() ;
 
-				//if ( size >= 40 )
-				//	continue ;
+				if ( size >= 100 )
+				{
+					if ( skipCnt < skipLimit )
+					{
+						++skipCnt ;
+						continue ;
+					}
+					else
+						skipCnt = 0 ;
+				}
 
 				for ( j = 0 ; j < size ; ++j )
 				{
@@ -805,6 +825,7 @@ private:
 		}
 		delete[] rcRead ;
 
+		//printf( "hitsize=%d\n", hits.Size() ) ;
 		// Find the overlaps.
 		// Sort the hits
 		if ( hits.Size() > 2 * seqs.size() ) 
@@ -1331,10 +1352,10 @@ private:
 				if ( extendedOverlap.similarity >= repeatSimilarity )
 					adj[i].push_back( extendedOverlap ) ;
 #ifdef DEBUG
-				printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
+				/*printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
 						extendedOverlap.readStart, extendedOverlap.readEnd,
 						extendedOverlap.seqStart, extendedOverlap.seqEnd,
-						extendedOverlap.similarity ) ;
+						extendedOverlap.similarity ) ;*/
 #endif				
 			}
 		}
@@ -2463,10 +2484,11 @@ public:
 			seqIndex.BuildIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, k, 0 ) ;
 			++k ;
 		}
+		SetPrevAddInfo( -1, -1, -1, -1, -1, 0 ) ; 
 		seqs.resize( k ) ;
 	}
 
-	void ChangeKmerSize( int kl )
+	void ChangeKmerLength( int kl )
 	{
 		kmerLength = kl ;
 		Clean( false ) ;

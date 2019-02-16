@@ -115,7 +115,9 @@ int main( int argc, char *argv[] )
 
 	int c, option_index ;
 	option_index = 0 ;
-	SeqSet seqSet( 9 ) ; // Only hold the novel seq.
+	int indexKmerLength = 9 ;
+	int changeKmerLengthThreshold = 4096 ;
+	SeqSet seqSet( indexKmerLength ) ; // Only hold the novel seq.
 	SeqSet refSet( 9 ) ;
 	KmerCount kmerCount( 21 ) ;
 	char outputPrefix[200] = "batas" ;
@@ -157,7 +159,7 @@ int main( int argc, char *argv[] )
 		{
 			kmerCount.AddCountFromFile( optarg ) ;
 			countMyself = false ;
-			fprintf( stderr, "Read in the kmer count information from %s", optarg ) ;
+			PrintLog( "Read in the kmer count information from %s", optarg ) ;
 		}
 		else if ( c == 10000 )
 		{
@@ -327,13 +329,20 @@ int main( int argc, char *argv[] )
 		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
 			seqSet.UpdateAllConsensus() ;
 
-		if ( i > 0 && i % 100000 == 0 )
-			PrintLog( "Processed %d reads (%d are used for assembly).", i, assembledReadCnt ) ;
+		if ( ( i + 1 ) % 100000 == 0 )
+			PrintLog( "Processed %d reads (%d are used for assembly).", i + 1, assembledReadCnt ) ;
 		
 		prevAddRet = addRet ;
 #ifdef DEBUG
 		printf( "done\n" ) ;
 #endif
+
+		if ( seqSet.Size() > changeKmerLengthThreshold && indexKmerLength < 16 )
+		{
+			changeKmerLengthThreshold *= 2 ;
+			indexKmerLength += 2 ;
+			seqSet.ChangeKmerLength( indexKmerLength ) ;
+		}
 	}
 	seqSet.UpdateAllConsensus() ;
 	PrintLog(  "Assembled %d reads.", assembledReadCnt ) ;
@@ -425,7 +434,7 @@ int main( int argc, char *argv[] )
 	}
 	fclose( fp ) ;
 
-	SeqSet extendedSeq( 17 ) ;
+	SeqSet extendedSeq( indexKmerLength > 17 ? indexKmerLength : 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
 	struct _overlap assign ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
@@ -434,9 +443,9 @@ int main( int argc, char *argv[] )
 			extendedSeq.AssignRead( assembledReads[i].read, 1.0, assign ) ;
 		assembledReads[i].overlap = assign ;
 			
-		if ( i > 0 && i % 100000 == 0 )
+		if ( ( i + 1 ) % 100000 == 0 )
 		{
-			PrintLog( "Processed %d reads for extension.", i ) ;
+			PrintLog( "Processed %d reads for extension.", i + 1 ) ;
 		}
 	}
 	
@@ -481,7 +490,7 @@ int main( int argc, char *argv[] )
 	
 	
 	PrintLog( "Extend assemblies by their overlap." ) ;
-	extendedSeq.ChangeKmerSize( 31 ) ;
+	extendedSeq.ChangeKmerLength( 31 ) ;
 	i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
 	extendedSeq.UpdateAllConsensus() ;
 	if ( outputPrefix[0] != '-' )
