@@ -213,8 +213,8 @@ int main( int argc, char *argv[] )
 		//if ( !alignments.IsPrimary() )
 		//	continue ;
 		alignments.GetReadSeq( buffer ) ;
-		if ( IsLowComplexity( buffer ) )
-			continue ;
+		//if ( IsLowComplexity( buffer ) )
+		//	continue ;
 
 		if ( !alignments.IsTemplateAligned() 
 			|| ( alignments.IsAligned() && ValidAlternativeChrom( alignments.GetChromName( alignments.GetChromId() ) ) ) )
@@ -222,10 +222,10 @@ int main( int argc, char *argv[] )
 			if ( filterUnalignedFragment && !alignments.IsTemplateAligned() )
 				continue ;
 			
-			if ( !alignments.IsTemplateAligned() && !refSet.HasHitInSet( buffer ) ) 
-				continue ;
+			//if ( !alignments.IsTemplateAligned() && !refSet.HasHitInSet( buffer ) ) 
+			//	continue ;
 			
-			/*if ( !alignments.IsTemplateAligned() && alignments.fragStdev != 0 )
+			if ( !alignments.IsTemplateAligned() && alignments.fragStdev != 0 )
 			{
 				//printf( "filtered\n" ) ;
 				std::string name( alignments.GetReadId() ) ;
@@ -260,7 +260,7 @@ int main( int argc, char *argv[] )
 					}
 				}
 				continue ;
-			}*/
+			}
 			
 			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
@@ -274,7 +274,7 @@ int main( int argc, char *argv[] )
 					candidates[name].mate2 = NULL ;
 				}
 			}
-			else
+			else if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer ) )
 			{
 				//alignments.GetReadSeq( buffer ) ;
 				fprintf( fp1, ">%s\n%s\n", alignments.GetReadId(), buffer ) ;
@@ -285,6 +285,9 @@ int main( int argc, char *argv[] )
 		if ( !alignments.IsAligned() ) // when reach here, it is parie-end case, and the other mate is aligned.
 			continue ;
 		
+		if ( IsLowComplexity( buffer ) )
+			continue ;
+
 		// The aligned reads can reach here.
 		int chrId = alignments.GetChromId() ;
 		int start = (int)alignments.segments[0].a ;
@@ -335,6 +338,9 @@ int main( int argc, char *argv[] )
 	{
 		if ( !alignments.IsPrimary() )
 			continue ;
+		if ( !alignments.IsTemplateAligned() ) // the sorted bam file should put all unaligned template at last.
+			break ;
+
 		std::string name( alignments.GetReadId() ) ;
 		int len = name.length() ;
 		if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 

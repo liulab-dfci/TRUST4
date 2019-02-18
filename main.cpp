@@ -299,7 +299,6 @@ int main( int argc, char *argv[] )
 					for ( j = 0 ; j < 4 ; ++j )
 						if ( geneOverlap[j].seqIdx != -1 )
 							break ;
-
 					if ( j < 4 )
 					{
 						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
@@ -339,7 +338,7 @@ int main( int argc, char *argv[] )
 
 		if ( seqSet.Size() > changeKmerLengthThreshold && indexKmerLength < 16 )
 		{
-			changeKmerLengthThreshold *= 2 ;
+			changeKmerLengthThreshold *= 4 ;
 			indexKmerLength += 2 ;
 			seqSet.ChangeKmerLength( indexKmerLength ) ;
 		}
@@ -398,7 +397,7 @@ int main( int argc, char *argv[] )
 	FILE *fp ;
 	if ( outputPrefix[0] != '-' )
 	{
-		sprintf( buffer, "%s_raw_assembly.out", outputPrefix ) ;
+		sprintf( buffer, "%s_raw.out", outputPrefix ) ;
 		fp = fopen( buffer, "w" ) ;
 	}
 	else

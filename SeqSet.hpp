@@ -740,9 +740,9 @@ private:
 		KmerCode prevKmerCode( kmerLength ) ;
 
 		// Locate the hits from the same-strand case.
-		int skipLimit = 0 ;
-		if ( readType == 0 )
-			skipLimit = kmerLength / 2 ; // Only filter hits when we are aligning reads
+		//int skipLimit = 3 ;
+		int skipLimit = kmerLength / 2 ; 
+		
 		int skipCnt = 0 ;
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( read[i] ) ;
@@ -762,9 +762,9 @@ private:
 						++skipCnt ;
 						continue ;
 					}
-					else
-						skipCnt = 0 ;
 				}
+				
+				skipCnt = 0 ;
 
 				for ( j = 0 ; j < size ; ++j )
 				{
@@ -802,9 +802,8 @@ private:
 						++skipCnt ;
 						continue ;
 					}
-					else
-						skipCnt = 0 ;
 				}
+				skipCnt = 0 ;
 
 				for ( j = 0 ; j < size ; ++j )
 				{
@@ -899,8 +898,24 @@ private:
 		overlapCnt = k ;*/
 
 		// Since the seqs are all from the same strand, the overlaps should be on the same strand.
-		k = 0 ;
+		std::sort( overlaps.begin(), overlaps.end() ) ;
+	
+		k = 1 ;
 		for ( i = 1 ; i < overlapCnt ; ++i )
+		{
+			if ( overlaps[i].strand != overlaps[0].strand )
+			{
+				delete overlaps[i].hitCoords ;
+				overlaps[i].hitCoords = NULL ;
+				continue ;		
+			}
+			if ( i != k )
+				overlaps[k] = overlaps[i] ;
+			++k ;
+		}
+		overlaps.resize( k ) ;
+		overlapCnt = k ;
+		/*for ( i = 1 ; i < overlapCnt ; ++i )
 		{
 			if ( overlaps[i].strand != overlaps[i - 1].strand )
 			{
@@ -909,7 +924,7 @@ private:
 					delete overlaps[i].hitCoords ;
 				return 0 ;
 			}
-		}
+		}*/
 
 		rcRead = new char[len + 1] ;
 		ReverseComplement( rcRead, read, len ) ;		
@@ -917,7 +932,6 @@ private:
 
 		// Compute similarity overlaps
 		//if ( overlaps.size() > 1000 )
-		std::sort( overlaps.begin(), overlaps.end() ) ;
 		/*int bestNovelOverlap = -1 ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
@@ -937,6 +951,7 @@ private:
 		
 		int firstRef = -1 ;
 		int bestNovelOverlap = -1 ;
+		k = 0 ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
 			char *r ;
