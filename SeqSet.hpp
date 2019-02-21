@@ -337,6 +337,116 @@ private:
 		prevAddInfo.strand = strand ;
 	}
 	
+	char DnaToAa( char a, char b, char c )
+	{
+		if ( a == 'N' || b == 'N' || c == 'N' )
+			return '-' ;
+
+		if ( a == 'A' )
+		{
+			if ( b == 'A' )
+			{
+				if ( c == 'A' || c == 'G' )
+					return 'K' ;
+				else
+					return 'N' ;
+			}
+			else if ( b == 'C' )
+			{
+				return 'T' ;
+			}
+			else if ( b == 'G' )
+			{
+				if ( c == 'A' || c == 'G' )
+					return 'R' ;
+				else
+					return 'S' ;
+			}
+			else
+			{
+				if ( c == 'G' )
+					return 'M' ;
+				else 
+					return 'I' ;
+			}
+		}
+		else if ( a == 'C' )
+		{
+			if ( b == 'A' )
+			{
+				if ( c == 'A' || c == 'G' )
+					return 'Q' ;
+				else
+					return 'H' ;
+				
+			}
+			else if ( b == 'C' )
+			{
+				return 'P' ;
+			}
+			else if ( b == 'G' )
+			{
+				return 'R' ;
+			}
+			else
+			{
+				return 'L' ;
+			}
+		}
+		else if ( a == 'G' )
+		{
+			if ( b == 'A' )
+			{
+				if ( c == 'A' || c == 'G' )
+					return 'E' ;
+				else
+					return 'D' ;
+			}
+			else if ( b == 'C' )
+			{
+				return 'A' ;
+			}
+			else if ( b == 'G' )
+			{
+				return 'G' ;
+			}
+			else
+			{
+				return 'V' ;
+			}
+		}
+		else
+		{
+			if ( b == 'A' )
+			{
+				if ( c == 'A' || c == 'G' )
+					return '*' ;
+				else
+					return 'Y' ;
+			}
+			else if ( b == 'C' )
+			{
+				return 'S' ;
+			}
+			else if ( b == 'G' )
+			{
+				if ( c == 'A' )
+					return '*' ;
+				else if ( c == 'G' )
+					return 'W' ;
+				else
+					return 'C' ;
+				
+			}
+			else
+			{
+				if ( c == 'A' || c == 'G' )
+					return 'L' ;
+				else
+					return 'F' ;
+			}
+		}
+	}
 
 	void ReleaseSeq( int idx )
 	{
@@ -2904,7 +3014,7 @@ public:
 				if ( geneOverlap[i].seqIdx == -1 )
 					continue ;
 				int seqIdx = geneOverlap[i].seqIdx ;				
-				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + geneOverlap[i].seqEnd + 1, seqs[ seqIdx ].consensusLen - geneOverlap[i].seqEnd, read + geneOverlap[i].readEnd + 1, len - geneOverlap[i].readEnd, 0, align ) ;
+				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + geneOverlap[i].seqEnd + 1, seqs[ seqIdx ].consensusLen - geneOverlap[i].seqEnd - 1, read + geneOverlap[i].readEnd + 1, len - geneOverlap[i].readEnd - 1, 0, align ) ;
 				
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
@@ -2968,35 +3078,261 @@ public:
 		if ( detailLevel >= 2 )
 		{
 			// Infer CDR3.
+			int s, e ;
+			int boundS = 0, boundE = len - 2 ;
+			int range = 31 ;
 			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
 			{
 				// The case that we have anchor.
-				// Find the motif for anchor.
-				if ( geneOverlap[0].readEnd < geneOverlap[2].readStart )
+				// Find the motif for anchor
+				int startFrame = geneOverlap[0].seqStart % 3 ;
+				s = geneOverlap[0].readEnd - ( geneOverlap[0].readEnd - geneOverlap[0].readStart + startFrame ) % 3 ;
+				startFrame = ( seqs[ geneOverlap[2].seqIdx ].consensusLen - 1 - geneOverlap[2].seqEnd ) % 3 ;
+				//e = geneOverlap[2].readStart + 
+				//	( geneOverlap[2].readEnd - geneOverlap[2].readStart + startFrame ) % 3 ;
+				e = geneOverlap[2].readStart ;
+				int adjustE = e ;
+				int locate = -1 ;
+				for ( i = adjustE ; i < geneOverlap[2].readEnd  && i + 11 < len ; ++i )
 				{
-					int s = geneOverlap[0].readEnd + 1 ;
-					int e = geneOverlap[2].readStart - 1 ;
-
-					for ( i = s ; i >= 0 ; --i )
+					// A strong motif, should be used as the anchor.
+					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
+								DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+							&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
 					{
-						if ( read[i] == 'T' && read[i + 1] == 'G' && read[i + 2] == 'T' )
-							break ;
+						locate = i ;
+						break ;
 					}
-					if ( i >= 0 )
-						s = i ;
-
-					for ( i = e ; i < len - 2 ; ++i )
-					{
-						if ( read[i] == 'T' && read[i + 1] == 'G' && read[i + 2] == 'G' )
-							break ;
-					}
-					if ( i < len - 2 )
-						e = i + 2 ;
-
-					cdr3 = new char[e - s + 2  + 1 ] ;
-					memcpy( cdr3, read + s, e - s + 1 ) ;
-					cdr3[e - s + 1] = '\0' ;
 				}
+
+				if ( locate != -1 )
+					e = locate ;
+
+				if ( e < s + 12 )
+					range += 15 ;
+
+				if ( s - range > boundS )
+					boundS = s - range ;
+				if ( e + range < boundE )
+					boundE = e + range ;
+				
+				if ( locate != -1 )
+					s = s - ( e - s ) % 3 ;
+			
+			}
+			else if ( geneOverlap[2].seqIdx != -1 )
+			{
+				e = geneOverlap[2].readStart ;
+				int adjustE = e ;
+				int locate = -1 ;
+				for ( i = adjustE ; i < boundE && i + 11 < len ; ++i )
+				{
+					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
+								DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+							&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+					{
+						locate = i ;
+						break ;
+					}
+				}
+				if ( locate != -1 )
+					e = locate ;
+
+				s = e - 3 ;
+				if ( e + 31 < boundE )
+					boundE = e + 31 ;
+			}
+			else if ( geneOverlap[0].seqIdx != -1 )
+			{
+				int startFrame = geneOverlap[0].seqStart % 3 ;
+				s = geneOverlap[0].readEnd - ( geneOverlap[0].readEnd - geneOverlap[0].readStart - startFrame ) % 3 ;
+				e = s + 12 ;
+				if ( s - 31 > boundS )
+					boundS = s - 31 ;
+				
+				int adjustE = e ;
+				int locate = -1 ;
+				if ( geneOverlap[3].seqIdx != -1 )
+					boundE = geneOverlap[3].readStart - 2 ;
+				for ( i = adjustE ; i < boundE && i + 11 < len ; ++i )
+				{
+					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
+								DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+							&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+					{
+						locate = i ;
+						break ;
+					}
+				}
+
+				if ( locate != -1 )
+				{
+					e = locate ;
+					s = e - 12 ;
+				}
+			}
+			else
+			{
+				s = 0 ;
+				e = len ;
+				boundS = 1 ;
+			}
+
+			if ( e < s + 12 )
+			{
+				e = s + 12 ;
+			}
+			int locateS = -1 ;
+			int locateE = -1 ;
+			for ( i = s ; i > boundS ; i -= 3 )
+			{
+				if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+				{
+					locateS = i ;
+					break ;
+				}
+			}
+			
+			if ( locateS == -1 )
+			{
+				// Don't follow the frame rule 
+				for ( i = s ; i > boundS ; --i )
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+					{
+						locateS = i ;
+						break ;
+					}
+			}
+			
+			if ( locateS == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
+			{
+				// Expand the search range.
+				int newS = e - 12 - ( e - 12 - s ) % 3 ;
+				if ( newS > s )
+				{
+					for ( i = newS ; i > s ; i -= 3 )
+						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+						{
+							locateS = i ;
+							break ;
+						}
+					if ( locateS == -1 )
+					{
+						for ( i = newS ; i > s ; --i )
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+							{
+								locateS = i ;
+								break ;
+							}
+					}
+
+				}
+			}
+			int adjustE = e  ;
+			if ( locateS != -1 )
+			{
+				adjustE = e - ( e - locateS ) % 3 ; 
+				for ( i = adjustE ; i < boundE && i + 11 < len ; i += 3 )
+				{
+					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
+						DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+						&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+						&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+					{
+						locateE = i ;
+						break ;
+					}
+				}
+
+				if ( locateE == -1 )
+				{
+					adjustE = e ;
+					for ( i = adjustE ; i < boundE && i + 11 < len ; ++i )
+					{
+						if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
+									DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+								&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+								&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+						{
+							locateE = i ;
+							break ;
+						}
+					}
+				}
+			}
+			
+			if ( locateE == -1 )
+			{
+				// Use weaker motif.
+				if ( locateS != -1 )
+				{
+					adjustE = e - ( e - locateS ) % 3 ; 
+					for ( i = adjustE ; i < boundE ; i += 3 )
+					{
+						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
+						{
+							//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
+							//	DnaToAa( read[i], read[i + 1], read[i + 2] ) ) ;
+							//printf( "%c%c%c=>%c\n", read[j], read[j + 1], read[j + 2],
+							//	DnaToAa( read[j], read[j + 1], read[j + 2] ) ) ;
+							locateE = i ;
+							break ;
+						}
+					}
+					if ( locateE == -1 )
+					{
+						for ( i = e ; i < boundE ; i += 3 )
+						{
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )
+							{
+								locateE = i ;
+								break ;
+							}
+						}
+					}
+				}
+
+				if ( locateE == -1 )
+				{
+					// frame shift happens or no locateS.
+					adjustE = e ; 
+					for ( i = adjustE ; i < boundE ; ++i )
+					{
+						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
+						{
+							//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
+							//	DnaToAa( read[i], read[i + 1], read[i + 2] ) ) ;
+							//printf( "%c%c%c=>%c\n", read[j], read[j + 1], read[j + 2],
+							//	DnaToAa( read[j], read[j + 1], read[j + 2] ) ) ;
+							locateE = i ;
+							break ;
+						}
+					}
+					if ( locateE == -1 )
+					{
+						for ( i = e ; i < boundE ; ++i )
+						{
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )
+							{
+								locateE = i ;
+								break ;
+							}
+						}
+					}
+				}
+			}
+
+			if ( locateS != -1 && locateE != -1 )
+			{
+				s = locateS ;
+				e = locateE + 2 ;
+
+				cdr3 = new char[e - s + 2  + 1 ] ;
+				memcpy( cdr3, read + s, e - s + 1 ) ;
+				cdr3[e - s + 1] = '\0' ;
 			}
 		}
 
@@ -3100,8 +3436,8 @@ public:
 				if ( adj[i][j].similarity < repeatSimilarity )
 					adj[i][j].similarity = 0 ;
 
-				printf( "%d branch %d %d: %d %d %lf\n", i, j, adj[i][j].seqIdx, 
-					adj[i][j].readStart, adj[i][j].readEnd, adj[i][j].similarity ) ;
+				//printf( "%d branch %d %d: %d %d %lf\n", i, j, adj[i][j].seqIdx, 
+				//	adj[i][j].readStart, adj[i][j].readEnd, adj[i][j].similarity ) ;
 			}
 		}
 
