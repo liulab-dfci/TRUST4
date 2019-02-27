@@ -3086,7 +3086,8 @@ public:
 				// The case that we have anchor.
 				// Find the motif for anchor
 				int startFrame = geneOverlap[0].seqStart % 3 ;
-				s = geneOverlap[0].readEnd - ( geneOverlap[0].readEnd - geneOverlap[0].readStart + startFrame ) % 3 ;
+				int ns = geneOverlap[0].readEnd ; //+ ( seqs[ geneOverlap[0].seqIdx ].consensusLen - 1 - geneOverlap[0].seqEnd ) ;
+				s = ns - ( ns - geneOverlap[0].readStart + startFrame ) % 3 ;
 				startFrame = ( seqs[ geneOverlap[2].seqIdx ].consensusLen - 1 - geneOverlap[2].seqEnd ) % 3 ;
 				//e = geneOverlap[2].readStart + 
 				//	( geneOverlap[2].readEnd - geneOverlap[2].readStart + startFrame ) % 3 ;
@@ -3140,7 +3141,9 @@ public:
 				if ( locate != -1 )
 					e = locate ;
 
-				s = e - 3 ;
+				s = e - 12 ;
+				if ( s < 0 )
+					s = 0 ;
 				if ( e + 31 < boundE )
 					boundE = e + 31 ;
 			}
@@ -3172,6 +3175,8 @@ public:
 				{
 					e = locate ;
 					s = e - 12 ;
+					if ( s < 0 )
+						s = 0 ;
 				}
 			}
 			else
@@ -3183,7 +3188,7 @@ public:
 
 			if ( e < s + 12 )
 			{
-				e = s + 12 ;
+				s =  e - 12 ;
 			}
 			int locateS = -1 ;
 			int locateE = -1 ;
@@ -3194,17 +3199,6 @@ public:
 					locateS = i ;
 					break ;
 				}
-			}
-			
-			if ( locateS == -1 )
-			{
-				// Don't follow the frame rule 
-				for ( i = s ; i > boundS ; --i )
-					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
-					{
-						locateS = i ;
-						break ;
-					}
 			}
 			
 			if ( locateS == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
@@ -3231,6 +3225,18 @@ public:
 
 				}
 			}
+
+			if ( locateS == -1 )
+			{
+				// Don't follow the frame rule 
+				for ( i = s ; i > boundS ; --i )
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+					{
+						locateS = i ;
+						break ;
+					}
+			}
+			
 			int adjustE = e  ;
 			if ( locateS != -1 )
 			{
