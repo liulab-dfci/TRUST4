@@ -100,7 +100,8 @@ private:
 	KmerIndex seqIndex ;
 	int kmerLength ;
 	int radius ;
-	
+	int hitLenRequired ;
+
 	// Some threshold
 	double novelSeqSimilarity ;
 	double refSeqSimilarity ;
@@ -969,7 +970,7 @@ private:
 		//for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
 		//	printf( "- %d %d %d %d\n", it->readOffset, it->indexHit.idx, it->indexHit.offset, it->strand ) ;
 
-		int hitLenRequired = 31 ;
+		//int hitLenRequired = 31 ;
 		int filterHits = 0 ;
 		if ( readType == 0 )
 		{
@@ -1477,10 +1478,10 @@ private:
 				if ( extendedOverlap.similarity >= repeatSimilarity )
 					adj[i].push_back( extendedOverlap ) ;
 #ifdef DEBUG
-				/*printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
+				printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
 						extendedOverlap.readStart, extendedOverlap.readEnd,
 						extendedOverlap.seqStart, extendedOverlap.seqEnd,
-						extendedOverlap.similarity ) ;*/
+						extendedOverlap.similarity ) ;
 #endif				
 			}
 		}
@@ -1495,7 +1496,8 @@ public:
 	{
 		kmerLength = kl ;
 		radius = 10 ;
-		
+		hitLenRequired = 31 ;
+
 		novelSeqSimilarity = 0.9 ;
 		refSeqSimilarity = 0.75 ; 
 		repeatSimilarity = 0.95 ; 
@@ -2967,7 +2969,10 @@ public:
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
 		
 		sprintf( buffer, "%d", len ) ;
+		hitLenRequired = 17 ;	
 		overlapCnt = GetOverlapsFromRead( read, 1, overlaps ) ;		
+		hitLenRequired = 31 ;
+
 		if ( overlapCnt == 0 )
 			return 0 ;
 		std::sort( overlaps.begin(), overlaps.end() ) ;
@@ -3001,6 +3006,20 @@ public:
 				continue ;
 			
 			geneOverlap[ geneType ] = overlaps[i] ;
+		}
+		
+		// Check whether the match to the constant gene is random.
+		if ( geneOverlap[3].seqIdx != -1 )
+		{
+			for ( i = 0 ; i < 3 ; ++i )
+			{
+				if ( geneOverlap[i].seqIdx >= 0 && geneOverlap[i].readEnd - 17 > geneOverlap[3].readStart 
+					&& geneOverlap[3].seqStart >= 100 )
+				{
+					geneOverlap[3].seqIdx = -1 ;
+					break ;
+				}
+			}
 		}
 		
 		// Extend overlap
@@ -3564,7 +3583,7 @@ public:
 		}
 	}
 	
-	// return: 0: extension. 1: end-to-inside extension. 2: end-to-end extension
+	// return: 0: no extension. 1: end-to-inside extension. 2: end-to-end extension
 	int GetExtendSeqCoord( int from, struct _overlap mateInfo, int direction, 
 			std::vector<struct _overlap> *branchAdj, struct _overlap &coord )
 	{
@@ -3801,10 +3820,21 @@ public:
 			rightExtend.seqIdx = -1 ;
 			extensionType[i].a = extensionType[i].b = 0 ;
 			if ( prevTag >= 0 )
+			{
 				extensionType[i].a = GetExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, branchAdj, leftExtend ) ;
+				if ( leftExtend.seqIdx == -1 )
+					matePrevNext[i].a = -1 ;
+
+			}
 			if ( nextTag >= 0 )
+			{
 				extensionType[i].b = GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, rightExtend ) ;
+				if ( rightExtend.seqIdx == -1 )
+					matePrevNext[i].b = -1 ;
+			}
+
 		}
+		
 
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -3812,9 +3842,11 @@ public:
 			
 			int prevTag = matePrevNext[i].a ;
 			int nextTag = matePrevNext[i].b ;
+			//if ( i == 47 )
+			//	fprintf( stderr, "hi %d %d %d %d\n", prevTag, nextTag,
+			//		prevAdj[i][prevTag].seqIdx, nextAdj[i][nextTag].seqIdx ) ;
 			if ( prevTag >= 0 && nextTag >= 0 )
 				continue ;
-			
 			// Keep the second part.
 			if ( nextTag >= 0 )
 			{
@@ -3830,7 +3862,24 @@ public:
 				}
 			}
 		}
-
+		
+		// Filter some middle part, if its two extension are connected.
+		/*for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int prevTag = matePrevNext[i].a ;
+			int nextTag = matePrevNext[i].b ; 
+			if ( directlyFilter[i] || prevTag < 0 || nextTag < 0 || extensionType[i].a != 2 
+				|| extensionType[i].b != 2 )
+				continue ;
+			
+			int prevSeqIdx = prevAdj[i][ prevTag ].seqIdx ;
+			int nextSeqIdx = nextAdj[i][ nextTag ].seqIdx ;
+			if ( ( matePrevNext[ prevSeqIdx ].b >= 0 
+					&& nextAdj[ prevSeqIdx ][ matePrevNext[ prevSeqIdx ].b ].seqIdx == nextSeqIdx ) 
+				|| ( matePrevNext[ nextSeqIdx ].a >= 0 
+					&& prevAdj[ nextSeqIdx ][ matePrevNext[ nextSeqIdx ].a ].seqIdx == prevSeqIdx ) )
+				directlyFilter[i] = true ;
+		}*/
 
 		// Do the extesion
 		for ( i = 0 ; i < seqCnt ; ++i )
