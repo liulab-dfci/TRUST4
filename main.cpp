@@ -21,7 +21,7 @@ char usage[] = "./bcr [OPTIONS]:\n"
 		"\t\tor\n"
 		"\t-b STRING: path to BAM alignment file\n"
 		"Optional:\n"
-		"\t-o STRING: prefix of the output file (default: batas)\n"
+		"\t-o STRING: prefix of the output file (default: trust)\n"
 		"\t-c STRING: the path to the kmer count file\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -120,7 +120,7 @@ int main( int argc, char *argv[] )
 	SeqSet seqSet( indexKmerLength ) ; // Only hold the novel seq.
 	SeqSet refSet( 9 ) ;
 	KmerCount kmerCount( 21 ) ;
-	char outputPrefix[200] = "batas" ;
+	char outputPrefix[200] = "trust" ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
@@ -394,6 +394,7 @@ int main( int argc, char *argv[] )
 	seqSet.Annotate( refSet ) ;*/
 
 	// Output the preliminary assembly.
+	seqSet.Clean( true ) ;
 	FILE *fp ;
 	if ( outputPrefix[0] != '-' )
 	{
@@ -473,7 +474,7 @@ int main( int argc, char *argv[] )
 	PrintLog( "Extend assemblies by mate pair information." ) ;
 	extendedSeq.ExtendSeqFromReads( assembledReads, 31 ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
 	
-	if ( outputPrefix[0] != '-' )
+	/*if ( outputPrefix[0] != '-' )
 	{
 		sprintf( buffer, "%s_extended.out", outputPrefix ) ;
 		fp = fopen( buffer, "w" ) ;
@@ -485,12 +486,13 @@ int main( int argc, char *argv[] )
 	fflush( fp ) ;
 	
 	if ( outputPrefix[0] != '-' )
-		fclose( fp ) ;
+		fclose( fp ) ;*/
 	
 	
-	PrintLog( "Extend assemblies by their overlap." ) ;
+	PrintLog( "Remove redundant assemblies." ) ;
 	extendedSeq.ChangeKmerLength( 31 ) ;
-	i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
+	//i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
+	i = extendedSeq.RemoveRedundantSeq() ;
 	extendedSeq.UpdateAllConsensus() ;
 	if ( outputPrefix[0] != '-' )
 	{

@@ -1330,6 +1330,102 @@ private:
 
 		return overlapCnt ;
 	}
+	
+	// Figure out whether a seq is a substring of another seq.
+	int BuildSeqSubstringRelation( std::vector<struct _overlap> &subsetOf )
+	{
+		int i, j, k ;
+		int seqCnt = seqs.size() ;
+		for ( k = 0 ; k < seqCnt ; ++k )
+			subsetOf[k].seqIdx = -1 ;
+		
+		std::map<int, int> seqHitCnt ;
+		for ( k = 0 ; k < seqCnt ; ++k )
+		{
+			if ( seqs[k].consensus == NULL )
+				continue ;
+
+			char *consensus = seqs[k].consensus ;
+			int len = seqs[k].consensusLen ;
+			if ( len < kmerLength )
+				return -1 ;
+
+			//SimpleVector<struct _hit> hits ;		    	
+
+			KmerCode kmerCode( kmerLength ) ;
+			KmerCode prevKmerCode( kmerLength ) ;
+
+			//int skipLimit = 3 ;
+			int skipLimit = kmerLength / 2 ; 
+
+			int skipCnt = 0 ;
+			int hitCnt ;
+			for ( i = 0 ; i < kmerLength - 1 ; ++i )
+				kmerCode.Append( consensus[i] ) ;
+			std::map<int, int> seqHitCnt ; 
+			
+			hitCnt = 0 ;
+			for ( ; i < len ; ++i )
+			{
+				kmerCode.Append( consensus[i] ) ;
+				if ( i == kmerLength || !prevKmerCode.IsEqual( kmerCode ) )
+				{
+					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+
+					int size = indexHit.Size() ;
+					if ( size >= 100 )
+					{
+						if ( skipCnt < skipLimit )
+						{
+							++skipCnt ;
+							continue ;
+						}
+					}
+
+					skipCnt = 0 ;
+
+					for ( j = 0 ; j < size ; ++j )
+					{
+						struct _hit nh ;
+						if ( indexHit[j].idx == k )
+							continue ;
+												
+						if ( hitCnt == 0 )
+							seqHitCnt[ indexHit[j].idx ] = 1 ;
+						else if ( seqHitCnt.find( indexHit[j].idx ) != seqHitCnt.end() )
+						{
+							if ( seqHitCnt[ indexHit[j].idx ] < hitCnt )
+							{
+								seqHitCnt.erase( indexHit[j].idx ) ;
+							}
+							else
+								++seqHitCnt[ indexHit[j].idx ] ;
+						}
+					}
+					++hitCnt ;
+				}
+
+				prevKmerCode = kmerCode ;
+			}
+			
+			for ( std::map<int, int>::iterator it = seqHitCnt.begin() ; it != seqHitCnt.end() ; ++it )
+			{
+				if ( it->second < hitCnt )
+					continue ;
+				char *p = strstr( seqs[ it->first ].consensus, consensus ) ;
+				if ( p != NULL )
+				{
+					subsetOf[k].seqIdx = it->first ;
+					subsetOf[k].readStart = 0 ;
+					subsetOf[k].readEnd = seqs[k].consensusLen - 1 ;
+					subsetOf[k].seqStart = p - seqs[it->first].consensus ;
+					subsetOf[k].seqEnd = subsetOf[k].seqStart + seqs[k].consensusLen - 1 ; 
+					break ;
+				}
+			}
+		}
+	}
+
 
 	// adj is the adjacent list for each seq. The size of the adj array is seqCnt.
 	int BuildSeqOverlapGraph( int overlapLength, std::vector<struct _overlap> *adj )
@@ -2910,6 +3006,27 @@ public:
 		delete[] prev ;
 		delete[] containedIn ;
 		return ret ;
+	}
+
+	// Remove the seq that are substring of other seqs.
+	int RemoveRedundantSeq()
+	{
+		int i ;
+		int seqCnt = seqs.size() ;
+		std::vector<struct _overlap> subsetOf ;
+		subsetOf.resize( seqCnt ) ;
+		
+		for ( i = 0 ; i < seqCnt ; ++i )
+			subsetOf[i].seqIdx = -1 ;	
+		
+		BuildSeqSubstringRelation( subsetOf ) ;
+
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( subsetOf[i].seqIdx != -1 )
+				ReleaseSeq( i ) ;
+		}
+		Clean( true ) ;
 	}
 
 	/*int AddRead( char *read )
