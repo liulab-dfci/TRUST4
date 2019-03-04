@@ -1331,7 +1331,7 @@ private:
 		return overlapCnt ;
 	}
 	
-	// Figure out whether a seq is a substring of another seq.
+	// Figure out whether a seq is a (almost) substring of another seq.
 	int BuildSeqSubstringRelation( std::vector<struct _overlap> &subsetOf )
 	{
 		int i, j, k ;
@@ -1340,6 +1340,9 @@ private:
 			subsetOf[k].seqIdx = -1 ;
 		
 		std::map<int, int> seqHitCnt ;
+		SimpleVector<struct _pair> firstSeqHit ; 
+		firstSeqHit.ExpandTo( seqCnt ) ;
+
 		for ( k = 0 ; k < seqCnt ; ++k )
 		{
 			if ( seqs[k].consensus == NULL )
@@ -1362,8 +1365,7 @@ private:
 			int hitCnt ;
 			for ( i = 0 ; i < kmerLength - 1 ; ++i )
 				kmerCode.Append( consensus[i] ) ;
-			std::map<int, int> seqHitCnt ; 
-			
+			seqHitCnt.clear() ;
 			hitCnt = 0 ;
 			for ( ; i < len ; ++i )
 			{
@@ -1390,16 +1392,20 @@ private:
 						if ( indexHit[j].idx == k )
 							continue ;
 												
-						if ( hitCnt == 0 )
-							seqHitCnt[ indexHit[j].idx ] = 1 ;
-						else if ( seqHitCnt.find( indexHit[j].idx ) != seqHitCnt.end() )
+						if ( seqHitCnt.find( indexHit[j].idx ) != seqHitCnt.end() )
 						{
-							if ( seqHitCnt[ indexHit[j].idx ] < hitCnt )
+							if ( hitCnt >= 50 && seqHitCnt[ indexHit[j].idx ] < hitCnt * 0.5 )
 							{
 								seqHitCnt.erase( indexHit[j].idx ) ;
 							}
 							else
 								++seqHitCnt[ indexHit[j].idx ] ;
+						}
+						else if ( hitCnt < 50 )
+						{
+							seqHitCnt[ indexHit[j].idx ] = 1 ;
+							firstSeqHit[ indexHit[j].idx ].a = i - kmerLength + 1 ;
+							firstSeqHit[ indexHit[j].idx ].b = indexHit[j].offset ;
 						}
 					}
 					++hitCnt ;
@@ -1410,15 +1416,37 @@ private:
 			
 			for ( std::map<int, int>::iterator it = seqHitCnt.begin() ; it != seqHitCnt.end() ; ++it )
 			{
-				if ( it->second < hitCnt )
+				if ( it->second < hitCnt * 0.75 )
 					continue ;
-				char *p = strstr( seqs[ it->first ].consensus, consensus ) ;
-				if ( p != NULL )
+				int seqIdx = it->first ; 
+				// Test whether k is a substring of seqIdx
+				if ( firstSeqHit[ seqIdx ].b - firstSeqHit[ seqIdx ].a < 0 )
+					continue ;
+
+				int start = firstSeqHit[ seqIdx ].b - firstSeqHit[ seqIdx ].a ;
+				if ( start + seqs[k].consensusLen - 1 >= seqs[seqIdx].consensusLen )
+					continue ;
+				int matchCnt = 0 ;
+				int mismatchCnt = 0 ;
+				int l ;
+				for ( j = 0, l = start ; j < seqs[k].consensusLen ; ++j, ++l )
+				{
+					if ( seqs[k].consensus[j] != seqs[seqIdx].consensus[l] )
+						++mismatchCnt ;
+					else
+						++matchCnt ;
+
+					if ( mismatchCnt >= 2 )
+						break ;
+				}
+				//char *p = strstr( seqs[ it->first ].consensus, consensus ) ;
+				//printf( "test %d\n%s\n%s\n", mismatchCnt, seqs[k].consensus, seqs[ seqIdx ].consensus  ) ;
+				if ( mismatchCnt < 2 ) // some mismatch are allowed because we allow mismatch in the overlaps of branch graph.
 				{
 					subsetOf[k].seqIdx = it->first ;
 					subsetOf[k].readStart = 0 ;
 					subsetOf[k].readEnd = seqs[k].consensusLen - 1 ;
-					subsetOf[k].seqStart = p - seqs[it->first].consensus ;
+					subsetOf[k].seqStart = start ;
 					subsetOf[k].seqEnd = subsetOf[k].seqStart + seqs[k].consensusLen - 1 ; 
 					break ;
 				}
@@ -3924,9 +3952,9 @@ public:
 		// Figure out the seqs whose extension will create repeat sequence
 		// 	e.g.: end-to-end extension from two anchor seq.
 		SimpleVector<struct _pair> extensionType ;
-		SimpleVector<bool> directlyFilter ;
+		SimpleVector<int> uniqueSuccessorOf ;
 		extensionType.ExpandTo( seqCnt ) ;
-		directlyFilter.ExpandTo( seqCnt ) ;
+		uniqueSuccessorOf.ExpandTo( seqCnt ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int prevTag = matePrevNext[i].a ;
@@ -3949,24 +3977,63 @@ public:
 				if ( rightExtend.seqIdx == -1 )
 					matePrevNext[i].b = -1 ;
 			}
-
 		}
-		
 
+		// Rescue some partial extension. e.g.: 
+		// A |;  A<=B. A could not extend right due to no overlap, then we will put A=>B back.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
-			directlyFilter[i] = false ;
+			int prevTag = matePrevNext[i].a ;
+			int nextTag = matePrevNext[i].b ;
+
+			if ( prevTag >= 0 )
+			{
+				int seqIdx = prevAdj[i][ prevTag ].seqIdx ;
+				if ( matePrevNext[ seqIdx ].b == -1 && extensionType[i].a == 2 )
+				{
+					// rescue the connection.
+					int size = nextAdj[ seqIdx ].size() ;
+					for ( j = 0 ; j < size ; ++j )
+						if ( nextAdj[ seqIdx ][j].seqIdx == i )
+						{
+							matePrevNext[ seqIdx ].b = j ;
+							extensionType[ seqIdx ].b = 2 ;
+							break ;
+						}
+				}
+			}
+
+			if ( nextTag >= 0 )
+			{
+				int seqIdx = nextAdj[i][ nextTag ].seqIdx ;
+				if ( matePrevNext[ seqIdx ].a == -1 && extensionType[i].b == 2 )
+				{
+					int size = prevAdj[seqIdx].size() ;
+					for ( j = 0 ; j < size; ++j )
+						if ( prevAdj[ seqIdx ][j].seqIdx == i )
+						{
+							matePrevNext[ seqIdx ].a = j ;
+							extensionType[ seqIdx ].a = 2 ;
+							break ;
+						}
+				}
+			}
+		}
+	
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			uniqueSuccessorOf[i] = -1 ;
 			
 			int prevTag = matePrevNext[i].a ;
 			int nextTag = matePrevNext[i].b ;
 			//if ( i == 47 )
 			//	fprintf( stderr, "hi %d %d %d %d\n", prevTag, nextTag,
 			//		prevAdj[i][prevTag].seqIdx, nextAdj[i][nextTag].seqIdx ) ;
-			if ( prevTag >= 0 && nextTag >= 0 )
-				continue ;
-			// Keep the second part.
-			if ( nextTag >= 0 )
+			//if ( prevTag >= 0 && nextTag >= 0 )
+			//	continue ;
+			/*if ( nextTag >= 0 )
 			{
+				// Keep the second part.
 				if ( extensionType[i].b == 2 )
 				{
 					int seqIdx = nextAdj[i][nextTag].seqIdx ;
@@ -3977,9 +4044,24 @@ public:
 						directlyFilter[i] = true ;
 					}
 				}
+			}*/
+
+			if ( prevTag >= 0 )
+			{
+				if ( extensionType[i].a == 2 )
+				{
+					int seqIdx = prevAdj[i][ prevTag ].seqIdx ;
+					if ( matePrevNext[seqIdx].b >= 0 
+						&& nextAdj[ seqIdx ][ matePrevNext[ seqIdx ].b ].seqIdx == i 
+						&& extensionType[ seqIdx ].b == 2 )
+					{
+						uniqueSuccessorOf[i] = seqIdx ;
+					}
+				}
 			}
 		}
 		
+
 		// Filter some middle part, if its two extension are connected.
 		/*for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -3999,71 +4081,121 @@ public:
 		}*/
 
 		// Do the extesion
+		SimpleVector<int> chain ;
+		SimpleVector<int> offset ;
+		SimpleVector<struct _pair> range ; // the range of a seq that needs to be copied in the new seq.
+		chain.Reserve( seqCnt ) ;
+		offset.Reserve( seqCnt ) ;
+		range.Reserve( seqCnt ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			//if ( inCnt[i] > 0 )
 			//	continue ;
 			
 			// Each seq will try to extend to each direction once.
-			if ( directlyFilter[i] )
+			if ( uniqueSuccessorOf[i] != -1 )
 			{
 				toRemoveSeqIdx.PushBack( i ) ;
 				continue ;
 			}
-
-			int prevTag = matePrevNext[i].a ;
-			int nextTag = matePrevNext[i].b ;
-
-			struct _overlap leftExtend, rightExtend ;
-			leftExtend.seqIdx = -1 ;
-			rightExtend.seqIdx = -1 ;
-			if ( prevTag >= 0 )
-				GetExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, branchAdj, leftExtend ) ;
-			if ( nextTag >= 0 )
-				GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, rightExtend ) ;
 			
-			// Compute the sequence for new 
-			int newConsensusLen = 0 ; 
-			int shift = 0, offset = 0 ;
+			int first = i ;
+			int firstPrevTag = matePrevNext[i].a ;
+			int last = i ;
+			int lastNextTag = matePrevNext[i].b ;
 			
-			int start, end ; // we might chop the endings of the current seq.
-			start = 0 ;
-			end = seqs[i].consensusLen - 1 ;
-			if ( leftExtend.seqIdx != -1 )
+			chain.Clear() ;
+			chain.PushBack( i ) ;
+			while ( 1 )
 			{
-				shift = leftExtend.seqEnd - leftExtend.seqStart + 1 ;
-				start = leftExtend.readStart ;
-				newConsensusLen += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
+				if ( lastNextTag >= 0 && uniqueSuccessorOf[ nextAdj[last][ lastNextTag ].seqIdx ] == last )
+				{
+					last = nextAdj[last][ lastNextTag ].seqIdx ;
+					lastNextTag = matePrevNext[last].b ;
+					chain.PushBack( last ) ;
+				}
+				else
+					break ;
 			}
-			if ( rightExtend.seqIdx != -1 )
+			int chainSize = chain.Size() ;
+			// Compute the length of new seq.
+			int newConsensusLen = 0 ;
+			offset.Clear() ;
+			range.Clear() ; 
+			struct _overlap leftMostExtend, rightMostExtend ;
+			leftMostExtend.seqIdx = -1 ;
+			rightMostExtend.seqIdx = -1 ;
+			offset.ExpandTo( chainSize ) ;
+			range.ExpandTo( chainSize ) ;
+			for ( j = 0 ; j < chainSize ; ++j )
 			{
-				newConsensusLen += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
-				end = rightExtend.readEnd ;
+				struct _overlap leftExtend, rightExtend ;
+				int prevTag = matePrevNext[ chain[j] ].a ;
+				int nextTag = matePrevNext[ chain[j] ].b ;
+				leftExtend.seqIdx = -1 ;
+				rightExtend.seqIdx = -1 ;
+				
+				if ( prevTag >= 0 )
+					GetExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1, branchAdj, leftExtend ) ;
+				if ( nextTag >= 0 )
+					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, rightExtend ) ;
+				
+				if ( j == 0 && leftExtend.seqIdx != -1 )
+				{
+					newConsensusLen += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
+					leftMostExtend = leftExtend ;
+				}
+				offset[j] = newConsensusLen ;
+				if ( leftExtend.seqIdx != -1 )
+					range[j].a = leftExtend.readStart ;
+				else
+					range[j].a = 0 ;
+
+				if ( rightExtend.seqIdx != -1 )
+					range[j].b = rightExtend.readEnd ;
+				else
+					range[j].b = seqs[ chain[j] ].consensusLen - 1 ;
+
+				if ( j < chainSize - 1 )
+				{
+					// For the middle ones, we only keep the left overlap.
+					struct _overlap tmp ;
+					GetExtendSeqCoord( chain[j + 1], prevAdj[ chain[j + 1] ][ matePrevNext[ chain[j + 1] ].a ], 
+						-1, branchAdj, tmp ) ;
+
+					range[j].b = tmp.seqEnd ;
+					if ( range[j].b < range[j].a )
+						range[j].b = range[j].a - 1 ;
+				} 
+
+				newConsensusLen += range[j].b - range[j].a + 1 ;
+				if ( j == chainSize - 1 && rightExtend.seqIdx != -1 )
+				{
+					newConsensusLen += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
+					rightMostExtend = rightExtend ;
+				}
 			}
-			newConsensusLen += end - start + 1 ;
-			if ( newConsensusLen == seqs[i].consensusLen )
+			if ( newConsensusLen == seqs[i].consensusLen ) // no extension.
 				continue ;
 
-			char *newConsensus = (char *)malloc( sizeof( char ) * ( newConsensusLen + 1 ) ) ;
-			
-			// The ending of current seq might be some random extensions, so
-			//    it has lower priority.
-			memcpy( newConsensus + shift, seqs[i].consensus + start, end - start + 1 ) ;
-			
-			if ( leftExtend.seqIdx != -1 )
+			//printf( "%d %d %d\n", chainSize, seqs[i].consensusLen, newConsensusLen ) ;	
+			char *newConsensus = ( char * )malloc( sizeof( char ) * ( newConsensusLen + 1 ) ) ;
+			// Put in the seqs.
+			if ( leftMostExtend.seqIdx != -1 )
+				memcpy( newConsensus, seqs[ leftMostExtend.seqIdx ].consensus + leftMostExtend.seqStart,
+					leftMostExtend.seqEnd - leftMostExtend.seqStart + 1 ) ;
+			for ( j = 0 ; j < chainSize ; ++j )
 			{
-				memcpy( newConsensus, seqs[ prevAdj[i][prevTag].seqIdx ].consensus + leftExtend.seqStart, 
-					leftExtend.seqEnd - leftExtend.seqStart + 1 ) ;
-				offset += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
+				memcpy( newConsensus + offset[j], seqs[ chain[j] ].consensus + range[j].a,
+					range[j].b - range[j].a + 1 ) ;
 			}
-			offset += end - start + 1 ;
-			if ( rightExtend.seqIdx != -1 )
+			if ( rightMostExtend.seqIdx != -1 )
 			{
-				memcpy( newConsensus + offset, seqs[ nextAdj[i][nextTag].seqIdx ].consensus + rightExtend.seqStart, 
-					rightExtend.seqEnd - rightExtend.seqStart + 1 ) ;
-				offset += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
+				memcpy( newConsensus + offset[j - 1] + range[j - 1].b - range[j - 1].a + 1,
+					seqs[ rightMostExtend.seqIdx ].consensus + rightMostExtend.seqStart,
+					rightMostExtend.seqEnd - rightMostExtend.seqStart + 1 ) ;
 			}
-			newConsensus[offset] = '\0' ;
+			newConsensus[newConsensusLen] = '\0' ;
 
 			struct _seqWrapper ns ;
 			ns.isRef = false ;
@@ -4077,16 +4209,25 @@ public:
 			for ( j = 0 ; j < newConsensusLen ; ++j )
 				if ( newConsensus[j] != 'N' )
 					ns.posWeight[j].count[ nucToNum[ newConsensus[j] - 'A' ] ] = 1 ;
-			for ( j = 0 ; j < end - start + 1 ; ++j )
-				ns.posWeight[j + shift] = seqs[i].posWeight[j + start] ;
+
+			for ( j = 0 ; j < chainSize ; ++j )
+			{
+				int l ;
+				for ( l = range[j].a ; l <= range[j].b ; ++l )
+				{
+					ns.posWeight[ offset[j] + l - range[j].a ] = seqs[ chain[j] ].posWeight[l] ;
+				}
+			}
 		
 #ifdef DEBUG	
-			if ( leftExtend.seqIdx != -1 )
-				printf( "prev: %d %s\n", prevAdj[i][prevTag].seqIdx, seqs[ prevAdj[i][prevTag].seqIdx ].consensus ) ;
-			printf( "my: %d %s\n", i, seqs[i].consensus ) ;
-			if ( rightExtend.seqIdx != -1 )
-				printf( "next: %d %s\n", nextAdj[i][nextTag].seqIdx, seqs[ nextAdj[i][nextTag].seqIdx ].consensus ) ;
-			printf( "%d new %s\n", i, newConsensus) ;	
+			if ( leftMostExtend.seqIdx != -1 )
+				printf( "left 0: %d %s\n", leftMostExtend.seqIdx, seqs[ leftMostExtend.seqIdx ].consensus ) ;
+
+			for ( j = 0 ; j < chainSize ; ++j )
+				printf( "chain %d: %d %s\n", j + 1, chain[j], seqs[ chain[j] ].consensus ) ;
+			if ( rightMostExtend.seqIdx != -1 )
+				printf( "right %d: %d %s\n", j + 1, rightMostExtend.seqIdx, seqs[ rightMostExtend.seqIdx ].consensus ) ;
+			printf( "%d new %s\n", i, newConsensus) ;
 #endif 
 
 			seqs.push_back( ns ) ;
