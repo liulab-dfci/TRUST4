@@ -12,7 +12,9 @@
 char usage[] = "./annotator [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
-		"\t-a STRING: path to the assembly file\n" ;
+		"\t-a STRING: path to the assembly file\n"
+		"Optional:\n"
+		"\t--fasta: the assembly file is in fasta format (default: false)\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -22,16 +24,18 @@ char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2,
 char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10241] = "" ;
+char weightBuffer[100241] = "" ;
 char seq[10241] = "" ;
 
 static const char *short_options = "f:a:r:" ;
 static struct option long_options[] = {
+			{ "fasta", no_argument, 0, 10000 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
 int main( int argc, char *argv[] )
 {
-	int i ;
+	int i, j, k ;
 	int radius = 10 ;
 
 	if ( argc <= 1 )
@@ -44,8 +48,10 @@ int main( int argc, char *argv[] )
 	int c, option_index ;
 	FILE *fpAssembly = NULL ;
 	struct _overlap geneOverlap[4] ;
+	struct _overlap cdr[3] ; // the coordinate for cdr1,2,3
 	option_index = 0 ;
-	
+	bool ignoreWeight = false ;
+
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -64,6 +70,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 'r' )
 		{
 			radius = atoi( optarg ) ;
+		}
+		else if ( c == 10000 )
+		{
+			ignoreWeight = true ;
 		}
 		else
 		{
@@ -94,6 +104,31 @@ int main( int argc, char *argv[] )
 
 		fgets( seq, sizeof( seq ), fpAssembly ) ;
 		
+		// Read in the four line of pos weight
+		SimpleVector<struct _posWeight> posWeight ;
+		if ( !ignoreWeight )
+		{
+			posWeight.ExpandTo( strlen( seq ) ) ;
+			for ( k = 0 ; k < 4 ; ++k )
+			{
+				fgets( weightBuffer, sizeof( weightBuffer ), fpAssembly ) ;
+
+				int num = 0 ;
+				i = 0 ;
+				for ( j = 0 ; weightBuffer[j] && weightBuffer[j] != '\n' ; ++j )
+				{
+					if ( weightBuffer[j] == ' ' )
+					{
+						posWeight[i].count[k] = num ;
+						++i ;
+						num = 0 ;
+					}
+					else
+						num = num * 10 + weightBuffer[j] - '0' ; 
+				}
+			}
+		}
+
 		for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
 			;
 		if ( buffer[i] != ' ' )
@@ -102,7 +137,58 @@ int main( int argc, char *argv[] )
 		int len = strlen( seq ) ;
 		if ( seq[len - 1] == '\n' )
 			seq[len - 1] = '\0' ;
-		refSet.AnnotateRead( seq, 2, geneOverlap, buffer + i + 1 ) ;
+		
+				
+		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + i + 1 ) ;
+
+		// Extract the alternative sequence of CDR1,2,3.
+		for ( i = 0 ; i < 3 && !ignoreWeight ; ++i )
+		{
+			if ( cdr[i].seqIdx == -1 )
+				continue ;
+			
+			SimpleVector<struct _pair> alterNuc ;
+			alterNuc.Reserve( cdr[i].readEnd - cdr[i].readStart + 1 ) ;
+			for ( j = cdr[i].readStart ; j <= cdr[i].readEnd ; ++j )
+			{
+				int sum = 0 ;
+				int max = 0 ;
+				for ( k = 0 ; k < 4 ; ++k )
+				{
+					sum += posWeight[j].count[k] ;
+					if ( posWeight[j].count[k] > max )
+						max = posWeight[j].count[k] ;
+				}
+
+				for ( k = 0 ; k < 4 ; ++k )
+				{
+					if ( numToNuc[k] != seq[j] && 
+						( sum <= posWeight[j].count[k] * 3 
+							|| ( sum >= 20 && sum <= posWeight[j].count[k] * 4 ) ) )
+					{
+						struct _pair na ;
+						na.a = j ;
+						na.b = k ;
+						alterNuc.PushBack( na ) ;
+					}
+				}
+			}
+
+			// Naively build the alternative CDR3.
+			if ( alterNuc.Size() > 0 )
+			{
+				int size = alterNuc.Size() ;
+				char *alterCDR = ( char * )malloc( sizeof( char ) * ( cdr[i].readEnd - cdr[i].readStart + 2 ) ) ;
+				memcpy( alterCDR, seq + cdr[i].readStart, cdr[i].readEnd - cdr[i].readStart + 1 ) ;
+				alterCDR[  cdr[i].readEnd - cdr[i].readStart + 1 ] = '\0' ;
+				for ( j = 0 ; j < size ; ++j )
+				{
+					alterCDR[ alterNuc[j].a - cdr[i].readStart ] = numToNuc[ alterNuc[j].b ] ; 	
+				}
+				sprintf( buffer + strlen( buffer ), " minorCDR%d=%s", i + 1, alterCDR ) ;
+			}
+		}
+		
 		printf( "%s\n%s\n", buffer, seq ) ;
 	}
 	fclose( fpAssembly ) ;

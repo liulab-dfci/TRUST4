@@ -3112,7 +3112,8 @@ public:
 		int len = strlen( read ) ;
 
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
-		
+		cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
+
 		sprintf( buffer, "%d", len ) ;
 		hitLenRequired = 17 ;	
 		overlapCnt = GetOverlapsFromRead( read, 1, overlaps ) ;		
@@ -3503,6 +3504,10 @@ public:
 				cdr3 = new char[e - s + 2  + 1 ] ;
 				memcpy( cdr3, read + s, e - s + 1 ) ;
 				cdr3[e - s + 1] = '\0' ;
+
+				cdr[2].seqIdx = 0 ;
+				cdr[2].readStart = s ;
+				cdr[2].readEnd = e ;
 			}
 		}
 
