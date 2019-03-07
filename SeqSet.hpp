@@ -3100,7 +3100,7 @@ public:
 	
 	// Figure out the gene composition for the read. 
 	// Return successful or not.
-	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], char *buffer )
+	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], struct _overlap cdr[3], char *buffer )
 	{
 		int i, j ;
 		
@@ -3534,14 +3534,14 @@ public:
 		char *buffer = new char[1024] ;
 		int seqCnt = seqs.size() ;
 		struct _overlap geneOverlap[4];
-		
+		struct _overlap cdr[3] ;
 		for ( i = 0 ; i < seqCnt  ; ++i )
 		{
 			if ( seqs[i].isRef || seqs[i].consensus == NULL )
 				continue ;
 		
 			free( seqs[i].name ) ;
-			refSet.AnnotateRead( seqs[i].consensus, 2, geneOverlap, buffer ) ;
+			refSet.AnnotateRead( seqs[i].consensus, 2, geneOverlap, cdr, buffer ) ;
 			seqs[i].name = strdup( buffer ) ;
 		}
 
@@ -3996,8 +3996,11 @@ public:
 					for ( j = 0 ; j < size ; ++j )
 						if ( nextAdj[ seqIdx ][j].seqIdx == i )
 						{
-							matePrevNext[ seqIdx ].b = j ;
-							extensionType[ seqIdx ].b = 2 ;
+							struct _overlap tmp ;
+							extensionType[ seqIdx ].b = GetExtendSeqCoord( seqIdx, nextAdj[ seqIdx ][j], 
+										1, branchAdj, tmp ) ;
+							if ( extensionType[ seqIdx ].b == 2 )
+								matePrevNext[ seqIdx ].b = j ;
 							break ;
 						}
 				}
@@ -4012,8 +4015,11 @@ public:
 					for ( j = 0 ; j < size; ++j )
 						if ( prevAdj[ seqIdx ][j].seqIdx == i )
 						{
-							matePrevNext[ seqIdx ].a = j ;
-							extensionType[ seqIdx ].a = 2 ;
+							struct _overlap tmp ;
+							extensionType[ seqIdx ].a = GetExtendSeqCoord( seqIdx, prevAdj[ seqIdx ][j], 
+										-1, branchAdj, tmp ) ;
+							if ( extensionType[ seqIdx ].a == 2 )
+								matePrevNext[ seqIdx ].a = j ;
 							break ;
 						}
 				}
@@ -4162,10 +4168,18 @@ public:
 					struct _overlap tmp ;
 					GetExtendSeqCoord( chain[j + 1], prevAdj[ chain[j + 1] ][ matePrevNext[ chain[j + 1] ].a ], 
 						-1, branchAdj, tmp ) ;
-
-					range[j].b = tmp.seqEnd ;
-					if ( range[j].b < range[j].a )
-						range[j].b = range[j].a - 1 ;
+					
+					if ( tmp.seqIdx != -1 )
+					{
+						range[j].b = tmp.seqEnd ;
+						if ( range[j].b < range[j].a )
+							range[j].b = range[j].a - 1 ;
+					}
+					else
+					{
+						// should never get here.
+						chainSize = j + 1 ;
+					}
 				} 
 
 				newConsensusLen += range[j].b - range[j].a + 1 ;
