@@ -293,7 +293,8 @@ int main( int argc, char *argv[] )
 				addRet = -1 ;
 			else
 			{
-				addRet = seqSet.AddRead( sortedReads[i].read ) ;
+				addRet = seqSet.AddRead( sortedReads[i].read, 
+					sortedReads[i].minCnt >= 20 ? 0.97 : 0.9 ) ;
 				if ( addRet < 0 )
 				{
 					for ( j = 0 ; j < 4 ; ++j )
@@ -370,7 +371,8 @@ int main( int argc, char *argv[] )
 		fflush( stdout ) ;
 #endif
 		int addRet = -1 ;
-		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read ) ;
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, 
+			( sortedReads[ rescueReadIdx[i] ].minCnt >= 20 ? 0.97 : 0.9 ) ) ;
 		if ( addRet >= 0 )
 		{
 			++assembledReadCnt ;
@@ -394,7 +396,7 @@ int main( int argc, char *argv[] )
 	seqSet.Annotate( refSet ) ;*/
 
 	// Output the preliminary assembly.
-	seqSet.Clean( true ) ;
+	//seqSet.Clean( true ) ;
 	FILE *fp ;
 	if ( outputPrefix[0] != '-' )
 	{

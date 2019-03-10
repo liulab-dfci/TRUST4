@@ -216,12 +216,12 @@ public:
 		{
 			printf( "ERROR\n" ) ;
 		}*/
-		assert( i < size ) ;
-		if ( i >= size )
+		//assert( i < size ) ;
+		/*if ( i >= size )
 		{
 			fprintf( stderr, "%s: Access out of the vector.\n", __func__ ) ;
 			exit( 1 ) ;
-		}
+		}*/
 		return s[i] ;
 	}
 	

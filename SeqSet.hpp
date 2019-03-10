@@ -1714,6 +1714,11 @@ public:
 	
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, strand ) ;
+
+
+#ifdef DEBUG
+		printf( "add novel seq: %d\n", seqIdx ) ;
+#endif
 		return seqIdx ;
 	}
 
@@ -1836,7 +1841,7 @@ public:
 	// If it is a candidate, but is quite different from the one we stored, we create a new poa for it.
 	// Return: the index id in the set. 
 	//	   -1: not add. -2: only overlapped with novel seq and could not be extended.
-	int AddRead( char *read )
+	int AddRead( char *read, double similarityThreshold )
 	{
 		//printf( "%s\n", seq ) ;
 		int i, j, k ;
@@ -1862,7 +1867,15 @@ public:
 					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd, 
 					overlaps[i].similarity ) ; 
 			//if ( !seqs[ overlaps[i].seqIdx ].isRef )
-			//	printf( " %s\n",seqs[  overlaps[i].seqIdx ].consensus ) ;
+			/*if ( !strcmp( read, "TTACTGTAATATACGATATTTTGACTGGTTATTAAGAGGCGACCCAAGAATCAATACTACTTTGACTACTGGGGCCAGGGAACCCTGGTCACCGTCTCCT" ) )
+			{
+				printf( " %s\n",seqs[  overlaps[i].seqIdx ].consensus ) ;
+				if ( i == 1 )
+				{
+					printf( "%d %d\n", seqs[ overlaps[i].seqIdx ].posWeight[103].count[0], 
+						seqs[ overlaps[i].seqIdx ].posWeight[103].count[2] ) ;
+				}
+			}*/
 		}
 		fflush( stdout ) ;	
 #endif		
@@ -1915,29 +1928,56 @@ public:
 				for ( j = 0 ; j < k ; ++j )
 				{
 					// If is contained in extended sequence.
-					if ( overlaps[i].readStart >= extendedOverlaps[j].readStart - radius  
-						&& overlaps[i].readEnd <= extendedOverlaps[j].readEnd + radius )
+					int leftRadius = radius ;
+					int rightRadius = radius ;
+					if ( extendedOverlaps[j].seqStart == 0 )
+						leftRadius = 0 ;
+					if ( extendedOverlaps[j].seqEnd == seqs[ extendedOverlaps[j].seqIdx ].consensusLen - 1 )
+						rightRadius = 0 ;
+					if ( overlaps[i].readStart >= extendedOverlaps[j].readStart - leftRadius  
+						&& overlaps[i].readEnd <= extendedOverlaps[j].readEnd + rightRadius )
 						break ;
+					
 					// Some extended is a subset of this one.
-					if ( extendedOverlaps[j].readStart >= overlaps[i].readStart - radius 
-						&& extendedOverlaps[j].readEnd <= overlaps[i].readEnd + radius )
+					leftRadius = radius ;
+					rightRadius = radius ;
+					if ( overlaps[i].seqStart == 0 )
+						leftRadius = 0 ;
+					if ( overlaps[i].seqEnd == seqs[ overlaps[i].seqIdx ].consensusLen - 1 )
+						rightRadius = 0 ;
+					if ( extendedOverlaps[j].readStart >= overlaps[i].readStart - leftRadius 
+						&& extendedOverlaps[j].readEnd <= overlaps[i].readEnd + rightRadius )
 						break ;
 				}
 				
 				struct _seqWrapper &seq = seqs[ overlaps[i].seqIdx ] ; 
 				if ( j < k || seq.isRef )
 					continue ;
-
+				//if ( !strcmp( read, "TTACTGTAATATACGATATTTTGACTGGTTATTAAGAGGCGACCCAAGAATCAATACTACTTTGACTACTGGGGCCAGGGAACCCTGGTCACCGTCTCCT" ) && i == 1 )
+				//	fprintf( stderr, "hi\n" ) ;
 				// Only extend the novel seqs.
 				if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 				{
 					// Double check whether there is subset relationship.
 					for ( j = 0 ; j < k ; ++j )
 					{
-						if ( extendedOverlaps[k].readStart >= extendedOverlaps[j].readStart - radius  
-								&& extendedOverlaps[k].readEnd <= extendedOverlaps[j].readEnd + radius )
+						int leftRadius = radius ;
+						int rightRadius = radius ;
+						if ( extendedOverlaps[j].seqStart == 0 )
+							leftRadius = 0 ;
+						if ( extendedOverlaps[j].seqEnd == seqs[ extendedOverlaps[j].seqIdx ].consensusLen - 1 )
+							rightRadius = 0 ;
+						if ( extendedOverlaps[k].readStart >= extendedOverlaps[j].readStart - leftRadius  
+								&& extendedOverlaps[k].readEnd <= extendedOverlaps[j].readEnd + rightRadius )
 							break ;
+
 						// Some extended is a subset of this one.
+						leftRadius = radius ;
+						rightRadius = radius ;
+						if ( extendedOverlaps[k].seqStart == 0 )
+							leftRadius = 0 ;
+						if ( extendedOverlaps[k].seqEnd == seqs[ extendedOverlaps[k].seqIdx ].consensusLen - 1 )
+							rightRadius = 0 ;
 						if ( extendedOverlaps[j].readStart >= extendedOverlaps[k].readStart - radius 
 								&& extendedOverlaps[j].readEnd <= extendedOverlaps[k].readEnd + radius )
 							break ;
@@ -2065,6 +2105,21 @@ public:
 					else
 						k = 1 ;
 				}
+			}
+
+			if ( similarityThreshold > novelSeqSimilarity )
+			{
+				// Filter extended sequence.
+				int cnt = 0 ;
+				for ( i = 0 ; i < k ; ++i )
+				{
+					if ( extendedOverlaps[i].similarity >= similarityThreshold )
+					{
+						extendedOverlaps[ cnt ] = extendedOverlaps[i] ;
+						++cnt ;
+					}
+				}
+				k = cnt ;
 			}
 
 #ifdef DEBUG
@@ -3112,7 +3167,8 @@ public:
 		int len = strlen( read ) ;
 
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
-		cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
+		if ( detailLevel >= 2 )
+			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
 
 		sprintf( buffer, "%d", len ) ;
 		hitLenRequired = 17 ;	
