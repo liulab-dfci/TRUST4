@@ -288,8 +288,34 @@ int main( int argc, char *argv[] )
 			//printf( "new stuff\n" ) ;
 			struct _overlap geneOverlap[4] ;
 			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, buffer ) ;
+			
+			// If the order of V,D,J,C is wrong from this read, then we ignore this.
+			//   probably from read through in cyclic fragment. 
+			bool filter = false ;
+			for ( j = 0 ; j < 4 ; ++j )
+			{
+				int l ;
+				if ( geneOverlap[j].seqIdx == -1 )
+					continue ;
+				for ( l = j + 1 ; l < 4 ; ++l )
+				{
+					if ( geneOverlap[l].seqIdx == -1 )
+						continue ;
+
+					if ( geneOverlap[j].readEnd - 10 > geneOverlap[l].readStart )
+					{
+						filter = true ;	
+						break ;
+					}
+				}
+				if ( filter )
+					break ;
+			}
 
 			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].seqStart >= 100 ) // From constant gene.
+				filter = true ;
+
+			if ( filter ) 
 				addRet = -1 ;
 			else
 			{
