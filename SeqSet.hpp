@@ -57,6 +57,7 @@ struct _overlap
 	double similarity ;
 
 	SimpleVector<struct _pair> *hitCoords ;
+	SimpleVector<int> *info ; // store extra informations 
 
 	bool operator<( const struct _overlap &b ) const
 	{
@@ -3756,7 +3757,10 @@ public:
 		//Clean( true ) ;	
 	}
 
-	void UpdateMateAdjGraph( int from, int fromStart, int fromEnd, int to, int toStart, int toEnd, std::vector<struct _overlap> *mateAdj )
+	// The readId is for the first mate, the other mate readId is readId+1.
+	//   The main program should determine which one to use.
+	void UpdateMateAdjGraph( int from, int fromStart, int fromEnd, int to, int toStart, int toEnd, 
+			int readId, std::vector<struct _overlap> *mateAdj )
 	{
 		int j ;
 		int size = mateAdj[from].size() ;
@@ -3773,6 +3777,7 @@ public:
 				if ( toEnd > mateAdj[from][j].seqEnd )
 					mateAdj[from][j].seqEnd = toEnd ;
 				++mateAdj[from][j].matchCnt ;
+				mateAdj[from][j].info->PushBack( readId ) ;
 				break ;
 			}
 		}
@@ -3785,6 +3790,8 @@ public:
 			na.seqStart = toStart ;
 			na.seqEnd = toEnd ;
 			na.matchCnt = 1 ;
+			na.info = new SimpleVector<int> ;
+			na.info->PushBack( readId ) ;
 			mateAdj[from].push_back( na ) ;
 		}
 	}
@@ -3827,6 +3834,7 @@ public:
 		}*/
 		
 		coord.seqIdx = to ;
+		coord.matchCnt = branchAdj[from][k].readEnd - branchAdj[from][k].readStart + 1 ; // Record the length of the branch overlap.
 		int ret = 1 ;
 		
 		if ( direction == 1 )
@@ -3925,8 +3933,8 @@ public:
 			
 				useInBranch[from] = true ;
 				useInBranch[to] = true ;
-				UpdateMateAdjGraph( from, fromStart, fromEnd, to, toStart, toEnd, nextAdj ) ;
-				UpdateMateAdjGraph( to, toStart, toEnd, from, fromStart, fromEnd, prevAdj ) ;
+				UpdateMateAdjGraph( from, fromStart, fromEnd, to, toStart, toEnd, i, nextAdj ) ;
+				UpdateMateAdjGraph( to, toStart, toEnd, from, fromStart, fromEnd, i, prevAdj ) ;
 				
 				//printf( "%d(%d %d) %d(%d %d)\n", 
 				//	from, fromStart, fromEnd,
@@ -4005,7 +4013,6 @@ public:
 						nextAdj[i][j].seqStart, nextAdj[i][j].seqEnd ) ;
 #endif
 			}
-			
 			matePrevNext[i].a = prevTag ;
 			matePrevNext[i].b = nextTag ;
 		}
@@ -4151,9 +4158,11 @@ public:
 		SimpleVector<int> chain ;
 		SimpleVector<int> offset ;
 		SimpleVector<struct _pair> range ; // the range of a seq that needs to be copied in the new seq.
+		SimpleVector<int> origRangeB ;
 		chain.Reserve( seqCnt ) ;
 		offset.Reserve( seqCnt ) ;
 		range.Reserve( seqCnt ) ;
+		origRangeB.Reserve( seqCnt ) ; // the range.b that are not adjusted.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			//if ( inCnt[i] > 0 )
@@ -4189,11 +4198,13 @@ public:
 			int newConsensusLen = 0 ;
 			offset.Clear() ;
 			range.Clear() ; 
+			origRangeB.Clear() ;
 			struct _overlap leftMostExtend, rightMostExtend ;
 			leftMostExtend.seqIdx = -1 ;
 			rightMostExtend.seqIdx = -1 ;
 			offset.ExpandTo( chainSize ) ;
 			range.ExpandTo( chainSize ) ;
+			origRangeB.ExpandTo( chainSize ) ;
 			for ( j = 0 ; j < chainSize ; ++j )
 			{
 				struct _overlap leftExtend, rightExtend ;
@@ -4222,11 +4233,12 @@ public:
 					range[j].b = rightExtend.readEnd ;
 				else
 					range[j].b = seqs[ chain[j] ].consensusLen - 1 ;
+				origRangeB[j] = range[j].b ;
 
 				if ( j < chainSize - 1 )
 				{
 					// For the middle ones, we only keep the left overlap.
-					struct _overlap tmp ;
+					/*struct _overlap tmp ;
 					GetExtendSeqCoord( chain[j + 1], prevAdj[ chain[j + 1] ][ matePrevNext[ chain[j + 1] ].a ], 
 						-1, branchAdj, tmp ) ;
 					
@@ -4240,7 +4252,10 @@ public:
 					{
 						// should never get here.
 						chainSize = j + 1 ;
-					}
+					}*/
+					range[j].b -= rightExtend.matchCnt ;
+					if ( range[j].b < range[j].a )
+						range[j].b = range[j].a - 1 ;
 				} 
 
 				newConsensusLen += range[j].b - range[j].a + 1 ;
@@ -4281,19 +4296,117 @@ public:
 			ns.posWeight.ExpandTo( newConsensusLen ) ;
 			ns.posWeight.SetZero( 0, newConsensusLen ) ;
 
-			for ( j = 0 ; j < newConsensusLen ; ++j )
-				if ( newConsensus[j] != 'N' )
-					ns.posWeight[j].count[ nucToNum[ newConsensus[j] - 'A' ] ] = 1 ;
-
+			// Assign the posWeight of the core part.	
 			for ( j = 0 ; j < chainSize ; ++j )
 			{
 				int l ;
-				for ( l = range[j].a ; l <= range[j].b ; ++l )
+				for ( l = range[j].a ; l <= origRangeB[j] && offset[j] + l < newConsensusLen ; ++l )
 				{
 					ns.posWeight[ offset[j] + l - range[j].a ] = seqs[ chain[j] ].posWeight[l] ;
 				}
 			}
-		
+
+			// Adjust the posWeight for the overhang part
+			if ( leftMostExtend.seqIdx != -1 )
+			{
+				int from = leftMostExtend.seqIdx ;
+				int to = chain[0] ;
+				
+				int size = nextAdj[from].size() ;
+				for ( j = 0 ; j < size ; ++j )
+					if ( nextAdj[from][j].seqIdx == to )
+						break ;
+				
+				if ( j < size )
+				{
+					// Should always get here
+					SimpleVector<int> &readIdx = *( nextAdj[from][j].info ) ; 
+					size = readIdx.Size() ;
+					int l ;
+					for ( l = 0 ; l < size ; ++l )
+					{
+						int ridx ;
+						if ( reads[ readIdx[l] ].overlap.seqIdx == from )
+							ridx = readIdx[l] ;
+						else
+							ridx = readIdx[l] + 1 ;
+						
+						if ( reads[ ridx ].overlap.seqEnd > leftMostExtend.seqEnd + leftMostExtend.matchCnt )
+							continue ;
+
+						int m, rm ;
+						for ( m = reads[ ridx ].overlap.seqStart, rm = 0 ; m <= reads[ ridx ].overlap.seqEnd ; ++m, ++rm )
+						{
+							if ( reads[ ridx ].read[rm] != 'N' )
+							{
+								++ns.posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
+								--seqs[ from ].posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
+							}
+						}
+					}
+				}
+			}
+
+			if ( rightMostExtend.seqIdx != -1 )
+			{
+				int from = chain[ chainSize - 1 ] ;
+				int to = rightMostExtend.seqIdx ;
+				
+				int size = nextAdj[from].size() ;
+				for ( j = 0 ; j < size ; ++j )
+					if ( nextAdj[from][j].seqIdx == to )
+						break ;
+				
+				if ( j < size )
+				{
+					// Should always get here
+					SimpleVector<int> &readIdx = *( nextAdj[from][j].info ) ; 
+					size = readIdx.Size() ;
+					int l ;
+					int lastOffset = offset[chainSize - 1] + range[chainSize - 1].b - range[chainSize - 1].a + 1 ; 
+					for ( l = 0 ; l < size ; ++l )
+					{
+						int ridx ;
+						if ( reads[ readIdx[l] ].overlap.seqIdx == from )
+							ridx = readIdx[l] + 1 ;
+						else
+							ridx = readIdx[l] ;
+						
+						if ( reads[ ridx ].overlap.seqStart < rightMostExtend.seqStart - rightMostExtend.matchCnt )
+							continue ;
+
+						int m ;
+						int rm ;
+						char *s = strdup( reads[ ridx ].read ) ;
+						if ( reads[ ridx ].overlap.strand == -1 )
+						{
+							// should always get here
+							ReverseComplement( s, reads[ ridx ].read, strlen( reads[ ridx ].read ) ) ;
+						}
+						for ( m = reads[ ridx ].overlap.seqStart, rm = 0 ; 
+							m <= reads[ ridx ].overlap.seqEnd ; ++m, ++rm )
+						{
+							if ( reads[ ridx ].read[rm] != 'N' )
+							{
+								int adjustM = m - rightMostExtend.seqStart + lastOffset ;  
+								//printf( "%d %d %d. %c %c\n", m, rm, adjustM, ns.consensus[adjustM], reads[ ridx ].read[rm] ) ;
+								++ns.posWeight[adjustM].count[ nucToNum[ s[rm] - 'A' ] ] ;
+								--seqs[to].posWeight[m].count[ nucToNum[ s[rm] - 'A' ] ] ;
+							}
+						}
+						free( s ) ;
+					}
+				}
+
+			}
+			
+			// For other not updated region, just assign a number there.
+			for ( j = 0 ; j < newConsensusLen ; ++j )
+				if ( newConsensus[j] != 'N' && 
+					ns.posWeight[j].count[0] + ns.posWeight[j].count[1] + 
+						ns.posWeight[j].count[2] + ns.posWeight[j].count[3] == 0 )
+					ns.posWeight[j].count[ nucToNum[ newConsensus[j] - 'A' ] ] = 1 ;
+
 #ifdef DEBUG	
 			if ( leftMostExtend.seqIdx != -1 )
 				printf( "left 0: %d %s\n", leftMostExtend.seqIdx, seqs[ leftMostExtend.seqIdx ].consensus ) ;
@@ -4314,6 +4427,23 @@ public:
 		Clean( true ) ;
 
 		delete[] branchAdj ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			size = nextAdj[i].size() ;
+			for ( j = 0 ; j < size ; ++j )
+			{
+				if ( nextAdj[i][j].info != NULL )
+					delete nextAdj[i][j].info ;
+			}
+			
+			size = prevAdj[i].size() ;
+			for ( j = 0 ; j < size ; ++j )
+			{
+				if ( prevAdj[i][j].info != NULL )
+					delete prevAdj[i][j].info ;
+			}
+
+		}
 		delete[] nextAdj ;
 		delete[] prevAdj ;
 	}
