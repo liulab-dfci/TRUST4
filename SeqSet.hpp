@@ -3177,7 +3177,11 @@ public:
 		hitLenRequired = 31 ;
 
 		if ( overlapCnt == 0 )
+		{
+			if ( detailLevel >= 2 )
+				sprintf( buffer + strlen( buffer ), " * * * CDR3=null" ) ;
 			return 0 ;
+		}
 		std::sort( overlaps.begin(), overlaps.end() ) ;
 		// Get the coverage of the genes.
 		for ( i = 0 ; i < overlapCnt ; ++i )
@@ -3570,16 +3574,23 @@ public:
 
 		// Compute the name
 		for ( i = 0 ; i < 4 ; ++i )
-		{
-			if ( geneOverlap[i].seqIdx == -1 )
+		{	
+			if ( i == 1 ) // skip the D gene.
 				continue ;
 
-			int offset = strlen( buffer ) ;
-			int seqIdx = geneOverlap[i].seqIdx ;
-			sprintf( buffer + offset, " %s(%d):(%d-%d):(%d-%d):%.2lf",
-				seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
-				geneOverlap[i].readStart, geneOverlap[i].readEnd, 
-				geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;	
+			if ( geneOverlap[i].seqIdx != -1 )
+			{
+				int offset = strlen( buffer ) ;
+				int seqIdx = geneOverlap[i].seqIdx ;
+				sprintf( buffer + offset, " %s(%d):(%d-%d):(%d-%d):%.2lf",
+						seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
+						geneOverlap[i].readStart, geneOverlap[i].readEnd, 
+						geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;	
+			}
+			else
+			{
+				sprintf( buffer + strlen( buffer ), " *" ) ;
+			}
 		}
 		
 		sprintf( buffer + strlen( buffer ), " CDR3=%s", cdr3 == NULL ? "null" : cdr3 ) ;
@@ -4159,10 +4170,22 @@ public:
 		SimpleVector<int> offset ;
 		SimpleVector<struct _pair> range ; // the range of a seq that needs to be copied in the new seq.
 		SimpleVector<int> origRangeB ;
-		chain.Reserve( seqCnt ) ;
+		SimpleVector<struct _pair> shiftSeq ; // where the seq moved to after extesion. a-new seqIdx, b-offset in new seq.
+					              // Note that the ending of a seq might be trimmed when extension,
+						      //  the b(offset) will regard those trimmed part existing, and hence
+						      //  starts a bit earlier than the portion that is actually used.
+		chain.Reserve( seqCnt ) ;	    
 		offset.Reserve( seqCnt ) ;
 		range.Reserve( seqCnt ) ;
 		origRangeB.Reserve( seqCnt ) ; // the range.b that are not adjusted.
+
+		shiftSeq.ExpandTo( seqCnt ) ; 
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			shiftSeq[i].a = i ;
+			shiftSeq[i].b = 0 ;
+		}
+
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			//if ( inCnt[i] > 0 )
@@ -4340,7 +4363,8 @@ public:
 							if ( reads[ ridx ].read[rm] != 'N' )
 							{
 								++ns.posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
-								--seqs[ from ].posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
+								--seqs[ shiftSeq[from].a ].posWeight[ shiftSeq[from].b + m ].
+												count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
 							}
 						}
 					}
@@ -4391,7 +4415,8 @@ public:
 								int adjustM = m - rightMostExtend.seqStart + lastOffset ;  
 								//printf( "%d %d %d. %c %c\n", m, rm, adjustM, ns.consensus[adjustM], reads[ ridx ].read[rm] ) ;
 								++ns.posWeight[adjustM].count[ nucToNum[ s[rm] - 'A' ] ] ;
-								--seqs[to].posWeight[m].count[ nucToNum[ s[rm] - 'A' ] ] ;
+								--seqs[ shiftSeq[to].a ].posWeight[ shiftSeq[to].b + m].
+												count[ nucToNum[ s[rm] - 'A' ] ] ;
 							}
 						}
 						free( s ) ;
@@ -4407,6 +4432,13 @@ public:
 						ns.posWeight[j].count[2] + ns.posWeight[j].count[3] == 0 )
 					ns.posWeight[j].count[ nucToNum[ newConsensus[j] - 'A' ] ] = 1 ;
 
+			// Update the shift information
+			for ( j = 0 ; j < chainSize ; ++j )
+			{
+				shiftSeq[ chain[j] ].a = seqs.size() ;
+				shiftSeq[ chain[j] ].b = offset[j] - range[j].a ;
+			}
+
 #ifdef DEBUG	
 			if ( leftMostExtend.seqIdx != -1 )
 				printf( "left 0: %d %s\n", leftMostExtend.seqIdx, seqs[ leftMostExtend.seqIdx ].consensus ) ;
@@ -4421,11 +4453,8 @@ public:
 			seqs.push_back( ns ) ;
 			toRemoveSeqIdx.PushBack( i ) ;
 		}
-		int size = toRemoveSeqIdx.Size() ;
-		for ( i = 0 ; i < size ; ++i )
-			ReleaseSeq( toRemoveSeqIdx[i] ) ;	
-		Clean( true ) ;
-
+		
+		int size ;
 		delete[] branchAdj ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -4446,6 +4475,32 @@ public:
 		}
 		delete[] nextAdj ;
 		delete[] prevAdj ;
+		
+		size = toRemoveSeqIdx.Size() ;
+		for ( i = 0 ; i < size ; ++i )
+			ReleaseSeq( toRemoveSeqIdx[i] ) ;	
+		Clean( true ) ;
+		
+		// Recompute the posweight that becomes negative 
+		// since the alignment might be changed when adding and after adding states
+		seqCnt = seqs.size() ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
+			{
+				int sum = 0 ;
+				for ( k = 0 ; k < 4 ; ++k )
+				{
+					if ( seqs[i].posWeight[j].count[k] < 0 )
+						seqs[i].posWeight[j].count[k] = 0 ;
+					sum += seqs[i].posWeight[j].count[k] ;
+				}	
+				if ( sum == 0 && seqs[i].consensus[j] != 'N' )
+				{
+					seqs[i].posWeight[j].count[ nucToNum[ seqs[i].consensus[j] - 'A' ] ] = 1 ;
+				}
+			}
+		}
 	}
 
 	void Output( FILE *fp )
