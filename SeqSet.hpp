@@ -743,7 +743,6 @@ private:
 			overlaps.clear() ;
 			return 0 ;
 		}
-		
 		int size = overlaps.size() ;
 		for ( i = 0 ; i < size ; ++i )
 		{
@@ -1011,19 +1010,38 @@ private:
 
 		// Since the seqs are all from the same strand, the overlaps should be on the same strand.
 		std::sort( overlaps.begin(), overlaps.end() ) ;
-	
-		k = 1 ;
-		for ( i = 1 ; i < overlapCnt ; ++i )
+		
+		if ( readType == 0 )
 		{
-			if ( overlaps[i].strand != overlaps[0].strand )
+			k = 1 ;
+			for ( i = 1 ; i < overlapCnt ; ++i )
 			{
-				delete overlaps[i].hitCoords ;
-				overlaps[i].hitCoords = NULL ;
-				continue ;		
+				if ( overlaps[i].strand != overlaps[0].strand )
+				{
+					delete overlaps[i].hitCoords ;
+					overlaps[i].hitCoords = NULL ;
+					continue ;		
+				}
+				if ( i != k )
+					overlaps[k] = overlaps[i] ;
+				++k ;
 			}
-			if ( i != k )
-				overlaps[k] = overlaps[i] ;
-			++k ;
+		}
+		else
+		{
+			k = 0 ;
+			for ( i = 0 ; i < overlapCnt ; ++i )
+			{
+				if ( overlaps[i].strand != 1 )
+				{
+					delete overlaps[i].hitCoords ;
+					overlaps[i].hitCoords = NULL ;
+					continue ;		
+				}
+				if ( i != k )
+					overlaps[k] = overlaps[i] ;
+				++k ;
+			}
 		}
 		overlaps.resize( k ) ;
 		overlapCnt = k ;
@@ -3161,9 +3179,10 @@ public:
 		int i, j ;
 		
 		std::vector<struct _overlap> overlaps ;
+		std::vector<struct _overlap> secondaryGeneOverlap[4] ;
 		int overlapCnt ;
 	
-		char BT = '\0' ;
+		char BT = '\0' ; // Bcell, Tcell
 		char chain = '\0' ;
 		int len = strlen( read ) ;
 
@@ -3172,8 +3191,9 @@ public:
 			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
 
 		sprintf( buffer, "%d", len ) ;
-		hitLenRequired = 17 ;	
-		overlapCnt = GetOverlapsFromRead( read, 1, overlaps ) ;		
+		if ( detailLevel > 0 )
+			hitLenRequired = 17 ;	
+		overlapCnt = GetOverlapsFromRead( read, detailLevel == 0 ? 0 : 1, overlaps ) ;		
 		hitLenRequired = 31 ;
 
 		if ( overlapCnt == 0 )
@@ -3216,7 +3236,8 @@ public:
 		}
 		
 		// Check whether the match to the constant gene is random.
-		if ( geneOverlap[3].seqIdx != -1 )
+		if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 <= len / 2 
+			&& geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 <= 50 )
 		{
 			for ( i = 0 ; i < 3 ; ++i )
 			{
@@ -3345,7 +3366,7 @@ public:
 					boundE = e + range ;
 				
 				if ( locate != -1 )
-					s = s - ( e - s ) % 3 ;
+					s = s + ( e - s ) % 3 ;
 			
 			}
 			else if ( geneOverlap[2].seqIdx != -1 )
@@ -3376,7 +3397,7 @@ public:
 			else if ( geneOverlap[0].seqIdx != -1 )
 			{
 				int startFrame = geneOverlap[0].seqStart % 3 ;
-				s = geneOverlap[0].readEnd - ( geneOverlap[0].readEnd - geneOverlap[0].readStart - startFrame ) % 3 ;
+				s = geneOverlap[0].readEnd + ( geneOverlap[0].readEnd - geneOverlap[0].readStart - startFrame ) % 3 ;
 				e = s + 12 ;
 				if ( s - 31 > boundS )
 					boundS = s - 31 ;
@@ -3430,7 +3451,7 @@ public:
 			if ( locateS == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
 			{
 				// Expand the search range.
-				int newS = e - 12 - ( e - 12 - s ) % 3 ;
+				int newS = e - 12 ; //- ( e - 12 - s ) % 3 ;
 				if ( newS > s )
 				{
 					for ( i = newS ; i > s ; i -= 3 )
