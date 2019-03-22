@@ -3397,7 +3397,7 @@ public:
 		{
 			// Infer CDR3.
 			int s, e ;
-			int boundS = 0, boundE = len - 2 ;
+			int boundS = 0, boundE = len - 2 ; //[boundS, boundE)
 			int range = 31 ;
 			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
 			{
@@ -3510,12 +3510,28 @@ public:
 			}
 			int locateS = -1 ;
 			int locateE = -1 ;
-			for ( i = s ; i > boundS ; i -= 3 )
+			
+			// The YYC motif on V gene, mentioned in TRUST3 paper, but seems not mentioned in IMGT Junction Analysis.
+			for ( i = s ; i >= boundS ; i -= 3 )
 			{
-				if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+				if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+					&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+					&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
 				{
-					locateS = i ;
+					locateS = i + 6 ;
 					break ;
+				}
+			}
+
+			if ( locateS == -1 )
+			{
+				for ( i = s ; i >= boundS ; i -= 3 )
+				{
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+					{
+						locateS = i ;
+						break ;
+					}
 				}
 			}
 			
@@ -3547,12 +3563,25 @@ public:
 			if ( locateS == -1 )
 			{
 				// Don't follow the frame rule 
-				for ( i = s ; i > boundS ; --i )
-					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+				for ( i = s ; i >= boundS ; --i )
+				{
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+							&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
 					{
-						locateS = i ;
+						locateS = i + 6 ;
 						break ;
 					}
+				}
+				if ( locateS == -1 )
+				{
+					for ( i = s ; i >= boundS ; --i )
+						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
+						{
+							locateS = i ;
+							break ;
+						}
+				}
 			}
 			
 			int adjustE = e  ;
