@@ -22,7 +22,8 @@ char usage[] = "./bcr [OPTIONS]:\n"
 		"\t-b STRING: path to BAM alignment file\n"
 		"Optional:\n"
 		"\t-o STRING: prefix of the output file (default: trust)\n"
-		"\t-c STRING: the path to the kmer count file\n" ;
+		"\t-c STRING: the path to the kmer count file\n"
+		"\t--noTrim: do not trim the reads for assembly (default: trim)" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -36,6 +37,7 @@ char buffer[10240] = "" ;
 static const char *short_options = "f:u:1:2:b:o:c:" ;
 static struct option long_options[] = {
 			{ "debug-ns", required_argument, 0, 10000 },
+			{ "noTrim", no_argument, 0, 10001 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -43,6 +45,7 @@ struct _sortRead
 {
 	char *id ;
 	char *read ;
+	char *qual ;
 	int minCnt ;
 	int medianCnt ;
 	double avgCnt ;
@@ -103,6 +106,7 @@ void PrintLog( const char *fmt, ... )
 	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
 }
 
+
 int main( int argc, char *argv[] )
 {
 	int i, j ;
@@ -126,6 +130,7 @@ int main( int argc, char *argv[] )
 	ReadFiles mateReads ;
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
+	bool flagNoTrim = false ;
 
 	while ( 1 )
 	{
@@ -165,6 +170,10 @@ int main( int argc, char *argv[] )
 		{
 			seqSet.InputNovelFa( optarg ) ;
 		}
+		else if ( c == 10001) 
+		{
+			flagNoTrim =true ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -201,6 +210,10 @@ int main( int argc, char *argv[] )
 		struct _sortRead nr ;
 		nr.read = strdup( reads.seq ) ;
 		nr.id = strdup( reads.id ) ;
+		if ( reads.qual != NULL )
+			nr.qual = strdup( reads.qual ) ;
+		else
+			nr.qual = NULL ; 
 
 		sortedReads.push_back( nr ) ;
 		if ( countMyself )
@@ -231,6 +244,7 @@ int main( int argc, char *argv[] )
 		struct _sortRead nr ;
 		nr.read = strdup( mateReads.seq ) ;
 		nr.id = strdup( mateReads.id ) ;
+		nr.qual = strdup( mateReads.qual ) ;
 
 		sortedReads.push_back( nr ) ;
 		if ( countMyself )
@@ -260,7 +274,17 @@ int main( int argc, char *argv[] )
 	kmerCount.SetBuffer( maxReadLen ) ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
-		kmerCount.GetCountStats( sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+		if ( flagNoTrim )
+			kmerCount.GetCountStatsAndTrim( sortedReads[i].read, NULL, 
+					sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+		else
+			kmerCount.GetCountStatsAndTrim( sortedReads[i].read, sortedReads[i].qual, 
+					sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+		if ( sortedReads[i].qual != NULL )
+		{
+			free( sortedReads[i].qual ) ;
+			sortedReads[i].qual = NULL ;
+		}
 	}
 
 #ifdef DEBUG
@@ -275,6 +299,14 @@ int main( int argc, char *argv[] )
 	std::vector<int> assembledReadIdx ;
 	int assembledReadCnt = 0 ;
 	int prevAddRet = -1 ;
+	
+	/*if ( seqSet.GetSeqCnt() > 0 )
+	{
+		for ( i = 0 ; i < readCnt ; ++i )
+			assembledReadIdx.push_back( i ) ;
+		readCnt = 0 ;
+	}*/
+
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 #ifdef DEBUG
@@ -465,18 +497,29 @@ int main( int argc, char *argv[] )
 	SeqSet extendedSeq( indexKmerLength > 17 ? indexKmerLength : 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
 	struct _overlap assign ;
+	memset( &assign, -1, sizeof( assign ) ) ;
+
+	/*fp = fopen( "assign_results.out", "r" ) ;
+	for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		fread( &assembledReads[i].overlap, sizeof( assembledReads[i].overlap ), 1, fp ) ;
+		//printf( "%d %d %d\n", assembledReads[i].overlap.seqIdx, assembledReads[i].overlap.readStart, 
+		//	assembledReads[i].overlap.readEnd ) ;
+	}*/
+	//fp = fopen( "assign_results.out", "w" ) ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
 		if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
 			extendedSeq.AssignRead( assembledReads[i].read, 1.0, assign ) ;
-		assembledReads[i].overlap = assign ;
-			
+		assembledReads[i].overlap = assign ;	
 		if ( ( i + 1 ) % 100000 == 0 )
 		{
 			PrintLog( "Processed %d reads for extension.", i + 1 ) ;
 		}
+		//fwrite( &assign, sizeof( assign ), 1, fp ) ;
 	}
-	
+	//fclose( fp ) ;
+
 	/*extendedSeq.BreakFalseAssembly( assembledReads ) ;
 	
 	if ( outputPrefix[0] != '-' )
@@ -541,11 +584,14 @@ int main( int argc, char *argv[] )
 		fprintf( fp, ">%s\n%s\n", assembledReads[i].id, assembledReads[i].read ) ;
 	}
 	fclose( fp ) ;*/
-	
+	if ( readCnt == 0 )
+		readCnt = assembledReadCnt ;	
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		free( sortedReads[i].id ) ;
 		free( sortedReads[i].read ) ;
+		if ( sortedReads[i].qual != NULL )
+			free( sortedReads[i].qual ) ;
 	}
 
 	PrintLog( "Finished." ) ;

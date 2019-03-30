@@ -26,6 +26,8 @@ static struct option long_options[] = {
 
 char buffer[100001] ;
 char buffer2[100001] ;
+char bufferQual[100001] ;
+char bufferQual2[100001] ;
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
@@ -54,6 +56,9 @@ struct _candidate
 {
 	char *mate1 ;
 	char *mate2 ;
+
+	char *qual1 ;
+	char *qual2 ;
 } ;
 
 bool ValidAlternativeChrom( char *chrom )
@@ -98,6 +103,11 @@ void TrimName( std::string &name )
 	{
 		name.erase( len - 2, 2 ) ; // Haven't tested yet.
 	}
+}
+
+void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
+{
+	fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
 }
 
 int main( int argc, char *argv[] )
@@ -195,14 +205,14 @@ int main( int argc, char *argv[] )
 	FILE *fp2 ;
 	if ( alignments.fragStdev == 0 )
 	{
-		sprintf( buffer, "%s.fa", prefix ) ;
+		sprintf( buffer, "%s.fq", prefix ) ;
 		fp1 = fopen( buffer, "w" ) ;
 	}
 	else
 	{
-		sprintf( buffer, "%s_1.fa", prefix ) ;
+		sprintf( buffer, "%s_1.fq", prefix ) ;
 		fp1 = fopen( buffer, "w" ) ;
-		sprintf( buffer, "%s_2.fa", prefix ) ;
+		sprintf( buffer, "%s_2.fq", prefix ) ;
 		fp2 = fopen( buffer, "w" ) ;
 	}
 
@@ -213,6 +223,7 @@ int main( int argc, char *argv[] )
 		//if ( !alignments.IsPrimary() )
 		//	continue ;
 		alignments.GetReadSeq( buffer ) ;
+		alignments.GetQual( bufferQual ) ;
 		//if ( IsLowComplexity( buffer ) )
 		//	continue ;
 
@@ -230,6 +241,7 @@ int main( int argc, char *argv[] )
 				//printf( "filtered\n" ) ;
 				std::string name( alignments.GetReadId() ) ;
 				strcpy( buffer2, buffer ) ;
+				alignments.GetQual( bufferQual2 ) ;
 
 				if ( !alignments.Next() )
 				{
@@ -238,7 +250,8 @@ int main( int argc, char *argv[] )
 				}
 				std::string mateName( alignments.GetReadId() ) ;
 				alignments.GetReadSeq( buffer ) ;
-				
+				alignments.GetQual( bufferQual ) ;
+
 				if ( name.compare( mateName ) != 0 )
 				{
 					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
@@ -250,13 +263,13 @@ int main( int argc, char *argv[] )
 				{
 					if ( !alignments.IsFirstMate() )
 					{
-						fprintf( fp1, ">%s\n%s\n", name.c_str(), buffer2 ) ;
-						fprintf( fp2, ">%s\n%s\n", name.c_str(), buffer ) ;
+						OutputSeq( fp1, name.c_str(), buffer2, bufferQual2 ) ;
+						OutputSeq( fp2, name.c_str(), buffer, bufferQual  ) ;
 					}
 					else
 					{
-						fprintf( fp1, ">%s\n%s\n", name.c_str(), buffer ) ;
-						fprintf( fp2, ">%s\n%s\n", name.c_str(), buffer2 ) ;
+						OutputSeq( fp1, name.c_str(), buffer, bufferQual ) ;
+						OutputSeq( fp2, name.c_str(), buffer2, bufferQual2 ) ;
 					}
 				}
 				continue ;
@@ -277,7 +290,7 @@ int main( int argc, char *argv[] )
 			else if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer ) )
 			{
 				//alignments.GetReadSeq( buffer ) ;
-				fprintf( fp1, ">%s\n%s\n", alignments.GetReadId(), buffer ) ;
+				OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 			}
 			continue ;
 		}
@@ -318,8 +331,8 @@ int main( int argc, char *argv[] )
 		}
 		else
 		{
-			alignments.GetReadSeq( buffer ) ;
-			fprintf( fp1, ">%s\n%s\n", alignments.GetReadId(), buffer ) ;
+			//alignments.GetReadSeq( buffer ) ;
+			OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 		}
 	}
 	alignments.Rewind() ;
@@ -354,17 +367,26 @@ int main( int argc, char *argv[] )
 			continue ;
 
 		alignments.GetReadSeq( buffer ) ;
+		alignments.GetQual( bufferQual ) ;
 		if ( alignments.IsFirstMate() )
+		{
 			it->second.mate1 = strdup( buffer ) ;
+			it->second.qual1 = strdup( bufferQual ) ;
+		}
 		else
+		{
 			it->second.mate2 = strdup( buffer ) ;
-
+			it->second.qual2 = strdup( bufferQual ) ;	
+		}
+		
 		if ( it->second.mate1 != NULL && it->second.mate2 != NULL )
 		{
-			fprintf( fp1, ">%s\n%s\n", name.c_str(), it->second.mate1 ) ;
-			fprintf( fp2, ">%s\n%s\n", name.c_str(), it->second.mate2 ) ;
+			OutputSeq( fp1, name.c_str(), it->second.mate1, it->second.qual1 ) ;
+			OutputSeq( fp2, name.c_str(), it->second.mate2, it->second.qual2 ) ;
 			free( it->second.mate1 ) ;
 			free( it->second.mate2 ) ;
+			free( it->second.qual1 ) ;
+			free( it->second.qual2 ) ;
 		}
 			
 	}

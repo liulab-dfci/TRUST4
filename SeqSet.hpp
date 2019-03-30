@@ -2872,8 +2872,8 @@ public:
 				  ++extendCnt ;
 				  }
 				  else if ( tmpExtendedOverlap.similarity == extend) */
-
-				break ;
+				if ( extendedOverlap.readStart == 0 && extendedOverlap.readEnd == len - 1 )
+					break ;
 			}
 		}
 
@@ -3398,7 +3398,7 @@ public:
 			// Infer CDR3.
 			int s, e ;
 			int boundS = 0, boundE = len - 2 ; //[boundS, boundE)
-			int range = 31 ;
+			int range = 37 ;
 			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
 			{
 				// The case that we have anchor.
@@ -3406,10 +3406,12 @@ public:
 				int startFrame = geneOverlap[0].seqStart % 3 ;
 				int ns = geneOverlap[0].readEnd ; //+ ( seqs[ geneOverlap[0].seqIdx ].consensusLen - 1 - geneOverlap[0].seqEnd ) ;
 				s = ns - ( ns - geneOverlap[0].readStart + startFrame ) % 3 ;
+				s = s + 6 < len ? s + 6 : s ;
 				startFrame = ( seqs[ geneOverlap[2].seqIdx ].consensusLen - 1 - geneOverlap[2].seqEnd ) % 3 ;
 				//e = geneOverlap[2].readStart + 
 				//	( geneOverlap[2].readEnd - geneOverlap[2].readStart + startFrame ) % 3 ;
 				e = geneOverlap[2].readStart ;
+				e = e - 6 >= 0 ? e - 6 : e ;
 				int adjustE = e ;
 				int locate = -1 ;
 				for ( i = adjustE ; i < geneOverlap[2].readEnd  && i + 11 < len ; ++i )
@@ -3435,7 +3437,7 @@ public:
 					boundS = s - range ;
 				if ( e + range < boundE )
 					boundE = e + range ;
-				
+
 				if ( locate != -1 )
 					s = s + ( e - s ) % 3 ;
 			
@@ -3443,6 +3445,7 @@ public:
 			else if ( geneOverlap[2].seqIdx != -1 )
 			{
 				e = geneOverlap[2].readStart ;
+				e = e - 6 >= 0 ? e - 6 : e ;
 				int adjustE = e ;
 				int locate = -1 ;
 				for ( i = adjustE ; i < boundE && i + 11 < len ; ++i )
@@ -3469,6 +3472,7 @@ public:
 			{
 				int startFrame = geneOverlap[0].seqStart % 3 ;
 				s = geneOverlap[0].readEnd + ( geneOverlap[0].readEnd - geneOverlap[0].readStart - startFrame ) % 3 ;
+				s = s + 6 < len ? s + 6 : s ;
 				e = s + 12 ;
 				if ( s - 31 > boundS )
 					boundS = s - 31 ;
@@ -3503,6 +3507,10 @@ public:
 				e = len ;
 				boundS = 1 ;
 			}
+			
+			if ( geneOverlap[2].seqIdx != -1 && boundE > geneOverlap[2].readEnd )
+				boundE = geneOverlap[2].readEnd ;
+				
 
 			if ( e < s + 12 )
 			{
@@ -3520,6 +3528,21 @@ public:
 				{
 					locateS = i + 6 ;
 					break ;
+				}
+			}
+
+			if ( locateS == -1 )
+			{
+				// Don't follow the frame rule 
+				for ( i = s ; i >= boundS ; --i )
+				{
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+							&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
+					{
+						locateS = i + 6 ;
+						break ;
+					}
 				}
 			}
 
@@ -3562,26 +3585,12 @@ public:
 
 			if ( locateS == -1 )
 			{
-				// Don't follow the frame rule 
 				for ( i = s ; i >= boundS ; --i )
-				{
-					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
-							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
-							&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
 					{
-						locateS = i + 6 ;
+						locateS = i ;
 						break ;
 					}
-				}
-				if ( locateS == -1 )
-				{
-					for ( i = s ; i >= boundS ; --i )
-						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
-						{
-							locateS = i ;
-							break ;
-						}
-				}
 			}
 			
 			int adjustE = e  ;
@@ -3673,6 +3682,20 @@ public:
 								locateE = i ;
 								break ;
 							}
+						}
+					}
+				}
+
+				if ( locateE == -1 )
+				{
+					// Look just for the GXG motif
+					for ( i = adjustE ; i < boundE ; ++i )
+					{
+						if ( DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+							&&  DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+						{
+							locateE = i ;
+							break ;
 						}
 					}
 				}
@@ -4084,7 +4107,7 @@ public:
 				int fromStart, fromEnd, toStart, toEnd ;
 				struct _overlap extendedOverlap = reads[i].overlap ;
 				struct _overlap mateExtendedOverlap = reads[i + 1].overlap ;
-
+								
 				if ( extendedOverlap.strand == 1 )
 				{
 					from = extendedOverlap.seqIdx ;
@@ -4354,7 +4377,6 @@ public:
 		{
 			//if ( inCnt[i] > 0 )
 			//	continue ;
-			
 			// Each seq will try to extend to each direction once.
 			if ( uniqueSuccessorOf[i] != -1 )
 			{
@@ -4453,8 +4475,9 @@ public:
 				}
 			}
 			if ( newConsensusLen == seqs[i].consensusLen ) // no extension.
+			{
 				continue ;
-
+			}
 			//printf( "%d %d %d\n", chainSize, seqs[i].consensusLen, newConsensusLen ) ;	
 			char *newConsensus = ( char * )malloc( sizeof( char ) * ( newConsensusLen + 1 ) ) ;
 			// Put in the seqs.
@@ -4487,7 +4510,7 @@ public:
 			for ( j = 0 ; j < chainSize ; ++j )
 			{
 				int l ;
-				for ( l = range[j].a ; l <= origRangeB[j] && offset[j] + l < newConsensusLen ; ++l )
+				for ( l = range[j].a ; l <= origRangeB[j] && offset[j] + l - range[j].a < newConsensusLen ; ++l )
 				{
 					ns.posWeight[ offset[j] + l - range[j].a ] = seqs[ chain[j] ].posWeight[l] ;
 				}
@@ -4522,12 +4545,16 @@ public:
 							continue ;
 
 						int m, rm ;
-						for ( m = reads[ ridx ].overlap.seqStart, rm = 0 ; m <= reads[ ridx ].overlap.seqEnd ; ++m, ++rm )
+						for ( m = reads[ ridx ].overlap.seqStart, rm = 0 ; 
+							m <= reads[ ridx ].overlap.seqEnd ; ++m, ++rm )
 						{
 							if ( reads[ ridx ].read[rm] != 'N' )
 							{
-								++ns.posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
-								--seqs[ shiftSeq[from].a ].posWeight[ shiftSeq[from].b + m ].
+								if ( m < newConsensusLen )
+									++ns.posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
+								if ( shiftSeq[from].b + m >= 0 && 
+									shiftSeq[from].b + m < seqs[ shiftSeq[from].a ].consensusLen )
+									--seqs[ shiftSeq[from].a ].posWeight[ shiftSeq[from].b + m ].
 												count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
 							}
 						}
@@ -4574,12 +4601,15 @@ public:
 						for ( m = reads[ ridx ].overlap.seqStart, rm = 0 ; 
 							m <= reads[ ridx ].overlap.seqEnd ; ++m, ++rm )
 						{
-							if ( reads[ ridx ].read[rm] != 'N' )
+							if ( s[rm] != 'N' )
 							{
 								int adjustM = m - rightMostExtend.seqStart + lastOffset ;  
 								//printf( "%d %d %d. %c %c\n", m, rm, adjustM, ns.consensus[adjustM], reads[ ridx ].read[rm] ) ;
-								++ns.posWeight[adjustM].count[ nucToNum[ s[rm] - 'A' ] ] ;
-								--seqs[ shiftSeq[to].a ].posWeight[ shiftSeq[to].b + m].
+								if ( adjustM >= 0 && adjustM < newConsensusLen )
+									++ns.posWeight[adjustM].count[ nucToNum[ s[rm] - 'A' ] ] ;
+								if ( shiftSeq[to].b + m >= 0 && 
+									shiftSeq[to].b + m < seqs[ shiftSeq[to].a ].consensusLen )
+									--seqs[ shiftSeq[to].a ].posWeight[ shiftSeq[to].b + m].
 												count[ nucToNum[ s[rm] - 'A' ] ] ;
 							}
 						}
@@ -4612,6 +4642,7 @@ public:
 			if ( rightMostExtend.seqIdx != -1 )
 				printf( "right %d: %d %s\n", j + 1, rightMostExtend.seqIdx, seqs[ rightMostExtend.seqIdx ].consensus ) ;
 			printf( "%d new %s\n", i, newConsensus) ;
+			fflush( stdout ) ;
 #endif 
 
 			seqs.push_back( ns ) ;

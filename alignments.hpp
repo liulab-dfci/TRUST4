@@ -482,8 +482,17 @@ public:
 				case 4: buffer[i] = 'G'; break ;
 				case 8: buffer[i] = 'T'; break ;
 				default: buffer[i] = 'N' ;
+			
 			}
 		}
+		buffer[i] = '\0' ;
+	}
+
+	void GetQual( char *buffer )
+	{
+		int i = 0 ;
+		for ( i = 0 ; i < b->core.l_qseq ; ++i )
+			buffer[i] = *( bam1_qual( b ) + i ) + 33 ;
 		buffer[i] = '\0' ;
 	}
 

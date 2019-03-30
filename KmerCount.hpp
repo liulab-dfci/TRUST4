@@ -92,6 +92,29 @@ public:
 		fclose( fp ) ;
 	}
 
+	void Output( char *file )
+	{
+		int i, j ;
+		FILE *fp = fopen( file, "r" ) ;
+		char *buffer = new char[kmerLength + 1] ;
+		for ( i = 0 ; i < KCOUNT_HASH_MAX ; ++i )	
+		{
+			for ( std::map<uint64_t, int>::iterator it = count[i].begin() ; it != count[i].end() ; ++it )
+			{
+				if ( it->second <= 1 )
+					continue ;
+				
+				for ( j = 0 ; j < kmerLength ; ++j )
+				{
+					buffer[j] = nucToNum[ ( it->first >> ( 2 * j ) ) & 3 ] ;  
+				}
+				buffer[j] = '\0' ;
+				printf( ">%d\n%s\n", it->second, buffer ) ;
+			}
+		}
+		delete[] buffer ;
+	}
+
 	void SetBuffer( int sz )
 	{
 		maxReadLen = sz ;
@@ -99,7 +122,7 @@ public:
 			 c = new int[ sz ] ;
 	}
 
-	int GetCountStats( char *read, int &minCount, int &medianCount, double &avgCount )
+	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, double &avgCount )
 	{
 		int i, k ;
 		int sum ;
@@ -137,6 +160,37 @@ public:
 		{
 			minCount = -len ;
 			return 0 ;
+		}
+		
+		// Do the trimming.
+		if ( qual != NULL )
+		{
+			int j ;
+			for ( i = k - 1 ; i >= 0 ; --i )
+			{
+				if ( c[i] > 1 )
+					break ;
+			}
+			
+			// Locate the low quality region.
+			++i ;
+			//for ( j = i + kmerLength - 1 ; j < len ; ++j )
+			int badCnt = 0 ;
+			int trimStart = -1 ;
+			for ( j = len - 1 ; j >= i + kmerLength - 1 ; --j )
+			{
+				if ( qual[j] - 32 <= 15 )	
+					++badCnt ;
+				if ( badCnt >= 0.1 * ( len - j ) )
+					trimStart = j ;
+			}
+
+			if ( trimStart > 0 )
+			{
+				k = trimStart - kmerLength + 1 ;
+				read[ trimStart ] = '\0' ;
+				qual[ trimStart ] = '\0' ;
+			}
 		}
 
 		std::sort( c, c + k ) ; 
