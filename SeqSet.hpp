@@ -599,7 +599,7 @@ private:
 				}
 				std::sort( concordantHitCoord.BeginAddress(), concordantHitCoord.EndAddress(), CompSortPairBInc ) ;
 				//for ( k = 0 ; k < e - s ; ++k )	
-				//	printf( "%d (%d-%d): %d %d %d\n", i, s, e, hits[i].indexHit.idx, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
+				//	printf( "%d (%d-%d): %d %s %d %d\n", i, s, e, hits[i].indexHit.idx, seqs[ hits[i].indexHit.idx ].name, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
 
 				// Compute the longest increasing subsequence.
 				hitCoordLIS.Clear() ;
@@ -643,7 +643,7 @@ private:
 				no.matchCnt = 2 * hitLen ;
 				no.similarity = 0 ;
 
-				if ( hitLen * 2 < no.seqEnd - no.seqStart + 1 )
+				if ( !seqs[ no.seqIdx ].isRef && hitLen * 2 < no.seqEnd - no.seqStart + 1 )
 				{
 					s = e ; 
 					continue ;
@@ -1619,13 +1619,15 @@ private:
 
 
 				if ( extendedOverlap.similarity >= repeatSimilarity )
+				{
 					adj[i].push_back( extendedOverlap ) ;
 #ifdef DEBUG
-				printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
-						extendedOverlap.readStart, extendedOverlap.readEnd,
-						extendedOverlap.seqStart, extendedOverlap.seqEnd,
-						extendedOverlap.similarity ) ;
+					printf( "branch %d %d: %d %d %d %d %d %lf\n", i, j, extendedOverlap.seqIdx, 
+							extendedOverlap.readStart, extendedOverlap.readEnd,
+							extendedOverlap.seqStart, extendedOverlap.seqEnd,
+							extendedOverlap.similarity ) ;
 #endif				
+				}	
 			}
 		}
 		
@@ -1853,14 +1855,64 @@ public:
 		return ret ;
 	}
 
+	// b comes after a, test wheter their gene names is compatible
+	bool IsNameCompatible( char *a, char *b )
+	{
+		int i, j ;
+		int maxA = -1 ;
+		int minB = 10 ;
+		for ( i = 0 ; a[i] ; )	
+		{
+			if ( a[i] == '+' )
+			{
+				++i ;
+				continue ;
+			}
 
+			for ( j = i ; a[j] && a[j] != '+' ; ++j )
+				;
+			char tmp = a[j] ;
+			a[j] = '\0' ;
+			int gt = GetGeneType( a + i ) ;
+			if ( gt > maxA )
+				maxA = gt ;
+			a[j] = tmp ;
+
+			i = j ;
+		}
+		
+		for ( i = 0 ; b[i] ; )	
+		{
+			if ( b[i] == '+' )
+			{
+				++i ;
+				continue ;
+			}
+
+			for ( j = i ; b[j] && b[j] != '+' ; ++j )
+				;
+			char tmp = b[j] ;
+			b[j] = '\0' ;
+			int gt = GetGeneType( b + i ) ;
+			if ( gt < minB )
+				minB = gt ;
+			b[j] = tmp ;
+
+			i = j ;
+		}
+
+		if ( maxA <= minB )
+			return true ;
+		else
+			return false ;
+	}
 	
 
 	// Test whether a read can from the index and update the index.
 	// If it is a candidate, but is quite different from the one we stored, we create a new poa for it.
 	// Return: the index id in the set. 
 	//	   -1: not add. -2: only overlapped with novel seq and could not be extended.
-	int AddRead( char *read, double similarityThreshold )
+	int AddRead( char *read, char *geneName, double similarityThreshold )
 	{
 		//printf( "%s\n", seq ) ;
 		int i, j, k ;
@@ -1875,6 +1927,34 @@ public:
 				
 		if ( overlapCnt <= 0 )
 			return -1 ;
+
+#ifdef DEBUG
+		printf( "geneName: %s\n", geneName ) ;
+#endif
+		if ( geneName[0] != '\0' )
+		{
+			k = 0 ;
+			for ( i = 0 ; i < overlapCnt ; ++i )
+			{
+				for ( j = 0 ; j < 3 ; ++j )
+					if ( seqs[ overlaps[i].seqIdx ].name[j] != geneName[j] )
+						break ;
+				if ( j == 3 )
+				{
+					overlaps[k] = overlaps[i] ;
+					++k ;
+				}
+				/*else
+				{
+					printf( "haha: %s %s\n%s\n", geneName, seqs[ overlaps[i].seqIdx ].name, read ) ;
+				}*/
+			}
+			overlaps.resize( k ) ;
+			overlapCnt = k ;
+			
+			if ( overlapCnt <= 0 )
+				return -1 ;
+		}
 
 		std::sort( overlaps.begin(), overlaps.end() ) ;
 
@@ -2199,7 +2279,21 @@ public:
 							seqs[ extendedOverlaps[i].seqIdx ].name, extendedOverlaps[i].strand, 
 							extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, extendedOverlaps[i].seqStart, 
 							extendedOverlaps[i].seqEnd ) ; 
-#endif				
+#endif			
+				// Infer from the gene name to make sure we would not merge two different receptors 
+				for ( i = 0 ; i < k ; ++i )
+				{
+					for ( j = i + 1 ; j < k ; ++j )
+					{
+						if ( !IsNameCompatible( seqs[ extendedOverlaps[i].seqIdx ].name,
+							seqs[ extendedOverlaps[j].seqIdx ].name ) )
+						{
+							delete[] extendedOverlaps ;
+							delete[] failedExtendedOverlaps ;
+							return -1 ;
+						}
+					}
+				}
 				// Compute the new consensus.
 				int sum = 0 ;
 				for ( i = 0 ; i < eOverlapCnt ; ++i )
@@ -3219,12 +3313,19 @@ public:
 		{
 			matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
 		}*/
-
-		/*if ( threshold < 1 && GetGeneType( seqs[ a.seqIdx ].name ) == 2  
-			&& a.seqEnd >= seqs[ a.seqIdx ].consensusLen - 3 && a.readEnd >= seqs[a.seqIdx].consensusLen 
-			&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - 3 && b.readEnd >= seqs[b.seqIdx].consensusLen )
-			matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ; */
-		
+		int gapAllow = kmerLength + 1 ;
+		if ( threshold >= 1 )
+			gapAllow = 3 ;
+		if ( GetGeneType( seqs[ a.seqIdx ].name ) == 2  
+			&& a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen 
+			&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow && b.readEnd >= seqs[b.seqIdx].consensusLen )
+		{
+			//matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
+			if ( a.similarity - 0.1 > b.similarity )
+			{
+				return true ;
+			}
+		}
 
 		if ( matchCnt > b.matchCnt * threshold )
 			return true ;
@@ -3278,7 +3379,7 @@ public:
 			chain = name[2] ;
 
 			int geneType = GetGeneType( name ) ;
-			//printf( "%d %s %lf: %d %d\n", i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].readStart, overlaps[i].readEnd ) ;
+			//printf( "%d %s %lf %d: %d %d\n", i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd ) ;
 			
 			if ( geneType >= 0 && geneOverlap[ geneType ].seqIdx == -1 )
 				geneOverlap[ geneType ] = overlaps[i] ;
@@ -3286,6 +3387,14 @@ public:
 			//printf( "%s %d\n", seqs[ overlaps[i].seqIdx ].name, overlaps[i].matchCnt ) ;
 			if ( geneType >= 0 && IsBetterGeneMatch( overlaps[i], geneOverlap[geneType], 0.95 ) )
 			{
+				allOverlaps.push_back( overlaps[i] ) ;
+			}
+			else if ( geneType >= 0 && geneOverlap[ geneType ].seqIdx != -1 &&
+				( overlaps[i].readEnd < geneOverlap[geneType].readStart || 
+					overlaps[i].readStart > geneOverlap[ geneType ].readEnd )
+				&& IsBetterGeneMatch( overlaps[i], geneOverlap[geneType], 0.9 ) )
+			{
+				// The gene on a different region of the read. Might happen due to false alignment.
 				allOverlaps.push_back( overlaps[i] ) ;
 			}
 		}
@@ -3326,7 +3435,8 @@ public:
 						++allOverlaps[i].readEnd ;
 						++allOverlaps[i].seqEnd ;
 						
-						allOverlaps[i].matchCnt += 2 ;
+						if ( align[j] == EDIT_MATCH )
+							allOverlaps[i].matchCnt += 2 ;
 					}
 					else if ( radius > 0 )
 					{
@@ -3367,7 +3477,7 @@ public:
 						break ;
 				}
 				delete[] rvs ;
-
+				
 				allOverlaps[i].similarity = (double)( allOverlaps[i].matchCnt ) / 
 						( allOverlaps[i].seqEnd - allOverlaps[i].seqStart + 1 + 
 							allOverlaps[i].readEnd - allOverlaps[i].readStart + 1 ) ;
@@ -3378,7 +3488,7 @@ public:
 				geneOverlap[i].seqIdx = -1 ;
 				geneOverlap[i].matchCnt = -1 ;
 			}
-
+			
 			for ( i = 0 ; i < size ; ++i )
 			{
 				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
@@ -3387,6 +3497,34 @@ public:
 					geneOverlap[ geneType ] = allOverlaps[i] ;
 				}
 			}
+			
+			// Test whether the V gene's coordinate is wrong if we have good J,C gene alignment.
+			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx != -1 )
+			{
+				if ( geneOverlap[2].readEnd + 3 >= geneOverlap[3].readStart && 
+					geneOverlap[2].readEnd - 3 <= geneOverlap[3].readStart &&
+					geneOverlap[0].readEnd > geneOverlap[2].readStart + 6 )
+				{
+					struct _overlap orig = geneOverlap[0] ;
+					geneOverlap[0].seqIdx = -1 ;
+					geneOverlap[0].matchCnt = -1 ;
+					for ( i = 0 ; i < size ; ++i )
+					{
+						int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
+						if ( geneType != 0 )
+							continue ;
+						
+						if ( allOverlaps[i].readEnd <= geneOverlap[2].readStart + 6 && 
+							IsBetterGeneMatch( allOverlaps[i], geneOverlap[ geneType ], 1.0 ) )
+						{
+							geneOverlap[ geneType ] = allOverlaps[i] ;
+						}
+					}
+					if ( geneOverlap[0].seqIdx == -1 )
+						geneOverlap[0] = orig ;
+				}
+			}
+
 			delete[] align ;
 			delete[] rvr ;
 		}
@@ -3589,6 +3727,17 @@ public:
 					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' ) 
 					{
 						locateS = i ;
+						break ;
+					}
+			}
+
+			if ( locateS == -1 )
+			{
+				for ( i = s ; i >= boundS ; --i )
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' )
+					{
+						locateS = i + 6 ;
 						break ;
 					}
 			}

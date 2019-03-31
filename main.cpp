@@ -244,7 +244,10 @@ int main( int argc, char *argv[] )
 		struct _sortRead nr ;
 		nr.read = strdup( mateReads.seq ) ;
 		nr.id = strdup( mateReads.id ) ;
-		nr.qual = strdup( mateReads.qual ) ;
+		if ( reads.qual != NULL )
+			nr.qual = strdup( mateReads.qual ) ;
+		else
+			nr.qual = NULL ;
 
 		sortedReads.push_back( nr ) ;
 		if ( countMyself )
@@ -351,7 +354,16 @@ int main( int argc, char *argv[] )
 				addRet = -1 ;
 			else
 			{
-				addRet = seqSet.AddRead( sortedReads[i].read, 
+				char name[5] ;
+				name[0] = '\0' ;
+				for ( j = 0 ; j < 4 ; ++j )
+					if ( geneOverlap[j].seqIdx != -1 )
+					{
+						char *s = refSet.GetSeqName( geneOverlap[j].seqIdx ) ;
+						name[0] = s[0] ; name[1] = s[1] ; name[2] = s[2] ; name[3] = s[3] ;
+						name[4] = '\0' ;
+					}
+				addRet = seqSet.AddRead( sortedReads[i].read, name, 
 					sortedReads[i].minCnt >= 20 ? 0.97 : 0.9 ) ;
 				if ( addRet < 0 )
 				{
@@ -429,7 +441,8 @@ int main( int argc, char *argv[] )
 		fflush( stdout ) ;
 #endif
 		int addRet = -1 ;
-		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, 
+		char name[2] = "" ;
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name,
 			( sortedReads[ rescueReadIdx[i] ].minCnt >= 20 ? 0.97 : 0.9 ) ) ;
 		if ( addRet >= 0 )
 		{
