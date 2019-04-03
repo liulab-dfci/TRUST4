@@ -3464,7 +3464,9 @@ public:
 					{
 						--allOverlaps[i].readStart ;
 						--allOverlaps[i].seqStart ;
-						allOverlaps[i].matchCnt += 2 ;
+					
+						if ( align[j] == EDIT_MATCH )
+							allOverlaps[i].matchCnt += 2 ;
 					}
 					else if ( radius > 0 )
 					{
@@ -3497,6 +3499,50 @@ public:
 					geneOverlap[ geneType ] = allOverlaps[i] ;
 				}
 			}
+
+			// Rescue constant gene if the anchor is too short
+			/*if ( geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx == -1 && 
+				geneOverlap[2].readEnd + hitLenRequired - 1 >= len )
+			{
+				int seqCnt = seqs.size() ;
+				int rstart = geneOverlap[2].readEnd + 6 ;
+				int plen = len - rstart ;
+				if ( plen >= 9 )
+				{
+					char *tBuffer = new char[len - geneOverlap[2].readEnd + 6] ;
+					for ( j = 0 ; j < seqCnt ; ++j )
+					{
+						int geneType = GetGeneType( seqs[j].name ) ;
+						if ( geneType != 3 )
+							continue ;
+						memcpy( tBuffer, seqs[j].consensus, len - geneOverlap[2].readEnd + 2 ) ;
+						tBuffer[ len - geneOverlap[2].readEnd + 2 ] = '\0' ;
+						char *p = strstr( tBuffer, read + rstart ) ;
+						if ( p == NULL )
+							continue ;
+						int l ;
+						for ( l = rstart ; l >= 0 && p >= tBuffer ; --p, --l )
+							if ( read[l] != *p )
+							{
+								break ;
+							}
+						if ( p >= tBuffer )
+							continue ;
+
+						struct _overlap no ;
+						no.seqIdx = j ;
+						no.readStart = l ;
+						no.readEnd = len - 1 ;
+						no.seqStart = 0 ;
+						no.seqEnd = no.readEnd - no.readStart ;
+						no.matchCnt = 2 * ( no.readEnd - no.readStart ) ;
+						no.similarity = 1.0 ;
+						geneOverlap[ geneType ] = no ;
+						allOverlaps.push_back( no ) ;
+					}
+					delete[] tBuffer ;
+				}
+			}*/
 			
 			// Test whether the V gene's coordinate is wrong if we have good J,C gene alignment.
 			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx != -1 )
@@ -3668,6 +3714,7 @@ public:
 					break ;
 				}
 			}
+			
 
 			if ( locateS == -1 )
 			{
@@ -3683,6 +3730,37 @@ public:
 					}
 				}
 			}
+			
+			if ( locateS == -1 )
+			{
+				// Try the YxC motif
+				for ( i = s ; i >= boundS ; i -= 3 )
+				{
+					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+							//&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+							&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
+					{
+						locateS = i + 6 ;
+						break ;
+					}
+				}
+				
+				if ( locateS == -1 )
+				{
+					for ( i = s ; i >= boundS ; --i )
+					{
+						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+								//&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+								&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
+						{
+							locateS = i + 6 ;
+							break ;
+						}
+					}
+
+				}
+			}
+
 
 			if ( locateS == -1 )
 			{
@@ -3695,6 +3773,7 @@ public:
 					}
 				}
 			}
+			
 			
 			if ( locateS == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
 			{
@@ -3733,6 +3812,7 @@ public:
 
 			if ( locateS == -1 )
 			{
+				// YYx motif.
 				for ( i = s ; i >= boundS ; --i )
 					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
 							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' )
@@ -3749,9 +3829,9 @@ public:
 				for ( i = adjustE ; i < boundE && i + 11 < len ; i += 3 )
 				{
 					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
-						DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
-						&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
-						&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+								DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+							&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
 					{
 						locateE = i ;
 						break ;
@@ -3773,24 +3853,51 @@ public:
 						}
 					}
 				}
-			}
-			
-			if ( locateE == -1 )
-			{
-				// Use weaker motif.
-				if ( locateS != -1 )
+
+				if ( locateE == -1 )
 				{
+					// Use weaker motif.
 					adjustE = e - ( e - locateS ) % 3 ; 
-					for ( i = adjustE ; i < boundE ; i += 3 )
+					for ( i = adjustE ; i < boundE ; ++i )
 					{
-						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
+						// The GxG motif
+						if ( read[i] == 'T' && DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+								&&  DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
 						{
-							//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
-							//	DnaToAa( read[i], read[i + 1], read[i + 2] ) ) ;
-							//printf( "%c%c%c=>%c\n", read[j], read[j + 1], read[j + 2],
-							//	DnaToAa( read[j], read[j + 1], read[j + 2] ) ) ;
 							locateE = i ;
 							break ;
+						}
+					}
+
+
+					if ( locateE == -1 )
+					{
+						for ( i = adjustE ; i < boundE ; ++i )
+						{
+							// The GxG motif
+							if ( DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+									&&  DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+							{
+								locateE = i ;
+								break ;
+							}
+						}
+
+					}
+					
+					if ( locateE == -1 )
+					{
+						for ( i = adjustE ; i < boundE ; i += 3 )
+						{
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
+							{
+								//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
+								//	DnaToAa( read[i], read[i + 1], read[i + 2] ) ) ;
+								//printf( "%c%c%c=>%c\n", read[j], read[j + 1], read[j + 2],
+								//	DnaToAa( read[j], read[j + 1], read[j + 2] ) ) ;
+								locateE = i ;
+								break ;
+							}
 						}
 					}
 					if ( locateE == -1 )
@@ -3804,52 +3911,37 @@ public:
 							}
 						}
 					}
-				}
 
-				if ( locateE == -1 )
-				{
-					// frame shift happens or no locateS.
-					adjustE = e ; 
-					for ( i = adjustE ; i < boundE ; ++i )
-					{
-						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
-						{
-							//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
-							//	DnaToAa( read[i], read[i + 1], read[i + 2] ) ) ;
-							//printf( "%c%c%c=>%c\n", read[j], read[j + 1], read[j + 2],
-							//	DnaToAa( read[j], read[j + 1], read[j + 2] ) ) ;
-							locateE = i ;
-							break ;
-						}
-					}
 					if ( locateE == -1 )
 					{
-						for ( i = e ; i < boundE ; ++i )
+						// frame shift happens or no locateS.
+						adjustE = e ; 
+						for ( i = adjustE ; i < boundE ; ++i )
 						{
-							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
 							{
+								//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
+								//	DnaToAa( read[i], read[i + 1], read[i + 2] ) ) ;
+								//printf( "%c%c%c=>%c\n", read[j], read[j + 1], read[j + 2],
+								//	DnaToAa( read[j], read[j + 1], read[j + 2] ) ) ;
 								locateE = i ;
 								break ;
 							}
 						}
-					}
-				}
-
-				if ( locateE == -1 )
-				{
-					// Look just for the GXG motif
-					for ( i = adjustE ; i < boundE ; ++i )
-					{
-						if ( DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
-							&&  DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+						if ( locateE == -1 )
 						{
-							locateE = i ;
-							break ;
+							for ( i = e ; i < boundE ; ++i )
+							{
+								if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )
+								{
+									locateE = i ;
+									break ;
+								}
+							}
 						}
 					}
 				}
 			}
-
 			if ( locateS != -1 && locateE != -1 )
 			{
 				s = locateS ;
