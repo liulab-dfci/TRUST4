@@ -4234,6 +4234,176 @@ public:
 			mateAdj[from].push_back( na ) ;
 		}
 	}
+
+	// For those seqs with single read support, use its mate pair's sequence to decide extension
+	//    which can use a much smaller overlap criterion to add new terms to branch graph.
+	void AugmentBranchGraphByMate( std::vector<struct _overlap> *branchAdj, std::vector<struct _overlap> *prevAdj, 
+			std::vector<struct _overlap> *nextAdj, std::vector<struct _assignRead> &reads )
+	{
+		int i, j, k ;
+		int seqCnt = seqs.size() ;
+
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( prevAdj[i].size() + nextAdj[i].size() != 1 )
+				continue ;
+			struct _seqWrapper &seq = seqs[i] ;
+			for ( j = 0 ; j < seq.consensusLen ; ++j )
+			{
+				int sum = seq.posWeight[j].count[0] + seq.posWeight[j].count[1]
+					+ seq.posWeight[j].count[2] + seq.posWeight[j].count[3] ;
+				if ( sum != 1 )
+					break ;
+			}
+			if ( j < seq.consensusLen )
+				continue ;		
+			int bsize = branchAdj[i].size() ;
+			int readIdx, mateReadIdx ;
+			char *fr ; // first read
+			char *sr ; // second read;
+			int flen, slen ; // their lengths
+			if ( prevAdj[i].size() == 1 )
+			{
+				// Extend left
+				for ( j = 0 ; j < bsize ; ++j )
+				{
+					if ( branchAdj[i][j].seqIdx == prevAdj[i][0].seqIdx )
+						break ;
+				}
+
+				if ( j < bsize )
+					continue ;
+
+				if ( prevAdj[i][0].info->Size() != 1 )
+					continue ;
+
+				readIdx = prevAdj[i][0].info->Get(0) ;
+				mateReadIdx = readIdx + 1 ;
+
+				if ( reads[ readIdx ].overlap.seqIdx != i )
+				{
+					int tmp = readIdx ;
+					readIdx = mateReadIdx ;
+					mateReadIdx = tmp ;
+				}
+
+				flen = strlen( reads[ mateReadIdx ].read  ) ;
+				slen = strlen( reads[ readIdx ].read ) ;
+				if ( slen != seq.consensusLen || flen != seqs[ prevAdj[i][0].seqIdx ].consensusLen )
+					continue ;
+				fr = strdup( reads[ mateReadIdx ].read ) ;
+				sr = strdup( reads[ readIdx ].read ) ;
+				
+				if ( reads[ mateReadIdx ].overlap.strand == -1 )
+					ReverseComplement( fr, reads[ mateReadIdx ].read, flen ) ;
+				if ( reads[ readIdx ].overlap.strand == -1 )
+					ReverseComplement( sr, reads[ readIdx ].read, slen ) ;
+			}
+			else
+			{
+				// Extend right
+				for ( j = 0 ; j < bsize ; ++j )
+				{
+					if ( branchAdj[i][j].seqIdx == nextAdj[i][0].seqIdx )
+						break ;
+				}
+				if ( j < bsize )
+					continue ;
+
+				if ( nextAdj[i][0].info->Size() != 1 )
+					continue ;
+
+				readIdx = nextAdj[i][0].info->Get(0) ;
+				mateReadIdx = readIdx + 1 ;
+
+				if ( reads[ readIdx ].overlap.seqIdx != i )
+				{
+					int tmp = readIdx ;
+					readIdx = mateReadIdx ;
+					mateReadIdx = tmp ;
+				}
+
+				flen = strlen( reads[ readIdx ].read ) ;
+				slen = strlen( reads[ mateReadIdx ].read ) ;
+				if ( flen != seq.consensusLen || slen != seqs[ nextAdj[i][0].seqIdx ].consensusLen )
+					continue ;
+				fr = strdup( reads[ readIdx ].read ) ;
+				sr = strdup( reads[ mateReadIdx ].read ) ;
+				
+				if ( reads[ readIdx ].overlap.strand == -1 )
+					ReverseComplement( fr, reads[ readIdx ].read, flen ) ;
+				if ( reads[ mateReadIdx ].overlap.strand == -1 )
+					ReverseComplement( sr, reads[ mateReadIdx ].read, slen ) ;
+			}
+			
+			// Naive implementation
+			int minOverlap = ( flen + slen) / 20 ;
+			if ( minOverlap >= 31 )
+				minOverlap = 31 ;
+			int offsetCnt = 0 ;
+			int offset = -1 ;
+			int overlapSize = -1 ;
+			int bestMatchCnt = -1 ;
+			for ( j = 0 ; j < flen - minOverlap ; ++j ) // The overlap start position in first read
+			{
+				// Whether the overlap works.
+				int matchCnt = 0 ;
+				int flag = true ;
+				for ( k = 0 ; j + k < flen && k < slen ; ++k )
+				{
+					if ( fr[j + k] == sr[k] )
+						++matchCnt ;
+					if ( matchCnt + ( flen - ( j + k ) - 1 ) < int( ( flen - j ) * 0.95 ) )
+					{
+						flag = false ;
+						break ;
+					}
+				}
+				
+				if ( flag ) 
+				{
+					offset = j ;
+					++offsetCnt ;
+					overlapSize = k ;
+					bestMatchCnt = 2 * matchCnt ;
+				}
+			}
+
+			if ( offsetCnt != 1 ) // Ambiguous overlap or no overlap
+			{
+				free( fr ) ; free( sr ) ;
+				continue ;
+			}
+			if ( prevAdj[i].size() == 1 )
+			{
+				struct _overlap no ;
+				no.seqIdx = prevAdj[i][0].seqIdx ;
+				no.readStart = 0 ;
+				no.readEnd = overlapSize - 1 ;
+				no.seqStart = reads[ mateReadIdx ].overlap.seqStart + offset ;
+				no.seqEnd = no.seqStart + overlapSize - 1 ;
+				no.matchCnt = bestMatchCnt ;
+				no.similarity = bestMatchCnt / (2.0 * overlapSize ) ;
+				branchAdj[i].push_back( no ) ;
+				
+				//printf( "<=%d %d\n%s\n%s\n\n", no.seqIdx, i, fr, sr ) ;
+			}
+			else
+			{
+				struct _overlap no ;
+				no.seqIdx = nextAdj[i][0].seqIdx ;
+				no.readStart = offset ;
+				no.readEnd = offset + overlapSize - 1 ;
+				no.seqStart = reads[ mateReadIdx ].overlap.seqStart ;
+				no.seqEnd = no.seqStart + overlapSize - 1 ;
+				no.matchCnt = bestMatchCnt ;
+				no.similarity = bestMatchCnt / (2.0 * overlapSize) ;
+				branchAdj[i].push_back( no ) ;
+				//printf( ">=%d %d\n%s\n%s\n\n", i, no.seqIdx, fr, sr ) ;
+			}
+			free( fr ) ; free( sr ) ;
+		}
+	}
 	
 	// return: 0: no extension. 1: end-to-inside extension. 2: end-to-end extension
 	int GetExtendSeqCoord( int from, struct _overlap mateInfo, int direction, 
@@ -4391,6 +4561,8 @@ public:
 		}
 
 		BuildBranchGraph( branchAdj, leastOverlapLen, useInBranch ) ;
+		AugmentBranchGraphByMate( branchAdj, prevAdj, nextAdj, reads ) ;
+		
 		// Each Seq will be extend to left and right one step.
 		SimpleVector<int> toRemoveSeqIdx ;
 		toRemoveSeqIdx.Reserve( seqCnt ) ;
@@ -4532,7 +4704,7 @@ public:
 				}
 			}
 		}
-	
+		
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			uniqueSuccessorOf[i] = -1 ;
