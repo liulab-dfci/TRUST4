@@ -106,6 +106,7 @@ int main( int argc, char *argv[] )
 		
 		// Read in the four line of pos weight
 		SimpleVector<struct _posWeight> posWeight ;
+		double depthSum = 0 ;
 		if ( !ignoreWeight )
 		{
 			posWeight.ExpandTo( strlen( seq ) ) ;
@@ -120,6 +121,7 @@ int main( int argc, char *argv[] )
 					if ( weightBuffer[j] == ' ' )
 					{
 						posWeight[i].count[k] = num ;
+						depthSum += num ;
 						++i ;
 						num = 0 ;
 					}
@@ -133,12 +135,12 @@ int main( int argc, char *argv[] )
 			;
 		if ( buffer[i] != ' ' )
 			buffer[i] = ' ' ;
-
+		buffer[i + 1] = '\0' ;
 		int len = strlen( seq ) ;
 		if ( seq[len - 1] == '\n' )
 			seq[len - 1] = '\0' ;
 		
-				
+		sprintf( buffer + i + 1, "%d %.2lf", len, depthSum / len ) ;
 		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + i + 1 ) ;
 
 		// Extract the alternative sequence of CDR1,2,3.

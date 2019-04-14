@@ -3353,7 +3353,7 @@ public:
 		if ( detailLevel >= 2 )
 			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
 
-		sprintf( buffer, "%d", len ) ;
+		//sprintf( buffer, "%d", len ) ;
 		if ( detailLevel > 0 )
 			hitLenRequired = 17 ;	
 		overlapCnt = GetOverlapsFromRead( read, detailLevel == 0 ? 0 : 1, overlaps ) ;		
@@ -3577,6 +3577,7 @@ public:
 
 		// Infer CDR1,2,3.
 		char *cdr3 = NULL ;
+		double cdr3Score = 0 ;
 		if ( detailLevel >= 2 )
 		{
 			// Infer CDR3.
@@ -3954,6 +3955,29 @@ public:
 				cdr[2].seqIdx = 0 ;
 				cdr[2].readStart = s ;
 				cdr[2].readEnd = e ;
+
+				// Use the anchor motif to score the cdr
+				if ( locateS - 6 > 0 )
+					if ( DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+						cdr3Score += 100.0 / 6 ;
+				if ( locateS - 3 > 0 )
+					if ( DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y' )
+						cdr3Score += 100.0 / 6 ;
+
+				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' )
+					cdr3Score += 100.0 / 6 ;
+
+				if ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+					cdr3Score += 100.0 / 6 ;
+
+				if ( locateE + 5 < len )
+					if ( DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' )
+						cdr3Score += 100.0 / 6 ;
+				if ( locateE + 11 < len )
+					if ( DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' )
+						cdr3Score += 100.0 / 6 ;
+
 			}
 		}
 
@@ -4019,9 +4043,9 @@ public:
 		}
 		
 		if ( cdr3 == NULL)
-			sprintf( buffer + strlen( buffer), " CDR3(0-0)=null" ) ;
+			sprintf( buffer + strlen( buffer), " CDR3(0-0):0.0=null" ) ;
 		else
-			sprintf( buffer + strlen( buffer), " CDR3(%d-%d)=%s", cdr[2].readStart, cdr[2].readEnd, cdr3 ) ;
+			sprintf( buffer + strlen( buffer), " CDR3(%d-%d):%.2lf=%s", cdr[2].readStart, cdr[2].readEnd, cdr3Score, cdr3 ) ;
 
 		if ( cdr3 != NULL )
 			delete[] cdr3 ;
