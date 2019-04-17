@@ -15,9 +15,25 @@ while ( <FP1> )
 	$seq = <FP1> ;
 	chomp $seq ;
 
-	next if ( $header =~ /\* / || $header =~ /null/ ) ;# Has missing components
-	
+	next if ( $header =~ /null/ ) ;# Missing CDR3
+
 	my @cols = split /\s/, $header ;
+	if ( $header =~ /\* / ) # More the assembly missing a part, their CDR3 score must be good
+	{
+		if ( $cols[6] =~ /\):(.+?)=/ )
+		{
+			if ( $1 >= 100 ) 
+			{
+				print "$header\n$seq\n" ;
+				#print "hello! ", $cols[6], " $1 ", $1>=80, "\n" ; 
+			}
+			next ; 
+		}
+		else
+		{
+			die "Wrong format $header\n" ;
+		}
+	}
 	
 	# Obtain the VJC coordinate
 	my @vCoord ;
