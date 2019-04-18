@@ -140,16 +140,16 @@ if ( @bamFiles > 0 )
 	system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -f $vdjcFasta -o ${prefix}_toassemble" ) ;
 
 	# determine paired-end or single-end
-	if ( -e $prefix."_toassemble_1.fa" )
+	if ( -e $prefix."_toassemble_1.fq" )
 	{
-		push @firstMateFiles, $prefix."_toassemble_1.fa" ;
-		push @secondMateFiles, $prefix."_toassemble_2.fa" ;
-		$mainArgs .= " -1 ".$prefix."_toassemble_1.fa -2 ".$prefix."_toassemble_2.fa" ;
+		push @firstMateFiles, $prefix."_toassemble_1.fq" ;
+		push @secondMateFiles, $prefix."_toassemble_2.fq" ;
+		$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
 	}
 	else
 	{
-		push @singleFiles, "${prefix}_toassemble.fa" ;
-		$mainArgs .= " -u ${prefix}_toassemble.fa" ;
+		push @singleFiles, "${prefix}_toassemble.fq" ;
+		$mainArgs .= " -u ${prefix}_toassemble.fq" ;
 	}
 }
 
@@ -163,7 +163,7 @@ if ( $vdjcRef eq "" )
 }
 else
 {
-	system_call( "$WD/annoator -f $vdjcRef -a ${prefix}_final.out > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out > ${prefix}_annot.out" ) ;
 }
 
 # Filter and output.
