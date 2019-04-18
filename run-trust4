@@ -163,7 +163,7 @@ if ( $vdjcRef eq "" )
 }
 else
 {
-	system_call( "$WD/annoator -f $vdjcRef -a ${prefix}_final.out > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out > ${prefix}_annot.out" ) ;
 }
 
 # Filter and output.
