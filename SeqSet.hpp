@@ -4364,40 +4364,18 @@ public:
 			int minOverlap = ( flen + slen) / 20 ;
 			if ( minOverlap >= 31 )
 				minOverlap = 31 ;
-			int offsetCnt = 0 ;
 			int offset = -1 ;
 			int overlapSize = -1 ;
 			int bestMatchCnt = -1 ;
-			for ( j = 0 ; j < flen - minOverlap ; ++j ) // The overlap start position in first read
-			{
-				// Whether the overlap works.
-				int matchCnt = 0 ;
-				int flag = true ;
-				for ( k = 0 ; j + k < flen && k < slen ; ++k )
-				{
-					if ( fr[j + k] == sr[k] )
-						++matchCnt ;
-					if ( matchCnt + ( flen - ( j + k ) - 1 ) < int( ( flen - j ) * 0.95 ) )
-					{
-						flag = false ;
-						break ;
-					}
-				}
-				
-				if ( flag ) 
-				{
-					offset = j ;
-					++offsetCnt ;
-					overlapSize = k ;
-					bestMatchCnt = 2 * matchCnt ;
-				}
-			}
+			overlapSize = AlignAlgo::IsMateOverlap( fr, flen, sr, slen, minOverlap, offset, bestMatchCnt ) ;
 
-			if ( offsetCnt != 1 ) // Ambiguous overlap or no overlap
+			if ( overlapSize != 1 ) // Ambiguous overlap or no overlap
 			{
 				free( fr ) ; free( sr ) ;
 				continue ;
 			}
+
+			bestMatchCnt *= 2 ;
 			if ( prevAdj[i].size() == 1 )
 			{
 				struct _overlap no ;
@@ -4500,6 +4478,121 @@ public:
 
 		return ret ;
 	}
+	
+	// Extend seq where one mate is aligned the other mate is missing, and the mates overlap with each other.
+	void ExtendSeqFromMissingOverlapMate( std::vector< struct _assignRead> reads )
+	{
+		int i, j, k ;
+		int readCnt = reads.size() ;
+		int seqCnt = seqs.size() ;
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			bool paired = false ;
+			if ( i < readCnt - 1 && !strcmp( reads[i].id, reads[i + 1].id ) )
+				paired = true ;
+			if ( !paired )
+				continue ;
+
+			if ( ( reads[i].overlap.seqIdx != -1 && reads[i + 1].overlap.seqIdx != -1 )
+				|| ( reads[i].overlap.seqIdx == -1 && reads[i + 1].overlap.seqIdx == -1 ) )
+			{
+				++i ;
+				continue ;
+			}
+			
+			int anchorId = i ;
+			int anchorSeqIdx = reads[i].overlap.seqIdx ;
+			int hangId = i + 1 ;
+			int asLen, hsLen ;
+			if ( reads[i].overlap.seqIdx == -1 )		
+			{
+				anchorId = i + 1 ;
+				anchorSeqIdx = reads[i + 1].overlap.seqIdx ;
+				hangId = i ;
+			}
+		
+			struct _seqWrapper &seq = seqs[ anchorSeqIdx ] ;	
+			if ( strcmp( seq.consensus, reads[ anchorId ].read ) )
+				continue ;
+			asLen = strlen( reads[ anchorId ].read ) ;
+			hsLen = strlen( reads[ hangId ].read ) ;
+			
+			char *r = strdup( reads[ hangId ].read ) ;
+			char *fr, *sr ;
+			int direction = 0 ;
+			int flen, slen ;
+			if ( reads[ anchorId ].overlap.strand )
+			{
+				// Extend towards right
+				ReverseComplement( r, reads[ hangId ].read, hsLen ) ;
+
+				fr = reads[ anchorId ].read ;
+				flen = asLen ;
+				sr = r ;
+				slen = hsLen ;
+				direction = 1 ;
+			}
+			else
+			{
+				fr = r ;
+				flen = hsLen ;
+				sr = seq.consensus ;
+				slen = asLen ;
+				direction = -1 ;
+			}
+			
+			int offset ;
+			int matchCnt ;
+			int minOverlap = ( flen + slen) / 20 ;
+			if ( minOverlap >= 31 )
+				minOverlap = 31 ;
+			if ( AlignAlgo::IsMateOverlap( fr, strlen( fr ), sr, strlen( sr ), minOverlap, 
+				offset, matchCnt ) == -1 )
+			{
+				++i ;
+				free( r ) ;
+				continue ;
+			}
+			
+			int newConsensusLen = offset + slen ; 
+			char *newConsensus = (char*)malloc( sizeof( char ) * ( newConsensusLen + 1 ) ) ;
+			memcpy( newConsensus, fr, offset ) ;
+			memcpy( newConsensus + offset, sr, slen ) ;
+			newConsensus[newConsensusLen] = '\0' ;
+			
+			// Update the pos weight.
+			if ( direction == 1 )
+			{
+				// Append
+				seq.posWeight.ExpandTo( newConsensusLen ) ;
+				seq.posWeight.SetZero( flen, newConsensusLen - flen ) ;
+				for ( j = 0 ; j < slen ; ++j )
+				{
+					if ( sr[j] == 'N' )
+						continue ;
+					++seq.posWeight[j + offset].count[ nucToNum[ sr[j] - 'A' ] ] ;
+				}
+			}
+			else
+			{
+				seq.posWeight.ShiftRight( offset ) ;
+				seq.posWeight.SetZero( 0, offset ) ;
+				for ( j = 0 ; j < flen ; ++j )
+				{
+					if ( fr[j] == 'N' )
+						continue ;
+					++seq.posWeight[j].count[ nucToNum[ fr[j] - 'A' ] ] ;
+				}
+			}
+			
+			
+			free( r ) ;
+			free( seq.consensus ) ;
+			seq.consensus = newConsensus ;
+			seq.consensusLen = newConsensusLen ;
+			++i ;
+		}
+	}
 
 	// Use this set of reads to extend,rearrange the seq 
 	void ExtendSeqFromReads( std::vector<struct _assignRead> reads, int leastOverlapLen )
@@ -4521,7 +4614,14 @@ public:
 		SimpleVector<bool> useInBranch ;
 		useInBranch.ExpandTo( seqCnt ) ;
 		useInBranch.SetZero( 0, seqCnt ) ;
-			
+
+		// Directly use overlapped mate pairs for extension on 
+		//   singleton assembly where the other mate has no perfect alignment.
+		// Since these reads will not be applied on more sophisticated extension, it is fine 
+		//   to make it an independent component.
+		ExtendSeqFromMissingOverlapMate( reads ) ;
+
+		// Then do more sophisticated extension
 		// Build the mate adj graph.
 		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
 		for ( i = 0 ; i < readCnt ; ++i )
@@ -4949,7 +5049,7 @@ public:
 				int l ;
 				for ( l = range[j].a ; l <= origRangeB[j] && offset[j] + l - range[j].a < newConsensusLen ; ++l )
 				{
-					ns.posWeight[ offset[j] + l - range[j].a ] = seqs[ chain[j] ].posWeight[l] ;
+					ns.posWeight[ offset[j] + l - range[j].a ] += seqs[ chain[j] ].posWeight[l] ;
 				}
 			}
 
@@ -5113,6 +5213,8 @@ public:
 			ReleaseSeq( toRemoveSeqIdx[i] ) ;	
 		Clean( true ) ;
 		
+		// Recompute the seq id the read is assigned to.
+
 		// Recompute the posweight that becomes negative 
 		// since the alignment might be changed when adding and after adding states
 		seqCnt = seqs.size() ;

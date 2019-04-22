@@ -13,6 +13,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t-a STRING: path to the assembly file\n"
+		"\t-r STRING: path to the reads used in the assembly\n"
 		"Optional:\n"
 		"\t--fasta: the assembly file is in fasta format (default: false)\n";
 
@@ -24,12 +25,14 @@ char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2,
 char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10241] = "" ;
+char buffer2[10241] = "" ;
 char weightBuffer[100241] = "" ;
 char seq[10241] = "" ;
 
 static const char *short_options = "f:a:r:" ;
 static struct option long_options[] = {
 			{ "fasta", no_argument, 0, 10000 },
+			{ "radius", required_argument, 0, 10001 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -51,6 +54,7 @@ int main( int argc, char *argv[] )
 	struct _overlap cdr[3] ; // the coordinate for cdr1,2,3
 	option_index = 0 ;
 	bool ignoreWeight = false ;
+	ReadFiles reads ;
 
 	while ( 1 )
 	{
@@ -69,11 +73,15 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 'r' )
 		{
-			radius = atoi( optarg ) ;
+			reads.AddReadFile( optarg, false ) ;
 		}
 		else if ( c == 10000 )
 		{
 			ignoreWeight = true ;
+		}
+		else if ( c == 10001 )
+		{
+			radius = atoi( optarg ) ;
 		}
 		else
 		{
@@ -87,6 +95,13 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+	
+	// Obtain the kmer count
+	int kmerLength = 31 ;
+	KmerCount kmerCount( kmerLength ) ;	
+	while ( reads.Next() )
+		kmerCount.AddCount( reads.seq ) ;
+
 
 	if ( fpAssembly == NULL )
 	{
@@ -138,10 +153,14 @@ int main( int argc, char *argv[] )
 		buffer[i + 1] = '\0' ;
 		int len = strlen( seq ) ;
 		if ( seq[len - 1] == '\n' )
+		{
 			seq[len - 1] = '\0' ;
-		
+			--len ;
+		}
+		//TODO: adjust the average depth 
 		sprintf( buffer + i + 1, "%d %.2lf", len, depthSum / len ) ;
 		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + i + 1 ) ;
+		printf( "%s\n%s\n", buffer, seq ) ;
 
 		// Extract the alternative sequence of CDR1,2,3.
 		for ( i = 0 ; i < 3 && !ignoreWeight ; ++i )
@@ -177,21 +196,72 @@ int main( int argc, char *argv[] )
 			}
 
 			// Naively build the alternative CDR3.
-			if ( alterNuc.Size() > 0 )
+			// So far, only handle one difference case.
+			if ( alterNuc.Size() > 0 ) //#&& alterNuc.Size() <= 2 )
 			{
 				int size = alterNuc.Size() ;
 				char *alterCDR = ( char * )malloc( sizeof( char ) * ( cdr[i].readEnd - cdr[i].readStart + 2 ) ) ;
-				memcpy( alterCDR, seq + cdr[i].readStart, cdr[i].readEnd - cdr[i].readStart + 1 ) ;
-				alterCDR[  cdr[i].readEnd - cdr[i].readStart + 1 ] = '\0' ;
-				for ( j = 0 ; j < size ; ++j )
+				int cdrLen = cdr[i].readEnd - cdr[i].readStart + 1 ;
+				alterCDR[ cdrLen ] = '\0' ;
+				int id = 1 ;
+				int n, l ;
+				for ( n = 1 ; n < (1<<size) ; ++n )
 				{
-					alterCDR[ alterNuc[j].a - cdr[i].readStart ] = numToNuc[ alterNuc[j].b ] ; 	
+					memcpy( alterCDR, seq + cdr[i].readStart, cdrLen ) ;
+					for ( l = 0 ; l < size ; ++l )
+					{
+						if ( n & ( 1 << l ) )
+							alterCDR[ alterNuc[l].a - cdr[i].readStart ] = numToNuc[ alterNuc[l].b ] ; 	
+					}
+					//sprintf( buffer + strlen( buffer ), " minorCDR%d=%s", i + 1, alterCDR ) ;
+					// Check whether this CDR3 is in the read or not. 
+					if ( cdrLen < kmerLength )
+					{
+						if ( cdr[i].readEnd + kmerLength - cdrLen < len )
+						{
+							if ( kmerCount.GetCount( seq + cdr[i].readStart ) <= 0)
+								continue ;
+						}
+						else
+						{
+							if ( kmerCount.GetCount( seq + cdr[i].readStart - ( kmerLength - cdrLen ) ) <= 0 )
+								continue ;
+						}
+					}
+					else
+					{
+						bool fail = false ; 
+						// Naive implementation
+						for ( l = cdr[i].readStart ; l + kmerLength - 1 <= cdr[i].readEnd ; ++l )
+							if ( kmerCount.GetCount( seq + l ) <= 0 )
+								fail = true ;
+						if ( fail )
+							continue ;
+					}
+
+					// Output the new seq
+					k = 0 ;
+					for ( j = 0 ; buffer[j] != ' ' ; ++j, ++k )
+					{
+						buffer2[k] = buffer[j] ;
+					}
+					buffer2[k] = '.' ;
+					sprintf( buffer2 + k + 1, "%d", id ) ;
+					++id ;
+					while ( buffer2[k] )
+						++k ;
+					
+					for ( ; buffer[j] != '=' ; ++j, ++k )
+						buffer2[k] = buffer[j] ;
+					buffer2[k] = '=' ;
+					++k ;
+					strcpy( buffer2 + k, alterCDR ) ;
+					printf( "%s\n%s\n", buffer2, seq ) ;
 				}
-				sprintf( buffer + strlen( buffer ), " minorCDR%d=%s", i + 1, alterCDR ) ;
+				free( alterCDR ) ;
 			}
 		}
 		
-		printf( "%s\n%s\n", buffer, seq ) ;
 	}
 	fclose( fpAssembly ) ;
 

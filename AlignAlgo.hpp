@@ -885,6 +885,42 @@ public:
 			taga = i ;
 		}
 	}
+
+	static int IsMateOverlap( char *fr, int flen, char *sr, int slen, int minOverlap, int &offset, int &bestMatchCnt )
+	{
+		int j, k ;		
+		bestMatchCnt = -1 ;
+		int offsetCnt = 0 ;
+		int overlapSize = -1 ;
+		for ( j = 0 ; j < flen - minOverlap ; ++j ) // The overlap start position in first read
+		{
+			// Whether the overlap works.
+			int matchCnt = 0 ;
+			bool flag = true ;
+			for ( k = 0 ; j + k < flen && k < slen ; ++k )
+			{
+				if ( fr[j + k] == sr[k] )
+					++matchCnt ;
+				if ( matchCnt + ( flen - ( j + k ) - 1 ) < int( ( flen - j ) * 0.95 ) )
+				{
+					flag = false ;
+					break ;
+				}
+			}
+
+			if ( flag ) 
+			{	
+				offset = j ;
+				++offsetCnt ;
+				overlapSize = k ;
+				bestMatchCnt = 2 * matchCnt ;
+			}
+		}
+
+		if ( offsetCnt != 1 )
+			return -1 ;
+		return overlapSize ;
+	}
 } ;
 
 #endif

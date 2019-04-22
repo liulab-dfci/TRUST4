@@ -121,6 +121,26 @@ public:
 		if ( c == NULL )
 			 c = new int[ sz ] ;
 	}
+	
+	int GetCount( char *kmer )
+	{
+		int i ;
+		kmerCode.Restart() ;
+		for ( i = 0 ; i < kmerLength ; ++i )
+			kmerCode.Append( kmer[i] ) ;
+		if ( kmerCode.IsValid() )
+		{
+			uint64_t kcode = kmerCode.GetCanonicalKmerCode() ;
+			int key = GetHash( kcode ) ;
+			if ( count[ key ].find( kcode ) == count[key].end() )
+				return 0 ;
+			else
+				return count[ GetHash( kcode ) ][ kcode ] ;
+		}
+		else
+			return 0 ;
+	}
+
 
 	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, double &avgCount )
 	{
@@ -149,7 +169,11 @@ public:
 			if ( kmerCode.IsValid() )
 			{
 				uint64_t kcode = kmerCode.GetCanonicalKmerCode() ;
-				c[k] = count[ GetHash( kcode ) ][ kcode ] ;
+				int key = GetHash( kcode ) ;
+				if ( count[ key ].find( kcode ) == count[key].end() )
+					c[k] = 0 ;
+				else
+					c[k] = count[ GetHash( kcode ) ][ kcode ] ;
 				if ( c[k] <= 0 )
 					c[k] = 1 ;
 				sum += c[k] ;

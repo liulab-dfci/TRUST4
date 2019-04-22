@@ -23,7 +23,7 @@ char usage[] = "./bcr [OPTIONS]:\n"
 		"Optional:\n"
 		"\t-o STRING: prefix of the output file (default: trust)\n"
 		"\t-c STRING: the path to the kmer count file\n"
-		"\t--noTrim: do not trim the reads for assembly (default: trim)" ;
+		"\t--noTrim: do not trim the reads for assembly (default: trim)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
