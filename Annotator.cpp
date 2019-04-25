@@ -183,7 +183,7 @@ int main( int argc, char *argv[] )
 
 				for ( k = 0 ; k < 4 ; ++k )
 				{
-					if ( numToNuc[k] != seq[j] && 
+					if ( numToNuc[k] != seq[j] && posWeight[j].count[k] > 1 &&  
 						( sum <= posWeight[j].count[k] * 3 
 							|| ( sum >= 20 && sum <= posWeight[j].count[k] * 4 ) ) )
 					{
@@ -197,7 +197,7 @@ int main( int argc, char *argv[] )
 
 			// Naively build the alternative CDR3.
 			// So far, only handle one difference case.
-			if ( alterNuc.Size() > 0 ) //#&& alterNuc.Size() <= 2 )
+			if ( alterNuc.Size() > 0 && alterNuc.Size() <= 20 )
 			{
 				int size = alterNuc.Size() ;
 				char *alterCDR = ( char * )malloc( sizeof( char ) * ( cdr[i].readEnd - cdr[i].readStart + 2 ) ) ;
@@ -215,11 +215,11 @@ int main( int argc, char *argv[] )
 					}
 					//sprintf( buffer + strlen( buffer ), " minorCDR%d=%s", i + 1, alterCDR ) ;
 					// Check whether this CDR3 is in the read or not. 
-					if ( cdrLen < kmerLength )
+					/*if ( cdrLen < kmerLength )
 					{
 						if ( cdr[i].readEnd + kmerLength - cdrLen < len )
 						{
-							if ( kmerCount.GetCount( seq + cdr[i].readStart ) <= 0)
+							if ( kmerCount.GetCount( seq + cdr[i].readStart ) <= 0 )
 								continue ;
 						}
 						else
@@ -237,7 +237,7 @@ int main( int argc, char *argv[] )
 								fail = true ;
 						if ( fail )
 							continue ;
-					}
+					}*/
 
 					// Output the new seq
 					k = 0 ;

@@ -530,9 +530,12 @@ int main( int argc, char *argv[] )
 		{
 			PrintLog( "Processed %d reads for extension.", i + 1 ) ;
 		}
+		//fprintf( fp, "%s %s %d\n", assembledReads[i].id, assembledReads[i].read, assign.seqIdx ) ;
 		//fwrite( &assign, sizeof( assign ), 1, fp ) ;
 	}
+	extendedSeq.RecomputePosWeight( assembledReads ) ;
 	//fclose( fp ) ;
+	//exit( 1 ) ;
 
 	/*extendedSeq.BreakFalseAssembly( assembledReads ) ;
 	

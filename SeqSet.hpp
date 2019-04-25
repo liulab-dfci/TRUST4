@@ -146,6 +146,25 @@ private:
 		rcSeq[i] = '\0' ;
 	}
 
+	bool IsReverseComplement( char *a, char *b )
+	{
+		int i, j ;
+		int len = strlen( a ) ;
+		if ( len != strlen( b) ) 
+			return false ;
+		for ( i = 0, j = len - 1 ; i < len ; ++i, --j )
+			if ( a[i] == 'N' && b[j] == 'N' )
+				continue ;
+			else if ( a[i] != 'N' && b[j] != 'N' )
+			{
+				if ( 3 - nucToNum[ a[i] - 'A' ] != nucToNum[ b[j] - 'A' ] )
+					return false ;
+			}
+			else
+				return false ;
+		return true ;
+	}
+
 	void Reverse( char *r, char *seq, int len )
 	{
 		int i ;
@@ -156,8 +175,8 @@ private:
 	
 	bool IsPosWeightCompatible( const struct _posWeight &a, const struct _posWeight &b )
 	{
-		int sumA = a.count[0] + a.count[1] + a.count[2] + a.count[3] ;
-		int sumB = b.count[0] + b.count[1] + b.count[2] + b.count[3] ;
+		int sumA = a.Sum() ;
+		int sumB = b.Sum() ;
 	
 		if ( sumA == 0 || sumB == 0 
 			|| ( sumA < 3 * a.count[0] && sumB < 3 * b.count[0] ) 
@@ -1636,6 +1655,17 @@ private:
 		delete[] align ;
 		return 1 ;
 	}
+
+
+	void UpdatePosWeightFromRead( SimpleVector<struct _posWeight> &posWeight, int offset, char *read )
+	{
+		int i ;
+		for ( i = 0 ; read[i] ; ++i )
+		{
+			if ( read[i] != 'N' )
+				++posWeight[i + offset].count[ nucToNum[ read[i] - 'A' ] ] ;
+		}
+	}
 public:
 	SeqSet( int kl ) 
 	{
@@ -2985,6 +3015,43 @@ public:
 		return assign.seqIdx ;
 	}
 	
+
+	// Recompute the posweight based on assigned read
+	void RecomputePosWeight( std::vector<struct _assignRead> &reads )
+	{
+		int i, j ;
+		int readCnt = reads.size() ;
+		int seqCnt = seqs.size() ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+			seqs[i].posWeight.SetZero( 0, seqs[i].consensusLen ) ;
+
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( reads[i].overlap.seqIdx == -1 )
+				continue ;
+			
+			if ( reads[i].overlap.strand == 1 )
+				UpdatePosWeightFromRead( seqs[ reads[i].overlap.seqIdx ].posWeight, reads[i].overlap.seqStart, reads[i].read ) ;
+			else
+			{
+				char *r = strdup( reads[i].read ) ;
+				ReverseComplement( r, reads[i].read, strlen( r ) ) ;
+				UpdatePosWeightFromRead( seqs[ reads[i].overlap.seqIdx ].posWeight, reads[i].overlap.seqStart, r ) ;
+				free( r ) ;
+			}
+		}
+
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			struct _seqWrapper &seq = seqs[i] ;
+			for ( j = 0 ; j < seq.consensusLen ; ++j )
+				if ( seq.consensus[j] != 'N' && seq.posWeight[j].Sum() == 0 )
+				{
+					seq.posWeight[j].count[ nucToNum[ seq.consensus[j] - 'A' ] ] = 1 ;
+				}
+		}
+	}
+	
 	// Return:the number of connections made.
 	int ExtendSeqFromSeqOverlap( int leastOverlapLen )
 	{
@@ -4274,9 +4341,7 @@ public:
 			struct _seqWrapper &seq = seqs[i] ;
 			for ( j = 0 ; j < seq.consensusLen ; ++j )
 			{
-				int sum = seq.posWeight[j].count[0] + seq.posWeight[j].count[1]
-					+ seq.posWeight[j].count[2] + seq.posWeight[j].count[3] ;
-				if ( sum != 1 )
+				if ( seq.posWeight[j].Sum() != 1 )
 					break ;
 			}
 			if ( j < seq.consensusLen )
@@ -4493,6 +4558,7 @@ public:
 			if ( !paired )
 				continue ;
 
+
 			if ( ( reads[i].overlap.seqIdx != -1 && reads[i + 1].overlap.seqIdx != -1 )
 				|| ( reads[i].overlap.seqIdx == -1 && reads[i + 1].overlap.seqIdx == -1 ) )
 			{
@@ -4511,9 +4577,14 @@ public:
 				hangId = i ;
 			}
 		
-			struct _seqWrapper &seq = seqs[ anchorSeqIdx ] ;	
-			if ( strcmp( seq.consensus, reads[ anchorId ].read ) )
+			struct _seqWrapper &seq = seqs[ anchorSeqIdx ] ;
+			//printf( "%d %s\n%s\n", anchorSeqIdx, seq.consensus, reads[ anchorId ].read ) ;
+			if ( ( reads[ anchorId ].overlap.strand == 1 && strcmp( seq.consensus, reads[ anchorId ].read ) ) 
+				|| ( reads[ anchorId ].overlap.strand == -1 && !IsReverseComplement( seq.consensus, reads[ anchorId ].read ) ) )
+			{
+				++i ;
 				continue ;
+			}
 			asLen = strlen( reads[ anchorId ].read ) ;
 			hsLen = strlen( reads[ hangId ].read ) ;
 			
@@ -4521,7 +4592,7 @@ public:
 			char *fr, *sr ;
 			int direction = 0 ;
 			int flen, slen ;
-			if ( reads[ anchorId ].overlap.strand )
+			if ( reads[ anchorId ].overlap.strand == 1 )
 			{
 				// Extend towards right
 				ReverseComplement( r, reads[ hangId ].read, hsLen ) ;
@@ -4546,14 +4617,22 @@ public:
 			int minOverlap = ( flen + slen) / 20 ;
 			if ( minOverlap >= 31 )
 				minOverlap = 31 ;
-			if ( AlignAlgo::IsMateOverlap( fr, strlen( fr ), sr, strlen( sr ), minOverlap, 
+			//printf( "overlap test %d %d %d\n%s\n%s\n", flen, slen, minOverlap, fr, sr ) ;
+			if ( AlignAlgo::IsMateOverlap( fr, flen, sr, slen, minOverlap, 
 				offset, matchCnt ) == -1 )
 			{
 				++i ;
 				free( r ) ;
 				continue ;
 			}
-			
+
+			if ( flen - offset >= slen ) // sr is contained in fr
+			{
+				++i ;
+				free( r ) ;
+				continue ;
+			}
+
 			int newConsensusLen = offset + slen ; 
 			char *newConsensus = (char*)malloc( sizeof( char ) * ( newConsensusLen + 1 ) ) ;
 			memcpy( newConsensus, fr, offset ) ;
@@ -4566,27 +4645,30 @@ public:
 				// Append
 				seq.posWeight.ExpandTo( newConsensusLen ) ;
 				seq.posWeight.SetZero( flen, newConsensusLen - flen ) ;
-				for ( j = 0 ; j < slen ; ++j )
+				UpdatePosWeightFromRead( seq.posWeight, offset, sr ) ;
+				/*for ( j = 0 ; j < slen ; ++j )
 				{
 					if ( sr[j] == 'N' )
 						continue ;
 					++seq.posWeight[j + offset].count[ nucToNum[ sr[j] - 'A' ] ] ;
-				}
+				}*/
 			}
 			else
 			{
 				seq.posWeight.ShiftRight( offset ) ;
 				seq.posWeight.SetZero( 0, offset ) ;
-				for ( j = 0 ; j < flen ; ++j )
+				UpdatePosWeightFromRead( seq.posWeight, 0, fr ) ;
+				/*for ( j = 0 ; j < flen ; ++j )
 				{
 					if ( fr[j] == 'N' )
 						continue ;
 					++seq.posWeight[j].count[ nucToNum[ fr[j] - 'A' ] ] ;
-				}
+				}*/
 			}
 			
-			
 			free( r ) ;
+			//printf( "pass\n%s\n%s\n%d %d\n", seq.consensus, newConsensus, seq.consensusLen, newConsensusLen ) ;
+			//fflush( stdout ) ;
 			free( seq.consensus ) ;
 			seq.consensus = newConsensus ;
 			seq.consensusLen = newConsensusLen ;
@@ -4619,11 +4701,11 @@ public:
 		//   singleton assembly where the other mate has no perfect alignment.
 		// Since these reads will not be applied on more sophisticated extension, it is fine 
 		//   to make it an independent component.
+		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
 		ExtendSeqFromMissingOverlapMate( reads ) ;
 
 		// Then do more sophisticated extension
 		// Build the mate adj graph.
-		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
 		for ( i = 0 ; i < readCnt ; ++i )
 		{
 			bool paired = false ;
@@ -5159,8 +5241,7 @@ public:
 			// For other not updated region, just assign a number there.
 			for ( j = 0 ; j < newConsensusLen ; ++j )
 				if ( newConsensus[j] != 'N' && 
-					ns.posWeight[j].count[0] + ns.posWeight[j].count[1] + 
-						ns.posWeight[j].count[2] + ns.posWeight[j].count[3] == 0 )
+					ns.posWeight[j].Sum() == 0 )
 					ns.posWeight[j].count[ nucToNum[ newConsensus[j] - 'A' ] ] = 1 ;
 
 			// Update the shift information

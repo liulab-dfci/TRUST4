@@ -26,6 +26,11 @@ struct _posWeight
 		count[2] += rhs.count[2] ;
 		count[3] += rhs.count[3] ;
 	}
+
+	int Sum() const
+	{
+		return count[0] + count[1] + count[2] + count[3] ;
+	}
 } ;
 
 class AlignAlgo
@@ -33,7 +38,7 @@ class AlignAlgo
 private:
 	static bool IsBaseEqual( const struct _posWeight &w, const char c )
 	{
-		int sum = w.count[0] + w.count[1] + w.count[2] + w.count[3] ;
+		int sum = w.Sum() ;
 		if ( sum == 0 || c == 'N' || sum < 3 * w.count[ nucToNum[ c - 'A' ] ] )
 			return true ;
 		return false ;
@@ -913,7 +918,7 @@ public:
 				offset = j ;
 				++offsetCnt ;
 				overlapSize = k ;
-				bestMatchCnt = 2 * matchCnt ;
+				bestMatchCnt = matchCnt ;
 			}
 		}
 
