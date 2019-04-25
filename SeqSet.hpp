@@ -4474,7 +4474,7 @@ public:
 	
 	// return: 0: no extension. 1: end-to-inside extension. 2: end-to-end extension
 	int GetExtendSeqCoord( int from, struct _overlap mateInfo, int direction, 
-			std::vector<struct _overlap> *branchAdj, struct _overlap &coord )
+			std::vector<struct _overlap> *branchAdj, bool aggressive, struct _overlap &coord )
 	{
 		int i, k ;
 		int adjCnt = branchAdj[from].size() ;	
@@ -4501,10 +4501,16 @@ public:
 			}
 		}
 
+
 		if ( i >= adjCnt )
 			return 0 ;
 		k = i ;
 		
+		if ( direction == 1 && mateInfo.seqEnd <= branchAdj[from][k].seqEnd )
+			return 0 ;
+		else if ( direction == -1 && mateInfo.seqStart >= branchAdj[from][k].seqStart )
+			return 0 ;
+
 		/*for ( i = 0 ; i < adjCnt ; ++i )
 		{
 		}*/
@@ -4527,14 +4533,23 @@ public:
 		if ( direction == 1 )
 		{
 			coord.seqStart = branchAdj[from][k].seqEnd + 1 ;
-			coord.seqEnd = seqs[to].consensusLen - 1 ;
+			if ( aggressive )
+				coord.seqEnd = seqs[to].consensusLen - 1 ;
+			else
+				coord.seqEnd = mateInfo.seqEnd ;
 
 			if ( branchAdj[from][k].seqStart <= overhangSize - 1 )
 				ret = 2 ;
 		}
 		else
 		{
-			coord.seqStart = 0 ;
+			if ( aggressive )
+				coord.seqStart = 0 ;
+			else
+			{
+				//printf( "%d %d: %d %d\n", from, to, mateInfo.seqStart, branchAdj[from][k].seqStart ) ;
+				coord.seqStart = mateInfo.seqStart ;
+			}
 			coord.seqEnd = branchAdj[from][k].seqStart - 1 ;
 
 			if ( branchAdj[from][k].seqEnd >= seqs[ branchAdj[from][k].seqIdx ].consensusLen - overhangSize )
@@ -4557,7 +4572,6 @@ public:
 				paired = true ;
 			if ( !paired )
 				continue ;
-
 
 			if ( ( reads[i].overlap.seqIdx != -1 && reads[i + 1].overlap.seqIdx != -1 )
 				|| ( reads[i].overlap.seqIdx == -1 && reads[i + 1].overlap.seqIdx == -1 ) )
@@ -4851,14 +4865,14 @@ public:
 			extensionType[i].a = extensionType[i].b = 0 ;
 			if ( prevTag >= 0 )
 			{
-				extensionType[i].a = GetExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, branchAdj, leftExtend ) ;
+				extensionType[i].a = GetExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, branchAdj, false, leftExtend ) ;
 				if ( leftExtend.seqIdx == -1 )
 					matePrevNext[i].a = -1 ;
 
 			}
 			if ( nextTag >= 0 )
 			{
-				extensionType[i].b = GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, rightExtend ) ;
+				extensionType[i].b = GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, false, rightExtend ) ;
 				if ( rightExtend.seqIdx == -1 )
 					matePrevNext[i].b = -1 ;
 			}
@@ -4883,7 +4897,7 @@ public:
 						{
 							struct _overlap tmp ;
 							extensionType[ seqIdx ].b = GetExtendSeqCoord( seqIdx, nextAdj[ seqIdx ][j], 
-										1, branchAdj, tmp ) ;
+										1, branchAdj, false, tmp ) ;
 							if ( extensionType[ seqIdx ].b == 2 )
 								matePrevNext[ seqIdx ].b = j ;
 							break ;
@@ -4902,7 +4916,7 @@ public:
 						{
 							struct _overlap tmp ;
 							extensionType[ seqIdx ].a = GetExtendSeqCoord( seqIdx, prevAdj[ seqIdx ][j], 
-										-1, branchAdj, tmp ) ;
+										-1, branchAdj, false, tmp ) ;
 							if ( extensionType[ seqIdx ].a == 2 )
 								matePrevNext[ seqIdx ].a = j ;
 							break ;
@@ -5042,9 +5056,9 @@ public:
 				rightExtend.seqIdx = -1 ;
 				
 				if ( prevTag >= 0 )
-					GetExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1, branchAdj, leftExtend ) ;
+					GetExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1, branchAdj, j > 0, leftExtend ) ;
 				if ( nextTag >= 0 )
-					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, rightExtend ) ;
+					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, j < chainSize - 1, rightExtend ) ;
 				
 				if ( j == 0 && leftExtend.seqIdx != -1 )
 				{
@@ -5170,7 +5184,9 @@ public:
 							if ( reads[ ridx ].read[rm] != 'N' )
 							{
 								if ( m < newConsensusLen )
-									++ns.posWeight[m].count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
+									++ns.posWeight[m - leftMostExtend.seqStart].
+										count[ nucToNum[ reads[ ridx ].read[rm] - 'A' ] ] ;
+								
 								if ( shiftSeq[from].b + m >= 0 && 
 									shiftSeq[from].b + m < seqs[ shiftSeq[from].a ].consensusLen )
 									--seqs[ shiftSeq[from].a ].posWeight[ shiftSeq[from].b + m ].
