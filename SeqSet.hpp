@@ -133,19 +133,7 @@ private:
 		return strcmp( a.id, b.id ) < 0 ;
 	}
 		
-	void ReverseComplement( char *rcSeq, char *seq, int len )
-	{
-		int i ;
-		for ( i = 0 ; i < len ; ++i )
-		{
-			if ( seq[len - 1 - i] != 'N' )
-				rcSeq[i] = numToNuc[ 3 - nucToNum[seq[len - 1 - i] - 'A'] ];
-			else
-				rcSeq[i] = 'N' ;
-		}
-		rcSeq[i] = '\0' ;
-	}
-
+	
 	bool IsReverseComplement( char *a, char *b )
 	{
 		int i, j ;
@@ -1703,6 +1691,19 @@ public:
 		return radius = r ;
 	}
 	
+	void ReverseComplement( char *rcSeq, char *seq, int len )
+	{
+		int i ;
+		for ( i = 0 ; i < len ; ++i )
+		{
+			if ( seq[len - 1 - i] != 'N' )
+				rcSeq[i] = numToNuc[ 3 - nucToNum[seq[len - 1 - i] - 'A'] ];
+			else
+				rcSeq[i] = 'N' ;
+		}
+		rcSeq[i] = '\0' ;
+	}
+
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename ) 
 	{
@@ -2252,11 +2253,13 @@ public:
 			}
 
 #ifdef DEBUG
+			printf( "%d\n", k ) ;
 			for ( i = 0 ; i < k ; ++i )
 				printf( "extended %d: %d %s. %d. %d %d %d %d %lf\n", i, extendedOverlaps[i].seqIdx, 
 						seqs[ extendedOverlaps[i].seqIdx ].name, extendedOverlaps[i].strand, 
 						extendedOverlaps[i].readStart, extendedOverlaps[i].readEnd, extendedOverlaps[i].seqStart, 
 						extendedOverlaps[i].seqEnd, extendedOverlaps[i].similarity ) ; 
+			fflush( stdout ) ;
 #endif
 			
 
@@ -2731,7 +2734,7 @@ public:
 			}
 			if ( i >= overlapCnt )
 				addNew = false ;
-
+			
 			/*if ( !addNew )
 			{
 				for ( i = 0 ; i < overlapCnt ; ++i )
@@ -3411,10 +3414,11 @@ public:
 		std::vector<struct _overlap> overlaps ;
 		std::vector<struct _overlap> allOverlaps ;
 		int overlapCnt ;
-	
+		
 		char BT = '\0' ; // Bcell, Tcell
 		char chain = '\0' ;
 		int len = strlen( read ) ;
+		buffer[0] = '\0' ;
 
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
 		if ( detailLevel >= 2 )
@@ -4123,7 +4127,7 @@ public:
 	void Annotate( SeqSet &refSet )
 	{
 		int i ;
-		char *buffer = new char[1024] ;
+		char *buffer = new char[10240] ;
 		int seqCnt = seqs.size() ;
 		struct _overlap geneOverlap[4];
 		struct _overlap cdr[3] ;
@@ -4691,7 +4695,7 @@ public:
 	}
 
 	// Use this set of reads to extend,rearrange the seq 
-	void ExtendSeqFromReads( std::vector<struct _assignRead> reads, int leastOverlapLen )
+	void ExtendSeqFromReads( std::vector<struct _assignRead> &reads, int leastOverlapLen )
 	{
 		int i, j, k ;
 		int readCnt = 0 ;

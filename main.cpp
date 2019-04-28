@@ -11,7 +11,7 @@
 #include "SeqSet.hpp"
 #include "AlignAlgo.hpp"
 
-char usage[] = "./bcr [OPTIONS]:\n"
+char usage[] = "./trust4 [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t[Read file]\n"
@@ -109,7 +109,7 @@ void PrintLog( const char *fmt, ... )
 
 int main( int argc, char *argv[] )
 {
-	int i, j ;
+	int i, j, k ;
 
 	if ( argc <= 1 )
 	{
@@ -312,6 +312,10 @@ int main( int argc, char *argv[] )
 
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
+		/*++assembledReadCnt ;
+		assembledReadIdx.push_back( i ) ;
+		continue ;*/
+
 #ifdef DEBUG
 		printf( "%s %s %d %lf\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].avgCnt ) ;
 		fflush( stdout ) ;
@@ -322,7 +326,7 @@ int main( int argc, char *argv[] )
 		{
 			//printf( "new stuff\n" ) ;
 			struct _overlap geneOverlap[4] ;
-			buffer[0] = '\0' ;
+			//buffer[0] = '\0' ;
 			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, buffer ) ;
 			
 			// If the order of V,D,J,C is wrong from this read, then we ignore this.
@@ -576,12 +580,134 @@ int main( int argc, char *argv[] )
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;*/
 	
-	
+		
 	PrintLog( "Remove redundant assemblies." ) ;
 	extendedSeq.ChangeKmerLength( 31 ) ;
 	//i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
 	i = extendedSeq.RemoveRedundantSeq() ;
 	extendedSeq.UpdateAllConsensus() ;
+	
+	
+	// Now the assembled reads should be sorted by their read id.
+	PrintLog( "Rescue low frequency reads." ) ;
+	SeqSet lowFreqSeqSet( indexKmerLength ) ;
+	KmerCount lowFreqKmerCount( 31 ) ;
+	std::vector<struct _pair> lowFreqReads ;
+	for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		bool paired = false ;
+		if ( i < assembledReadCnt - 1 && !strcmp( assembledReads[i].id, assembledReads[i + 1].id  ) )
+		{
+			paired = true ;
+		}
+
+		if ( !paired )
+			continue ;
+		
+		if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
+		{
+			++i ;
+			continue ;
+		}
+
+		lowFreqKmerCount.AddCount( assembledReads[i].read ) ;
+		lowFreqKmerCount.AddCount( assembledReads[i + 1].read ) ;
+		struct _pair np ;
+		np.a = i ;
+		np.b = i + 1 ;
+		lowFreqReads.push_back( np ) ;
+		
+		++i ;
+	}
+	k = 0 ;
+	int lowFreqCnt = lowFreqReads.size() ;
+	std::vector<char *> lowFreqMergedReads ;
+	for ( i = 0 ; i < lowFreqCnt ; ++i )
+	{
+		// At least one of the mate should have at least 2 kmer count.
+		int a = lowFreqReads[i].a ;
+		int b = lowFreqReads[i].b ;
+		int minCntA, minCntB, tmp ;
+		double tmpd ;
+		lowFreqKmerCount.GetCountStatsAndTrim( assembledReads[a].read, NULL, 
+			minCntA, tmp, tmpd ) ;
+		lowFreqKmerCount.GetCountStatsAndTrim( assembledReads[b].read, NULL, 
+			minCntB, tmp, tmpd ) ;
+		
+		if ( minCntA < 2 && minCntB < 2 )
+			continue ;
+		
+		if ( minCntA > minCntB )
+		{
+			// the second one should dominate the consensus.
+			a = lowFreqReads[i].b ;
+			b = lowFreqReads[i].a ; 
+		}
+		// Then these two pairs must overlap with each other.
+		char *fr = assembledReads[a].read ;
+		char *sr = strdup( assembledReads[b].read ) ;
+		int flen = strlen( fr ) ;
+		int slen = strlen( sr ) ;
+		seqSet.ReverseComplement( sr, assembledReads[b].read, slen ) ;	
+		int minOverlap = ( flen + slen) / 20 ;
+		if ( minOverlap >= 31 )
+			minOverlap = 31 ;
+		int offset ;
+		int matchCnt ;
+		if ( AlignAlgo::IsMateOverlap( fr, flen, sr, slen, minOverlap, offset, matchCnt ) != -1 )
+		{
+			int newLen = offset + slen ;
+			if ( newLen < flen )
+				newLen = flen ;
+			char *r = (char *)malloc( sizeof( char ) * ( newLen + 1 ) ) ;
+			strcpy( r, fr ) ;
+			strcpy( r + offset, sr ) ;
+
+			lowFreqReads[k] = lowFreqReads[i] ;
+			lowFreqMergedReads.push_back( r ) ;
+			++k ;
+		}
+		free( sr ) ;
+	}
+
+	/*for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		char *r = strdup( assembledReads[i].read ) ;
+		lowFreqMergedReads.push_back( r ) ;
+		++k ;
+		
+	}*/
+	lowFreqCnt = k ;
+	PrintLog( "Found %d low frequency merged pairs.", lowFreqCnt ) ;
+	for ( i = 0 ; i < lowFreqCnt ; ++i )
+	{
+		char name[10] = "" ;
+		name[0] = '\0' ;
+		//printf( "%s\n", lowFreqMergedReads[i] ) ;
+		//fflush( stdout ) ;
+		if ( lowFreqSeqSet.AddRead( lowFreqMergedReads[i], name, 0.95 ) < 0 )
+		{
+			struct _overlap geneOverlap[4] ;
+			//buffer[0] = '\0' ;
+			refSet.AnnotateRead( lowFreqMergedReads[i], 0, geneOverlap, NULL, buffer ) ;
+			
+			for ( j = 0 ; j < 4 ; ++j )
+				if ( geneOverlap[j].seqIdx != -1 )
+					break ;
+			if ( j < 4 )
+			{
+				lowFreqSeqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
+						lowFreqMergedReads[i], geneOverlap[j].strand ) ;
+			}
+
+		}
+		
+		free( lowFreqMergedReads[i] ) ;
+	}
+	
+	lowFreqSeqSet.UpdateAllConsensus() ;
+	extendedSeq.InputSeqSet( lowFreqSeqSet, false ) ;	
+	
 	if ( outputPrefix[0] != '-' )
 	{
 		sprintf( buffer, "%s_final.out", outputPrefix ) ;
