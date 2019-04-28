@@ -159,7 +159,7 @@ int main( int argc, char *argv[] )
 		}
 		//TODO: adjust the average depth 
 		sprintf( buffer + i + 1, "%d %.2lf", len, depthSum / len ) ;
-		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + i + 1 ) ;
+		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seq ) ;
 
 		// Extract the alternative sequence of CDR1,2,3.
