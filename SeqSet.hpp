@@ -1796,6 +1796,8 @@ public:
 			ns.consensus = strdup( in.seqs[i].consensus ) ;
 			ns.consensusLen = in.seqs[i].consensusLen ;
 			ns.posWeight = in.seqs[i].posWeight ;
+			ns.minLeftExtAnchor = in.seqs[i].minLeftExtAnchor ;
+			ns.minRightExtAnchor = in.seqs[i].minRightExtAnchor ;
 			seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, id ) ;
 			seqs.push_back( ns ) ;
 		}
@@ -4690,6 +4692,7 @@ public:
 			free( seq.consensus ) ;
 			seq.consensus = newConsensus ;
 			seq.consensusLen = newConsensusLen ;
+			seq.minLeftExtAnchor = seq.minRightExtAnchor = 0 ;
 			++i ;
 		}
 	}
@@ -5283,6 +5286,7 @@ public:
 			fflush( stdout ) ;
 #endif 
 
+			ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
 			seqs.push_back( ns ) ;
 			toRemoveSeqIdx.PushBack( i ) ;
 		}

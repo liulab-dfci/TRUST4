@@ -604,7 +604,20 @@ int main( int argc, char *argv[] )
 		if ( !paired )
 			continue ;
 		
-		if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
+		/*if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
+		{
+			++i ;
+			continue ;
+		}*/
+		
+		int nCnt = 0 ;
+		for ( j = 0 ; assembledReads[i].read[j] ; ++j )
+			if ( assembledReads[i].read[j] == 'N' )
+				++nCnt ;
+		for ( j = 0 ; assembledReads[i + 1].read[j] ; ++j )
+			if ( assembledReads[i + 1].read[j] == 'N' )
+				++nCnt ;
+		if ( nCnt >= 1 )
 		{
 			++i ;
 			continue ;
@@ -621,7 +634,7 @@ int main( int argc, char *argv[] )
 	}
 	k = 0 ;
 	int lowFreqCnt = lowFreqReads.size() ;
-	std::vector<char *> lowFreqMergedReads ;
+	std::vector<struct _sortRead> lowFreqMergedReads ;
 	for ( i = 0 ; i < lowFreqCnt ; ++i )
 	{
 		// At least one of the mate should have at least 2 kmer count.
@@ -664,12 +677,20 @@ int main( int argc, char *argv[] )
 			strcpy( r + offset, sr ) ;
 
 			lowFreqReads[k] = lowFreqReads[i] ;
-			lowFreqMergedReads.push_back( r ) ;
+			struct _sortRead nr ;
+			nr.id = NULL ;
+			nr.read = r ;
+			nr.qual = NULL ;
+			nr.minCnt = ( minCntA < minCntB ? minCntA : minCntB ) ;
+			nr.medianCnt = tmp ;
+			nr.avgCnt = tmpd ;
+			lowFreqMergedReads.push_back( nr ) ;
+			//printf( "f: %s\ns: %s\nr: %s\n", fr, sr, r ) ;
 			++k ;
 		}
 		free( sr ) ;
 	}
-
+	std::sort( lowFreqMergedReads.begin(), lowFreqMergedReads.end() ) ;
 	/*for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
 		char *r = strdup( assembledReads[i].read ) ;
@@ -683,26 +704,38 @@ int main( int argc, char *argv[] )
 	{
 		char name[10] = "" ;
 		name[0] = '\0' ;
-		//printf( "%s\n", lowFreqMergedReads[i] ) ;
+		//printf( "%s\n", lowFreqMergedReads[i].read ) ;
 		//fflush( stdout ) ;
-		if ( lowFreqSeqSet.AddRead( lowFreqMergedReads[i], name, 0.95 ) < 0 )
+		if ( extendedSeq.AddRead( lowFreqMergedReads[i].read, name, 0.9 ) < 0 )
 		{
-			struct _overlap geneOverlap[4] ;
-			//buffer[0] = '\0' ;
-			refSet.AnnotateRead( lowFreqMergedReads[i], 0, geneOverlap, NULL, buffer ) ;
-			
-			for ( j = 0 ; j < 4 ; ++j )
-				if ( geneOverlap[j].seqIdx != -1 )
-					break ;
-			if ( j < 4 )
+			if ( lowFreqMergedReads[i].minCnt >= 2 
+				&& lowFreqSeqSet.AddRead( lowFreqMergedReads[i].read, name, 0.95 ) < 0 )
 			{
-				lowFreqSeqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
-						lowFreqMergedReads[i], geneOverlap[j].strand ) ;
-			}
+				struct _overlap geneOverlap[4] ;
+				//buffer[0] = '\0' ;
+				refSet.AnnotateRead( lowFreqMergedReads[i].read, 0, geneOverlap, NULL, buffer ) ;
 
+				int componentCnt = 0 ;
+				int lastJ = -1 ;
+				for ( j = 0 ; j < 4 ; ++j )
+				{
+					if ( geneOverlap[j].seqIdx != -1 )
+					{
+						++componentCnt ;
+						lastJ = j ;
+					}
+				}
+				if ( componentCnt >= 1 )
+				{
+					j = lastJ ;
+					lowFreqSeqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
+							lowFreqMergedReads[i].read, geneOverlap[j].strand ) ;
+				}
+
+			}
 		}
 		
-		free( lowFreqMergedReads[i] ) ;
+		free( lowFreqMergedReads[i].read ) ;
 	}
 	
 	lowFreqSeqSet.UpdateAllConsensus() ;
