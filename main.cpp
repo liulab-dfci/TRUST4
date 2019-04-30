@@ -604,11 +604,11 @@ int main( int argc, char *argv[] )
 		if ( !paired )
 			continue ;
 		
-		/*if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
+		if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
 		{
 			++i ;
 			continue ;
-		}*/
+		}
 		
 		int nCnt = 0 ;
 		for ( j = 0 ; assembledReads[i].read[j] ; ++j )
