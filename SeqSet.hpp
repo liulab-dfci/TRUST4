@@ -845,7 +845,8 @@ private:
 	// Obtain the overlaps, each overlap further contains the hits induce the overlap. 
 	// readType: 0(default): sqeuencing read. 1:seqs, no need filter.
 	// Return: the number of overlaps.
-	int GetOverlapsFromRead( char *read, int readType, std::vector<struct _overlap> &overlaps )
+	int GetOverlapsFromRead( char *read, int readType, std::vector<struct _overlap> &overlaps, 
+		SimpleVector<bool> *puse = NULL )
 	{
 		int i, j, k ;
 		int len = strlen( read ) ;
@@ -890,6 +891,8 @@ private:
 					nh.indexHit = indexHit[j] ;
 					nh.readOffset = i - kmerLength + 1 ;
 					nh.strand = 1 ;
+					if ( puse != NULL && !puse->Get( indexHit[j].idx ) )
+						continue ;
 					hits.PushBack( nh ) ;
 				}
 			}
@@ -929,6 +932,9 @@ private:
 					nh.indexHit = indexHit[j] ;
 					nh.readOffset = i - kmerLength + 1 ;
 					nh.strand = -1 ;
+					if ( puse != NULL && !puse->Get( indexHit[j].idx ) )
+						continue ;
+					
 					hits.PushBack( nh ) ;
 					if ( seqs[indexHit[j].idx].name == NULL)
 					{
@@ -1243,7 +1249,7 @@ private:
 					if ( hitCoords[j - 1].a + kmerLength - 1 >= hitCoords[j].a && 
 						hitCoords[j - 1].b + kmerLength - 1 < hitCoords[j].b )
 					{
-						matchCnt += ( hitCoords[j].a - hitCoords[j - 1].a ) + kmerLength ;
+						matchCnt += 2 * ( hitCoords[j].a - hitCoords[j - 1].a ) ; //+ kmerLength ;
 						// Make the two kmer hit match on coordinate.
 						indelCnt += ( hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ) + 
 							( hitCoords[j].a + kmerLength - hitCoords[j - 1].a )  ) ;
@@ -1251,14 +1257,16 @@ private:
 					else if ( hitCoords[j - 1].a + kmerLength - 1 < hitCoords[j].a && 
 						hitCoords[j - 1].b + kmerLength - 1 >= hitCoords[j].b )
 					{
-						matchCnt += kmerLength + ( hitCoords[j].b - hitCoords[j - 1].b ) ;
+						//matchCnt += kmerLength + ( hitCoords[j].b - hitCoords[j - 1].b ) ;
+						matchCnt += 2 * ( hitCoords[j].b - hitCoords[j - 1].b ) ;
 						indelCnt += ( hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength ) +
 							( hitCoords[j].b + kmerLength - hitCoords[j - 1].b ) ) ;
 					}
 					else if ( hitCoords[j - 1].a + kmerLength - 1 >= hitCoords[j].a &&
 						hitCoords[j - 1].b + kmerLength - 1 >= hitCoords[j].b )
 					{
-						matchCnt += ( hitCoords[j].a - hitCoords[j - 1].a ) + ( hitCoords[j].b - hitCoords[j - 1].b ) ;
+						//matchCnt += ( hitCoords[j].a - hitCoords[j - 1].a ) + ( hitCoords[j].b - hitCoords[j - 1].b ) ;
+						matchCnt += 2 * MIN( hitCoords[j].a - hitCoords[j - 1].a, hitCoords[j].b - hitCoords[j - 1].b ) ;
 						indelCnt += ABS( ( hitCoords[j].a - hitCoords[j].b ) - 
 							( hitCoords[j - 1].a - hitCoords[j - 1].b ) ) ;
 					}
@@ -1323,7 +1331,7 @@ private:
 			}
 			/*if ( overlaps[i].similarity > 0 )
 			{
-				printf( "%d: %d %d %d %d %lf\n", matchCnt, overlaps[i].readStart, overlaps[i].readEnd, 
+				printf( "%d: %d %d %d %d %d %lf\n", matchCnt, overlaps[i].seqIdx, overlaps[i].readStart, overlaps[i].readEnd, 
 							overlaps[i].seqStart, overlaps[i].seqEnd, similarity ) ;
 			}
 			assert( overlaps[i].similarity <= 1 ) ;*/
@@ -1561,7 +1569,7 @@ private:
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
 
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, overlaps ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, overlaps, &use ) ;
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
 				if ( overlaps[j].strand == -1 ) // Note that all the seqs are from 5'->3' on its strand.
@@ -1998,6 +2006,7 @@ public:
 					seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
 					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd, 
 					overlaps[i].similarity ) ; 
+			printf( "%s\n", seqs[  overlaps[i].seqIdx ].consensus ) ;
 			//if ( !seqs[ overlaps[i].seqIdx ].isRef )
 			/*if ( !strcmp( read, "TTACTGTAATATACGATATTTTGACTGGTTATTAAGAGGCGACCCAAGAATCAATACTACTTTGACTACTGGGGCCAGGGAACCCTGGTCACCGTCTCCT" ) )
 			{
@@ -2255,7 +2264,6 @@ public:
 			}
 
 #ifdef DEBUG
-			printf( "%d\n", k ) ;
 			for ( i = 0 ; i < k ; ++i )
 				printf( "extended %d: %d %s. %d. %d %d %d %d %lf\n", i, extendedOverlaps[i].seqIdx, 
 						seqs[ extendedOverlaps[i].seqIdx ].name, extendedOverlaps[i].strand, 
@@ -2845,6 +2853,20 @@ public:
 			free( r ) ;
 
 		return prevAddInfo.seqIdx ;
+	}
+
+	void AddAssignedRead( char *read, struct _overlap assign )
+	{
+		if ( assign.seqIdx == -1 )
+			return ;
+
+		char *r = strdup( read ) ;
+		int len = strlen( read ) ;
+		if ( assign.strand == -1 )
+			ReverseComplement( r, read, len ) ;
+		
+		UpdatePosWeightFromRead( seqs[ assign.seqIdx ].posWeight, assign.seqStart, r ) ;
+		free( r ) ;
 	}
 	
 
@@ -4345,18 +4367,27 @@ public:
 			if ( prevAdj[i].size() + nextAdj[i].size() != 1 )
 				continue ;
 			struct _seqWrapper &seq = seqs[i] ;
-			for ( j = 0 ; j < seq.consensusLen ; ++j )
+			/*for ( j = 0 ; j < seq.consensusLen ; ++j )
 			{
 				if ( seq.posWeight[j].Sum() != 1 )
 					break ;
 			}
 			if ( j < seq.consensusLen )
-				continue ;		
+				continue ;*/		
 			int bsize = branchAdj[i].size() ;
 			int readIdx, mateReadIdx ;
 			char *fr ; // first read
 			char *sr ; // second read;
 			int flen, slen ; // their lengths
+
+			// For overlaps
+			int minOverlap = ( flen + slen) / 20 ;
+			if ( minOverlap >= 31 )
+				minOverlap = 31 ;
+			int offset = -1 ;
+			int overlapSize = -1 ;
+			int bestMatchCnt = -1 ;
+
 			if ( prevAdj[i].size() == 1 )
 			{
 				// Extend left
@@ -4369,30 +4400,43 @@ public:
 				if ( j < bsize )
 					continue ;
 
-				if ( prevAdj[i][0].info->Size() != 1 )
-					continue ;
-
-				readIdx = prevAdj[i][0].info->Get(0) ;
-				mateReadIdx = readIdx + 1 ;
-
-				if ( reads[ readIdx ].overlap.seqIdx != i )
+				//if ( prevAdj[i][0].info->Size() == 0 )
+				//	continue ;
+				int size = prevAdj[i][0].info->Size() ;
+				for ( j = 0 ; j < size ; ++j )
 				{
-					int tmp = readIdx ;
-					readIdx = mateReadIdx ;
-					mateReadIdx = tmp ;
-				}
+					readIdx = prevAdj[i][0].info->Get(j) ;
+					mateReadIdx = readIdx + 1 ;
+					if ( reads[ readIdx ].overlap.seqIdx != i )
+					{
+						int tmp = readIdx ;
+						readIdx = mateReadIdx ;
+						mateReadIdx = tmp ;
+					}
 
-				flen = strlen( reads[ mateReadIdx ].read  ) ;
-				slen = strlen( reads[ readIdx ].read ) ;
-				if ( slen != seq.consensusLen || flen != seqs[ prevAdj[i][0].seqIdx ].consensusLen )
-					continue ;
-				fr = strdup( reads[ mateReadIdx ].read ) ;
-				sr = strdup( reads[ readIdx ].read ) ;
+					flen = strlen( reads[ mateReadIdx ].read  ) ;
+					slen = strlen( reads[ readIdx ].read ) ;
+					//if ( slen != seq.consensusLen || flen != seqs[ prevAdj[i][0].seqIdx ].consensusLen  )
+					//	continue ;
+					if ( reads[ readIdx ].overlap.seqStart > 3 )
+						continue ;
+					
+					fr = strdup( reads[ mateReadIdx ].read ) ;
+					sr = strdup( reads[ readIdx ].read ) ;
+
+					if ( reads[ mateReadIdx ].overlap.strand == -1 )
+						ReverseComplement( fr, reads[ mateReadIdx ].read, flen ) ;
+					if ( reads[ readIdx ].overlap.strand == -1 )
+						ReverseComplement( sr, reads[ readIdx ].read, slen ) ;
+					overlapSize = AlignAlgo::IsMateOverlap( fr, flen, sr, slen, minOverlap, offset, bestMatchCnt ) ;
 				
-				if ( reads[ mateReadIdx ].overlap.strand == -1 )
-					ReverseComplement( fr, reads[ mateReadIdx ].read, flen ) ;
-				if ( reads[ readIdx ].overlap.strand == -1 )
-					ReverseComplement( sr, reads[ readIdx ].read, slen ) ;
+					if ( overlapSize == -1 )
+					{
+						free( fr ) ; free( sr ) ;
+					}
+					else
+						break ;
+				}
 			}
 			else
 			{
@@ -4405,54 +4449,58 @@ public:
 				if ( j < bsize )
 					continue ;
 
-				if ( nextAdj[i][0].info->Size() != 1 )
-					continue ;
-
-				readIdx = nextAdj[i][0].info->Get(0) ;
-				mateReadIdx = readIdx + 1 ;
-
-				if ( reads[ readIdx ].overlap.seqIdx != i )
+				//if ( nextAdj[i][0].info->Size() == 0 )
+				//	continue ;
+				int size = nextAdj[i][0].info->Size() ;
+				for ( j = 0 ; j < size ; ++j )
 				{
-					int tmp = readIdx ;
-					readIdx = mateReadIdx ;
-					mateReadIdx = tmp ;
-				}
+					readIdx = nextAdj[i][0].info->Get(j) ;
+					mateReadIdx = readIdx + 1 ;
 
-				flen = strlen( reads[ readIdx ].read ) ;
-				slen = strlen( reads[ mateReadIdx ].read ) ;
-				if ( flen != seq.consensusLen || slen != seqs[ nextAdj[i][0].seqIdx ].consensusLen )
-					continue ;
-				fr = strdup( reads[ readIdx ].read ) ;
-				sr = strdup( reads[ mateReadIdx ].read ) ;
-				
-				if ( reads[ readIdx ].overlap.strand == -1 )
-					ReverseComplement( fr, reads[ readIdx ].read, flen ) ;
-				if ( reads[ mateReadIdx ].overlap.strand == -1 )
-					ReverseComplement( sr, reads[ mateReadIdx ].read, slen ) ;
+					if ( reads[ readIdx ].overlap.seqIdx != i )
+					{
+						int tmp = readIdx ;
+						readIdx = mateReadIdx ;
+						mateReadIdx = tmp ;
+					}
+
+					flen = strlen( reads[ readIdx ].read ) ;
+					slen = strlen( reads[ mateReadIdx ].read ) ;
+					//if ( flen != seq.consensusLen /*|| slen != seqs[ nextAdj[i][0].seqIdx ].consensusLen */)
+					if ( reads[ readIdx ].overlap.seqEnd < seq.consensusLen - 4 )
+						continue ;
+
+					fr = strdup( reads[ readIdx ].read ) ;
+					sr = strdup( reads[ mateReadIdx ].read ) ;
+
+					if ( reads[ readIdx ].overlap.strand == -1 )
+						ReverseComplement( fr, reads[ readIdx ].read, flen ) ;
+					if ( reads[ mateReadIdx ].overlap.strand == -1 )
+						ReverseComplement( sr, reads[ mateReadIdx ].read, slen ) ;
+					overlapSize = AlignAlgo::IsMateOverlap( fr, flen, sr, slen, minOverlap, offset, bestMatchCnt ) ;
+					
+					if ( overlapSize == -1 )
+					{
+						free( fr ) ; free( sr ) ;
+					}
+					else
+						break ;
+				}
 			}
 			
-			// Naive implementation
-			int minOverlap = ( flen + slen) / 20 ;
-			if ( minOverlap >= 31 )
-				minOverlap = 31 ;
-			int offset = -1 ;
-			int overlapSize = -1 ;
-			int bestMatchCnt = -1 ;
-			overlapSize = AlignAlgo::IsMateOverlap( fr, flen, sr, slen, minOverlap, offset, bestMatchCnt ) ;
 
-			if ( overlapSize != 1 ) // Ambiguous overlap or no overlap
+			if ( overlapSize == -1 ) // Ambiguous overlap or no overlap
 			{
-				free( fr ) ; free( sr ) ;
+				//free( fr ) ; free( sr ) ;
 				continue ;
 			}
-
 			bestMatchCnt *= 2 ;
 			if ( prevAdj[i].size() == 1 )
 			{
 				struct _overlap no ;
 				no.seqIdx = prevAdj[i][0].seqIdx ;
-				no.readStart = 0 ;
-				no.readEnd = overlapSize - 1 ;
+				no.readStart = reads[ readIdx ].overlap.seqStart ;
+				no.readEnd = no.readStart + overlapSize - 1 ;
 				no.seqStart = reads[ mateReadIdx ].overlap.seqStart + offset ;
 				no.seqEnd = no.seqStart + overlapSize - 1 ;
 				no.matchCnt = bestMatchCnt ;
@@ -4465,8 +4513,8 @@ public:
 			{
 				struct _overlap no ;
 				no.seqIdx = nextAdj[i][0].seqIdx ;
-				no.readStart = offset ;
-				no.readEnd = offset + overlapSize - 1 ;
+				no.readStart = reads[ readIdx ].overlap.seqStart + offset ;
+				no.readEnd = no.readStart + overlapSize - 1 ;
 				no.seqStart = reads[ mateReadIdx ].overlap.seqStart ;
 				no.seqEnd = no.seqStart + overlapSize - 1 ;
 				no.matchCnt = bestMatchCnt ;
@@ -4703,6 +4751,8 @@ public:
 		int i, j, k ;
 		int readCnt = 0 ;
 		int seqCnt = seqs.size() ;
+		double backupNovelSeqSimilarity = novelSeqSimilarity ;
+
 		novelSeqSimilarity = 1.00 ;
 		int ret = 0 ;
 
@@ -5340,6 +5390,8 @@ public:
 				}
 			}
 		}
+
+		novelSeqSimilarity = backupNovelSeqSimilarity ;
 	}
 
 	void Output( FILE *fp )

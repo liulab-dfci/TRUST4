@@ -565,6 +565,7 @@ int main( int argc, char *argv[] )
 	
 	PrintLog( "Extend assemblies by mate pair information." ) ;
 	extendedSeq.ExtendSeqFromReads( assembledReads, 31 ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
+	extendedSeq.UpdateAllConsensus() ;
 	
 	/*if ( outputPrefix[0] != '-' )
 	{
@@ -581,11 +582,6 @@ int main( int argc, char *argv[] )
 		fclose( fp ) ;*/
 	
 		
-	PrintLog( "Remove redundant assemblies." ) ;
-	extendedSeq.ChangeKmerLength( 31 ) ;
-	//i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
-	i = extendedSeq.RemoveRedundantSeq() ;
-	extendedSeq.UpdateAllConsensus() ;
 	
 	
 	// Now the assembled reads should be sorted by their read id.
@@ -605,6 +601,8 @@ int main( int argc, char *argv[] )
 			continue ;
 		
 		if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
+		//if ( assembledReads[i].overlap.seqIdx != -1 && assembledReads[i + 1].overlap.seqIdx != -1 
+		//	&& assembledReads[i].overlap.seqIdx == assembledReads[i + 1].overlap.seqIdx )
 		{
 			++i ;
 			continue ;
@@ -706,9 +704,17 @@ int main( int argc, char *argv[] )
 		name[0] = '\0' ;
 		//printf( "%s\n", lowFreqMergedReads[i].read ) ;
 		//fflush( stdout ) ;
-		if ( extendedSeq.AddRead( lowFreqMergedReads[i].read, name, 0.9 ) < 0 )
+		//printf( ">r%d\n%s\n", i, lowFreqMergedReads[i].read ) ;
+		extendedSeq.AssignRead( lowFreqMergedReads[i].read, 0.95, assign ) ;
+		if ( assign.seqIdx != -1 )
 		{
-			if ( lowFreqMergedReads[i].minCnt >= 2 
+			if ( assign.similarity < 1.0 )
+				extendedSeq.AddAssignedRead( lowFreqMergedReads[i].read, assign ) ;
+		}
+		else if ( extendedSeq.AddRead( lowFreqMergedReads[i].read, name, 1.0 ) == -1 )
+		//else
+		{
+			if ( lowFreqMergedReads[i].minCnt >= 1 
 				&& lowFreqSeqSet.AddRead( lowFreqMergedReads[i].read, name, 0.95 ) < 0 )
 			{
 				struct _overlap geneOverlap[4] ;
@@ -740,6 +746,13 @@ int main( int argc, char *argv[] )
 	
 	lowFreqSeqSet.UpdateAllConsensus() ;
 	extendedSeq.InputSeqSet( lowFreqSeqSet, false ) ;	
+	
+	
+	PrintLog( "Remove redundant assemblies." ) ;
+	extendedSeq.ChangeKmerLength( 31 ) ;
+	//i = extendedSeq.ExtendSeqFromSeqOverlap( ( avgReadLen / 2 < 31 ) ? 31 : ( avgReadLen / 2 ) ) ;
+	i = extendedSeq.RemoveRedundantSeq() ;
+	
 	
 	if ( outputPrefix[0] != '-' )
 	{

@@ -201,6 +201,7 @@ int main( int argc, char *argv[] )
 			{
 				int size = alterNuc.Size() ;
 				char *alterCDR = ( char * )malloc( sizeof( char ) * ( cdr[i].readEnd - cdr[i].readStart + 2 ) ) ;
+				char *newSeq = strdup( seq ) ;
 				int cdrLen = cdr[i].readEnd - cdr[i].readStart + 1 ;
 				alterCDR[ cdrLen ] = '\0' ;
 				int id = 1 ;
@@ -208,14 +209,18 @@ int main( int argc, char *argv[] )
 				for ( n = 1 ; n < (1<<size) ; ++n )
 				{
 					memcpy( alterCDR, seq + cdr[i].readStart, cdrLen ) ;
+					strcpy( newSeq, seq ) ;
 					for ( l = 0 ; l < size ; ++l )
 					{
 						if ( n & ( 1 << l ) )
-							alterCDR[ alterNuc[l].a - cdr[i].readStart ] = numToNuc[ alterNuc[l].b ] ; 	
+						{
+							alterCDR[ alterNuc[l].a - cdr[i].readStart ] = numToNuc[ alterNuc[l].b ] ; 
+							newSeq[ alterNuc[l].a ] = numToNuc[ alterNuc[l].b ] ;
+						}
 					}
 					//sprintf( buffer + strlen( buffer ), " minorCDR%d=%s", i + 1, alterCDR ) ;
 					// Check whether this CDR3 is in the read or not. 
-					/*if ( cdrLen < kmerLength )
+					if ( cdrLen < kmerLength )
 					{
 						if ( cdr[i].readEnd + kmerLength - cdrLen < len )
 						{
@@ -237,7 +242,7 @@ int main( int argc, char *argv[] )
 								fail = true ;
 						if ( fail )
 							continue ;
-					}*/
+					}
 
 					// Output the new seq
 					k = 0 ;
@@ -256,9 +261,10 @@ int main( int argc, char *argv[] )
 					buffer2[k] = '=' ;
 					++k ;
 					strcpy( buffer2 + k, alterCDR ) ;
-					printf( "%s\n%s\n", buffer2, seq ) ;
+					printf( "%s\n%s\n", buffer2, newSeq ) ;
 				}
 				free( alterCDR ) ;
+				free( newSeq ) ;
 			}
 		}
 		
