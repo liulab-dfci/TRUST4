@@ -193,6 +193,7 @@ public:
 	int Resize( int s ) 
 	{
 		size = s ;
+		return size ;
 	}
 
 	int Capacity()

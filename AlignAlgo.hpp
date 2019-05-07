@@ -25,6 +25,8 @@ struct _posWeight
 		count[1] += rhs.count[1] ;
 		count[2] += rhs.count[2] ;
 		count[3] += rhs.count[3] ;
+	
+		return *this ;
 	}
 
 	int Sum() const

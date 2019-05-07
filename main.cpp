@@ -203,10 +203,6 @@ int main( int argc, char *argv[] )
 			continue ;
 		}*/
 
-		if ( IsLowComplexity( reads.seq ) )
-		{
-			continue ;
-		}
 		struct _sortRead nr ;
 		nr.read = strdup( reads.seq ) ;
 		nr.id = strdup( reads.id ) ;
@@ -215,56 +211,87 @@ int main( int argc, char *argv[] )
 		else
 			nr.qual = NULL ; 
 
-		sortedReads.push_back( nr ) ;
-		if ( countMyself )
-			kmerCount.AddCount( reads.seq ) ;
-
-		++i ;
-
-		int len = strlen( reads.seq ) ;
-		if ( len > maxReadLen )
-			maxReadLen = len ;
-	
-		if ( countMyself && i % 100000 == 0 )
-			PrintLog( "Read in and count kmers for %d reads.", i ) ;
-		else if ( !countMyself && i % 1000000 == 0 )
-			PrintLog( "Read in %d reads.", i ) ;
-	}
-	
-	while ( mateReads.Next() )
-	{
-		/*struct _overlap geneOverlap[4] ;
-		refSet.AnnotateRead( mateReads.seq, 0, geneOverlap, buffer ) ;
 		
-		if ( geneOverlap[0].seqIdx + geneOverlap[1].seqIdx + geneOverlap[2].seqIdx + geneOverlap[3].seqIdx == -4 )
-			continue ;*/
-		if ( IsLowComplexity( mateReads.seq ) )
-			continue ;
-
-		struct _sortRead nr ;
-		nr.read = strdup( mateReads.seq ) ;
-		nr.id = strdup( mateReads.id ) ;
-		if ( reads.qual != NULL )
-			nr.qual = strdup( mateReads.qual ) ;
+		struct _sortRead mateR ;
+		mateR.read = NULL ;
+		if ( mateReads.Next() )
+		{
+			mateR.read = strdup( mateReads.seq ) ;
+			mateR.id = strdup( mateReads.id ) ;
+			if ( mateReads.qual != NULL )
+				mateR.qual = strdup( mateReads.qual ) ;
+			else
+				mateR.qual = NULL ;
+			
+			// Check chimeric. After reverse-complement, the mate should be after the current read.
+			int flen = strlen( mateReads.seq ) ;
+			int slen = strlen( nr.read ) ;
+			seqSet.ReverseComplement( mateR.read, mateReads.seq, flen ) ;
+			int minOverlap = ( flen + slen ) / 10 ;
+			if ( minOverlap > 31 )
+				minOverlap = 31 ;
+			int offset = -1 ;
+			int bestMatchCnt = -1 ;
+			if ( AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt ) >= 0 )
+			{
+				// Wrong order happened, filter the mate.
+				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
+				mateR.read = NULL ;
+			}
+			else
+			{
+				strcpy( mateR.read, mateReads.seq ) ;
+			}
+		}
 		else
-			nr.qual = NULL ;
-
-		sortedReads.push_back( nr ) ;
-		if ( countMyself )
-			kmerCount.AddCount( mateReads.seq ) ;
-
-		++i ;
+		{
+			fprintf( stderr, "The two mate-pair read files have different number of reads.\n" ) ;
+			exit( 1 ) ;
+		}
 		
-		int len = strlen( reads.seq ) ;
-		if ( len > maxReadLen )
-			maxReadLen = len ;
 		
+		if ( !IsLowComplexity( reads.seq ) )
+		{
+			sortedReads.push_back( nr ) ;
+			if ( countMyself )
+				kmerCount.AddCount( reads.seq ) ;
+			++i ;
+
+			int len = strlen( reads.seq ) ;
+			if ( len > maxReadLen )
+				maxReadLen = len ;
+		}
+		else
+		{
+			free( nr.read ) ; free( nr.id ) ; free( nr.qual ) ;
+		}
+
+		if ( mateR.read != NULL )
+		{
+			if ( !IsLowComplexity( mateReads.seq ) )
+			{
+				sortedReads.push_back( mateR ) ;
+				if ( countMyself )
+					kmerCount.AddCount( mateReads.seq ) ;
+
+				++i ;
+
+				int len = strlen( mateReads.seq ) ;
+				if ( len > maxReadLen )
+					maxReadLen = len ;
+			}
+			else
+			{
+				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
+			}
+		}
+	
 		if ( countMyself && i % 100000 == 0 )
 			PrintLog( "Read in and count kmers for %d reads.", i ) ;
 		else if ( !countMyself && i % 1000000 == 0 )
 			PrintLog( "Read in %d reads.", i ) ;
 	}
-
+	
 	PrintLog( "Found %i reads.", i ) ;
 	if ( maxReadLen <= 0 )
 	{
@@ -370,6 +397,7 @@ int main( int argc, char *argv[] )
 					}
 				addRet = seqSet.AddRead( sortedReads[i].read, name, 
 					sortedReads[i].minCnt >= 20 ? 0.97 : 0.9 ) ;
+				
 				if ( addRet < 0 )
 				{
 					for ( j = 0 ; j < 4 ; ++j )
@@ -600,9 +628,9 @@ int main( int argc, char *argv[] )
 		if ( !paired )
 			continue ;
 		
-		if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
-		//if ( assembledReads[i].overlap.seqIdx != -1 && assembledReads[i + 1].overlap.seqIdx != -1 
-		//	&& assembledReads[i].overlap.seqIdx == assembledReads[i + 1].overlap.seqIdx )
+		//if ( assembledReads[i].overlap.seqIdx != -1 || assembledReads[i + 1].overlap.seqIdx != -1 )
+		if ( assembledReads[i].overlap.seqIdx != -1 && assembledReads[i + 1].overlap.seqIdx != -1 
+			&& assembledReads[i].overlap.seqIdx == assembledReads[i + 1].overlap.seqIdx )
 		{
 			++i ;
 			continue ;

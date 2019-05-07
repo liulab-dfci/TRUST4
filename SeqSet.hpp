@@ -948,7 +948,7 @@ private:
 		}
 		delete[] rcRead ;
 
-		//printf( "hitsize=%d\n", hits.Size() ) ;
+		//printf( "hitsize=%d; %d\n", hits.Size(), kmerLength ) ;
 		// Find the overlaps.
 		// Sort the hits
 		if ( hits.Size() > 2 * seqs.size() ) 
@@ -1486,6 +1486,8 @@ private:
 				}
 			}
 		}
+
+		return 0 ;
 	}
 
 
@@ -1955,7 +1957,7 @@ public:
 	//	   -1: not add. -2: only overlapped with novel seq and could not be extended.
 	int AddRead( char *read, char *geneName, double similarityThreshold )
 	{
-		//printf( "%s\n", seq ) ;
+		//printf( "%s\n", read ) ;
 		int i, j, k ;
 		int len = strlen( read ) ;
 
@@ -3317,6 +3319,8 @@ public:
 				ReleaseSeq( i ) ;
 		}
 		Clean( true ) ;
+	
+		return seqs.size() ;
 	}
 
 	/*int AddRead( char *read )
