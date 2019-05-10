@@ -3414,15 +3414,33 @@ public:
 		int gapAllow = kmerLength + 1 ;
 		if ( threshold >= 1 )
 			gapAllow = 3 ;
-		if ( GetGeneType( seqs[ a.seqIdx ].name ) == 2  
-			&& a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen 
-			&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow && b.readEnd >= seqs[b.seqIdx].consensusLen )
+		if ( GetGeneType( seqs[ a.seqIdx ].name ) == 2 ) 
 		{
-			//matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
-			if ( a.similarity - 0.1 > b.similarity )
+			if ( a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen 
+					&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow && b.readEnd >= seqs[b.seqIdx].consensusLen )
+			{
+				//matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
+				if ( a.similarity - 0.1 > b.similarity )
+				{
+					return true ;
+				}
+			}
+			else if (  a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen )
 			{
 				return true ;
 			}
+		}
+		
+		//if ( threshold == 1 )
+		//	printf( "%s %d %lf %s %d %lf\n", seqs[ a.seqIdx ].name, a.matchCnt, a.similarity,
+		//		 seqs[ b.seqIdx ].name, b.matchCnt, b.similarity ) ;
+
+		if ( a.readStart == b.readStart && a.readEnd == b.readEnd )
+		{
+			if ( a.similarity > b.similarity )
+				return true ;
+			else if ( a.similarity < b.similarity )
+				return false ;
 		}
 
 		if ( matchCnt > b.matchCnt * threshold )
@@ -3796,10 +3814,6 @@ public:
 				boundE = geneOverlap[2].readEnd ;
 				
 
-			if ( e < s + 12 )
-			{
-				s =  e - 12 ;
-			}
 			int locateS = -1 ;
 			int locateE = -1 ;
 			
@@ -3957,7 +3971,9 @@ public:
 				if ( locateE == -1 )
 				{
 					// Use weaker motif.
-					adjustE = e - ( e - locateS ) % 3 ; 
+					adjustE = e - ( e - locateS ) % 3 ;
+					if ( adjustE + 3 < locateS + 18 )
+						adjustE = locateS + 15 ;
 					for ( i = adjustE ; i < boundE ; ++i )
 					{
 						// The GxG motif
@@ -3975,7 +3991,7 @@ public:
 						for ( i = adjustE ; i < boundE ; ++i )
 						{
 							// The GxG motif
-							if ( DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+							if ( read[i] == 'T' && DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
 									&&  DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
 							{
 								locateE = i ;
@@ -4042,7 +4058,7 @@ public:
 					}
 				}
 			}
-			if ( locateS != -1 && locateE != -1 )
+			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
 			{
 				s = locateS ;
 				e = locateE + 2 ;
@@ -4385,9 +4401,6 @@ public:
 			int flen, slen ; // their lengths
 
 			// For overlaps
-			int minOverlap = ( flen + slen) / 20 ;
-			if ( minOverlap >= 31 )
-				minOverlap = 31 ;
 			int offset = -1 ;
 			int overlapSize = -1 ;
 			int bestMatchCnt = -1 ;
@@ -4427,6 +4440,9 @@ public:
 					
 					fr = strdup( reads[ mateReadIdx ].read ) ;
 					sr = strdup( reads[ readIdx ].read ) ;
+					int minOverlap = ( flen + slen) / 20 ;
+					if ( minOverlap >= 31 )
+						minOverlap = 31 ;
 
 					if ( reads[ mateReadIdx ].overlap.strand == -1 )
 						ReverseComplement( fr, reads[ mateReadIdx ].read, flen ) ;
@@ -4473,6 +4489,9 @@ public:
 					//if ( flen != seq.consensusLen /*|| slen != seqs[ nextAdj[i][0].seqIdx ].consensusLen */)
 					if ( reads[ readIdx ].overlap.seqEnd < seq.consensusLen - 4 )
 						continue ;
+					int minOverlap = ( flen + slen) / 20 ;
+					if ( minOverlap >= 31 )
+						minOverlap = 31 ;
 
 					fr = strdup( reads[ readIdx ].read ) ;
 					sr = strdup( reads[ mateReadIdx ].read ) ;

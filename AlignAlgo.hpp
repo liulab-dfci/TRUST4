@@ -893,7 +893,8 @@ public:
 		}
 	}
 
-	static int IsMateOverlap( char *fr, int flen, char *sr, int slen, int minOverlap, int &offset, int &bestMatchCnt )
+	static int IsMateOverlap( char *fr, int flen, char *sr, int slen, int minOverlap, int &offset, int &bestMatchCnt,
+		bool checkTandem = false )
 	{
 		int i, j, k ;		
 		bestMatchCnt = -1 ;
@@ -929,7 +930,7 @@ public:
 		
 		// If the overlap size is near minOverlap, the overlap could still be ambiguous. 
 		// i- the repeat size
-		if ( overlapSize <= minOverlap * 2 )
+		if ( checkTandem && overlapSize <= minOverlap * 2 )
 		{
 			for ( i = 1 ; i <= overlapSize / 2 ; ++i )
 			{

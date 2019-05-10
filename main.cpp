@@ -228,16 +228,74 @@ int main( int argc, char *argv[] )
 			int slen = strlen( nr.read ) ;
 			seqSet.ReverseComplement( mateR.read, mateReads.seq, flen ) ;
 			int minOverlap = ( flen + slen ) / 10 ;
+			int minOverlap2 = ( flen + slen ) / 20 ;
 			if ( minOverlap > 31 )
 				minOverlap = 31 ;
+			if ( minOverlap2 > 31 )
+				minOverlap2 = 31 ;
 			int offset = -1 ;
 			int bestMatchCnt = -1 ;
-			if ( AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt ) >= 0 )
+			
+			/*if ( AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt ) >= 0 )
 			{
-				// Wrong order happened, filter the mate.
+				printf( "Outie\n%s\n%s\n", nr.read, mateR.read ) ;
+			}
+			else if ( AlignAlgo::IsMateOverlap( nr.read, slen, mateR.read, flen, minOverlap, offset, bestMatchCnt ) >= 0 )
+			{
+				printf( "Innie\n%s\n%s\n", nr.read, mateR.read ) ;
+			}
+			else
+				printf( "Uncertain\n" ) ;*/
+			
+			int overlapSize = AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt, false ) ;
+			if ( overlapSize >= 0 )
+			{
+				// Wrong order happened, 
+				// Only keep the overlapped portion.
+				nr.read[ overlapSize ] = '\0' ;
+				if ( nr.qual != NULL )
+				{
+					nr.qual[ overlapSize ] = '\0' ;
+
+					for ( j = 0 ; j < overlapSize ; ++j )
+					{
+						if ( mateR.qual[j + offset] > nr.qual[j] || nr.read[j] == 'N' )
+						{
+							nr.read[j] = mateR.read[j + offset] ;
+							nr.qual[j] = mateR.qual[j + offset] ;
+						}
+					}
+				}
+				
+				// filter the mate.
 				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
 				mateR.read = NULL ;
 			}
+			/*else if (  ( overlapSize = 
+				AlignAlgo::IsMateOverlap( nr.read, slen, mateR.read, flen, minOverlap2, offset, bestMatchCnt ) ) >= 0 )
+			{
+				char *r = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
+				char *q = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
+				for ( j = 0 ; j < flen ; ++j )
+				{
+					r[ offset + j ] = mateR.read[j] ;
+					q[ offset + j ] = mateR.qual[j] ;
+				}
+				int len = offset + j ;
+				for ( j = 0 ; j < slen ; ++j )
+				{
+					r[j] = nr.read[j] ;
+					q[j] = nr.qual[j] ;
+				}
+				if ( j > len ) 
+					len = j ;
+				r[len] = q[len] = '\0' ;
+				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
+				mateR.read = NULL ;
+				free( nr.read ) ; free( nr.qual ) ;
+				nr.read = r ;
+				nr.qual = q ;
+			}*/
 			else
 			{
 				strcpy( mateR.read, mateReads.seq ) ;
@@ -254,10 +312,15 @@ int main( int argc, char *argv[] )
 		{
 			sortedReads.push_back( nr ) ;
 			if ( countMyself )
-				kmerCount.AddCount( reads.seq ) ;
+				kmerCount.AddCount( nr.read ) ;
 			++i ;
+			
+			if ( countMyself && i % 100000 == 0 )
+				PrintLog( "Read in and count kmers for %d reads.", i ) ;
+			else if ( !countMyself && i % 1000000 == 0 )
+				PrintLog( "Read in %d reads.", i ) ;
 
-			int len = strlen( reads.seq ) ;
+			int len = strlen( nr.read ) ;
 			if ( len > maxReadLen )
 				maxReadLen = len ;
 		}
@@ -272,11 +335,16 @@ int main( int argc, char *argv[] )
 			{
 				sortedReads.push_back( mateR ) ;
 				if ( countMyself )
-					kmerCount.AddCount( mateReads.seq ) ;
+					kmerCount.AddCount( mateR.read ) ;
 
 				++i ;
 
-				int len = strlen( mateReads.seq ) ;
+				if ( countMyself && i % 100000 == 0 )
+					PrintLog( "Read in and count kmers for %d reads.", i ) ;
+				else if ( !countMyself && i % 1000000 == 0 )
+					PrintLog( "Read in %d reads.", i ) ;
+				
+				int len = strlen( mateR.read ) ;
 				if ( len > maxReadLen )
 					maxReadLen = len ;
 			}
@@ -286,12 +354,11 @@ int main( int argc, char *argv[] )
 			}
 		}
 	
-		if ( countMyself && i % 100000 == 0 )
+		/*if ( countMyself && i % 100000 == 0 )
 			PrintLog( "Read in and count kmers for %d reads.", i ) ;
 		else if ( !countMyself && i % 1000000 == 0 )
-			PrintLog( "Read in %d reads.", i ) ;
+			PrintLog( "Read in %d reads.", i ) ;*/
 	}
-	
 	PrintLog( "Found %i reads.", i ) ;
 	if ( maxReadLen <= 0 )
 	{
@@ -739,8 +806,8 @@ int main( int argc, char *argv[] )
 			if ( assign.similarity < 1.0 )
 				extendedSeq.AddAssignedRead( lowFreqMergedReads[i].read, assign ) ;
 		}
-		else if ( extendedSeq.AddRead( lowFreqMergedReads[i].read, name, 1.0 ) == -1 )
-		//else
+		//else if ( extendedSeq.AddRead( lowFreqMergedReads[i].read, name, 1.0 ) == -1 )
+		else
 		{
 			if ( lowFreqMergedReads[i].minCnt >= 1 
 				&& lowFreqSeqSet.AddRead( lowFreqMergedReads[i].read, name, 0.95 ) < 0 )
@@ -759,7 +826,7 @@ int main( int argc, char *argv[] )
 						lastJ = j ;
 					}
 				}
-				if ( componentCnt >= 1 )
+				if ( componentCnt >= 1 && lowFreqMergedReads[i].minCnt >= 2 )
 				{
 					j = lastJ ;
 					lowFreqSeqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
