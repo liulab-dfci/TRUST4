@@ -23,6 +23,8 @@ struct _seqWrapper
 	bool isRef ; // this is from reference.
 
 	int minLeftExtAnchor, minRightExtAnchor ; // only overlap with size larger than this can be counted as valid extension.
+
+	struct _pair info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1
 } ;
 
 struct _hit
@@ -1717,6 +1719,7 @@ public:
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename ) 
 	{
+		int i, j, k ;
 		ReadFiles fa ;
 		fa.AddReadFile( filename, false ) ;
 		
@@ -1734,8 +1737,51 @@ public:
 			struct _seqWrapper &sw = seqs[id] ;
 			int seqLen = strlen( fa.seq ) ;
 			sw.consensus = strdup( fa.seq ) ;	
-			sw.consensusLen = strlen( fa.seq );	
-			seqIndex.BuildIndexFromRead( kmerCode, fa.seq, seqLen, id ) ;
+			
+			
+			// Remove "." from IMGT annotation.
+			k = 0 ;
+			for ( i = 0 ; i < seqLen ; ++i )
+				if ( sw.consensus[i] != '.' )
+				{
+					sw.consensus[k] = sw.consensus[i] ;
+					++k ;
+				}
+			sw.consensus[k] = '\0' ;
+
+			// Use IMGT documented coordinate to infer CDR1,2 coordinate.
+			if ( GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
+			{	
+				// Infer the coordinate for CDR1
+				for ( i = 0, k = 0 ; i < 3 * ( 27 - 1 ) ; ++i )
+					if ( fa.seq[i] != '.' )		
+						++k ;
+				sw.info[0].a = k ;
+				for ( ; i < 3 * ( 38 ) ; ++i )
+					if ( fa.seq[i] != '.' )	
+						++k ;
+				sw.info[0].b = k - 1 ;
+
+				// Infer the coordinate for CDR2
+				for ( ; i < 3 * ( 56 - 1 ) ; ++i )
+					if ( fa.seq[i] != '.' )		
+						++k ;
+				sw.info[1].a = k ;
+				for ( ; i < 3 * ( 65 ) ; ++i )
+					if ( fa.seq[i] != '.' )	
+						++k ;
+				sw.info[1].b = k - 1 ;
+			}
+			else
+			{
+				sw.info[0].a = sw.info[0].b = -1 ;
+				sw.info[1].a = sw.info[1].b = -1 ;
+			}
+
+			
+
+			sw.consensusLen = strlen( sw.consensus );	
+			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id ) ;
 		}
 	}
 	
@@ -3455,7 +3501,7 @@ public:
 	// Return successful or not.
 	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], struct _overlap cdr[3], char *buffer )
 	{
-		int i, j ;
+		int i, j, k ;
 		
 		std::vector<struct _overlap> overlaps ;
 		std::vector<struct _overlap> allOverlaps ;
@@ -3544,7 +3590,9 @@ public:
 				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + allOverlaps[i].seqEnd + 1, 
 					seqs[ seqIdx ].consensusLen - allOverlaps[i].seqEnd - 1, 
 					read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, 0, align ) ;
-				
+				//AlignAlgo::VisualizeAlignment( seqs[ seqIdx ].consensus + allOverlaps[i].seqEnd + 1, 
+				//	seqs[ seqIdx ].consensusLen - allOverlaps[i].seqEnd - 1, 
+				//	read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
 					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
@@ -3693,8 +3741,73 @@ public:
 		}
 
 		// Infer CDR1,2,3.
+		char *cdr1 = NULL ;
+		char *cdr2 = NULL ;
+		
+		if ( detailLevel >= 2 && geneOverlap[0].seqIdx != -1 
+			&& ( geneOverlap[2].seqIdx == -1 || geneOverlap[0].readStart < geneOverlap[2].readStart ) )
+		{
+			// Infer CDR1, 2
+			char *align = new char[ 2 * len + 2 ] ;
+			struct _overlap vgene = geneOverlap[0] ; // Overlap with v-gene
+			AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+				read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, align ) ;
+			AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+				read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, align ) ;
+
+			// Locate CDR1.
+			int cdrIdx ;
+			for ( cdrIdx = 0 ; cdrIdx <= 1 ; ++cdrIdx )
+			{
+				int seqRangeStart = seqs[ vgene.seqIdx ].info[ cdrIdx ].a ; 
+				int seqRangeEnd = seqs[ vgene.seqIdx ].info[ cdrIdx ].b ;
+
+				if ( vgene.seqStart <= seqRangeStart && vgene.seqEnd >= seqRangeEnd )
+				{
+					i = vgene.readStart - 1 ;
+					j = vgene.seqStart - 1 ;
+					int readRangeStart, readRangeEnd ;
+					int matchCnt = 0 ;
+					for ( k = 0 ; align[k] != -1 ; ++k )	
+					{
+						if ( align[k] != EDIT_DELETE )
+							++i ;
+						if ( align[k] != EDIT_INSERT )
+							++j ;
+						
+						if ( j == seqRangeStart )
+							readRangeStart = i ;
+						if ( j >= seqRangeStart && align[k] == EDIT_MATCH )
+							matchCnt += 2 ;
+						if ( j == seqRangeEnd )
+						{
+							readRangeEnd = i ;
+							break ;
+						}
+					}
+					cdr[cdrIdx].seqIdx = vgene.seqIdx ;
+					cdr[cdrIdx].readStart = readRangeStart ;
+					cdr[cdrIdx].readEnd = readRangeEnd ;
+					cdr[cdrIdx].matchCnt = matchCnt ;
+					cdr[cdrIdx].similarity = (double)matchCnt / 
+						( readRangeEnd - readRangeStart + 1 + seqRangeEnd - seqRangeStart + 1 ) ;
+					printf( "%d: %d %d; %d %d\n", matchCnt, readRangeStart, readRangeEnd, seqRangeStart, seqRangeEnd ) ;
+
+					char *r =  ( char * )malloc( sizeof( char ) * ( readRangeEnd - readRangeStart + 2 ) ) ;
+					memcpy( r, read + readRangeStart, readRangeEnd - readRangeStart + 1 ) ;
+					r[  readRangeEnd - readRangeStart + 1 ] = '\0' ;
+					if ( cdrIdx == 0 )
+						cdr1 = r ;
+					else if ( cdrIdx == 1 )
+						cdr2 = r ;
+				}
+			}
+
+		}
+		
 		char *cdr3 = NULL ;
 		double cdr3Score = 0 ;
+		
 		if ( detailLevel >= 2 )
 		{
 			// Infer CDR3.
@@ -4157,11 +4270,27 @@ public:
 			}
 		}
 		
+		if ( cdr1 == NULL)
+			sprintf( buffer + strlen( buffer), " CDR1(0-0):0.0=null" ) ;
+		else
+			sprintf( buffer + strlen( buffer), " CDR1(%d-%d):%.2lf=%s", cdr[0].readStart, cdr[0].readEnd, 
+				cdr[0].similarity * 100, cdr1 ) ;
+		
+		if ( cdr2 == NULL)
+			sprintf( buffer + strlen( buffer), " CDR2(0-0):0.0=null" ) ;
+		else
+			sprintf( buffer + strlen( buffer), " CDR2(%d-%d):%.2lf=%s", cdr[1].readStart, cdr[1].readEnd, 
+				cdr[1].similarity * 100, cdr2 ) ;
+
 		if ( cdr3 == NULL)
 			sprintf( buffer + strlen( buffer), " CDR3(0-0):0.0=null" ) ;
 		else
 			sprintf( buffer + strlen( buffer), " CDR3(%d-%d):%.2lf=%s", cdr[2].readStart, cdr[2].readEnd, cdr3Score, cdr3 ) ;
-
+		
+		if ( cdr1 != NULL )
+			delete[] cdr1 ;
+		if ( cdr2 != NULL )
+			delete[] cdr2 ;
 		if ( cdr3 != NULL )
 			delete[] cdr3 ;
 		return 1 ;
@@ -4796,7 +4925,7 @@ public:
 		// Since these reads will not be applied on more sophisticated extension, it is fine 
 		//   to make it an independent component.
 		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
-		ExtendSeqFromMissingOverlapMate( reads ) ;
+		//ExtendSeqFromMissingOverlapMate( reads ) ;
 
 		// Then do more sophisticated extension
 		// Build the mate adj graph.
@@ -4861,7 +4990,7 @@ public:
 		}
 
 		BuildBranchGraph( branchAdj, leastOverlapLen, useInBranch ) ;
-		AugmentBranchGraphByMate( branchAdj, prevAdj, nextAdj, reads ) ;
+		//AugmentBranchGraphByMate( branchAdj, prevAdj, nextAdj, reads ) ;
 		
 		// Each Seq will be extend to left and right one step.
 		SimpleVector<int> toRemoveSeqIdx ;
