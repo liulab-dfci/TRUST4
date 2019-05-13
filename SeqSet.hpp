@@ -3525,7 +3525,7 @@ public:
 		if ( overlapCnt == 0 )
 		{
 			if ( detailLevel >= 2 )
-				sprintf( buffer + strlen( buffer ), " * * * CDR3=null" ) ;
+				sprintf( buffer + strlen( buffer ), " * * * CDR1(0-0):0.00=null CDR2(0-0):0.00=null CDR3(0-0):0.00=null" ) ;
 			return 0 ;
 		}
 		std::sort( overlaps.begin(), overlaps.end() ) ;
@@ -4271,19 +4271,19 @@ public:
 		}
 		
 		if ( cdr1 == NULL)
-			sprintf( buffer + strlen( buffer), " CDR1(0-0):0.0=null" ) ;
+			sprintf( buffer + strlen( buffer), " CDR1(0-0):0.00=null" ) ;
 		else
 			sprintf( buffer + strlen( buffer), " CDR1(%d-%d):%.2lf=%s", cdr[0].readStart, cdr[0].readEnd, 
 				cdr[0].similarity * 100, cdr1 ) ;
 		
 		if ( cdr2 == NULL)
-			sprintf( buffer + strlen( buffer), " CDR2(0-0):0.0=null" ) ;
+			sprintf( buffer + strlen( buffer), " CDR2(0-0):0.00=null" ) ;
 		else
 			sprintf( buffer + strlen( buffer), " CDR2(%d-%d):%.2lf=%s", cdr[1].readStart, cdr[1].readEnd, 
 				cdr[1].similarity * 100, cdr2 ) ;
 
 		if ( cdr3 == NULL)
-			sprintf( buffer + strlen( buffer), " CDR3(0-0):0.0=null" ) ;
+			sprintf( buffer + strlen( buffer), " CDR3(0-0):0.00=null" ) ;
 		else
 			sprintf( buffer + strlen( buffer), " CDR3(%d-%d):%.2lf=%s", cdr[2].readStart, cdr[2].readEnd, cdr3Score, cdr3 ) ;
 		

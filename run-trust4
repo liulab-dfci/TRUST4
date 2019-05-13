@@ -159,11 +159,11 @@ system_call( "$WD/trust4 $mainArgs" ) ;
 # Annotation 
 if ( $vdjcRef eq "" )
 {
-	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa > ${prefix}_annot.out" ) ;
 }
 else
 {
-	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa > ${prefix}_annot.out" ) ;
 }
 
 # Filter and output.

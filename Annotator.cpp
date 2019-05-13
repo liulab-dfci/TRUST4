@@ -162,8 +162,8 @@ int main( int argc, char *argv[] )
 		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seq ) ;
 
-		// Extract the alternative sequence of CDR1,2,3.
-		for ( i = 0 ; i < 3 && !ignoreWeight ; ++i )
+		// Extract the alternative sequence of CDR1,2,3. Only do cdr3 now.
+		for ( i = 2 ; i < 3 && !ignoreWeight ; ++i )
 		{
 			if ( cdr[i].seqIdx == -1 )
 				continue ;
@@ -255,7 +255,10 @@ int main( int argc, char *argv[] )
 					++id ;
 					while ( buffer2[k] )
 						++k ;
-					
+					for ( ; buffer[j] != 'C' || buffer[j + 1] != 'D' || buffer[j + 2] != 'R' 
+						|| buffer[j + 3] != '3' ; ++j, ++k )	
+						buffer2[k] = buffer[j] ;
+
 					for ( ; buffer[j] != '=' ; ++j, ++k )
 						buffer2[k] = buffer[j] ;
 					buffer2[k] = '=' ;
