@@ -3752,8 +3752,8 @@ public:
 			struct _overlap vgene = geneOverlap[0] ; // Overlap with v-gene
 			AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
 				read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, align ) ;
-			AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
-				read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, align ) ;
+			//AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+			//	read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, align ) ;
 
 			// Locate CDR1.
 			int cdrIdx ;
@@ -3791,7 +3791,7 @@ public:
 					cdr[cdrIdx].matchCnt = matchCnt ;
 					cdr[cdrIdx].similarity = (double)matchCnt / 
 						( readRangeEnd - readRangeStart + 1 + seqRangeEnd - seqRangeStart + 1 ) ;
-					printf( "%d: %d %d; %d %d\n", matchCnt, readRangeStart, readRangeEnd, seqRangeStart, seqRangeEnd ) ;
+					//printf( "%d: %d %d; %d %d\n", matchCnt, readRangeStart, readRangeEnd, seqRangeStart, seqRangeEnd ) ;
 
 					char *r =  ( char * )malloc( sizeof( char ) * ( readRangeEnd - readRangeStart + 2 ) ) ;
 					memcpy( r, read + readRangeStart, readRangeEnd - readRangeStart + 1 ) ;
