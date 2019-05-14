@@ -3883,7 +3883,8 @@ public:
 				if ( e + 31 < boundE )
 					boundE = e + 31 ;
 			}
-			else if ( geneOverlap[0].seqIdx != -1 )
+			else if ( geneOverlap[0].seqIdx != -1 
+				&& geneOverlap[0].seqEnd >= seqs[ geneOverlap[0].seqIdx ].consensusLen - 50 )
 			{
 				int startFrame = geneOverlap[0].seqStart % 3 ;
 				s = geneOverlap[0].readEnd + ( geneOverlap[0].readEnd - geneOverlap[0].readStart - startFrame ) % 3 ;
