@@ -3568,12 +3568,30 @@ public:
 		{
 			for ( i = 0 ; i < 3 ; ++i )
 			{
-				if ( geneOverlap[i].seqIdx >= 0 && geneOverlap[i].readEnd - 17 > geneOverlap[3].readStart 
+				if ( geneOverlap[i].seqIdx >= 0 && 
+					( geneOverlap[i].readEnd - 17 > geneOverlap[3].readStart 
+						|| geneOverlap[3].readEnd < geneOverlap[i].readEnd ) 
 					&& geneOverlap[3].seqStart >= 100 )
 				{
+					// Filter out all the overlaps from C gene
 					geneOverlap[3].seqIdx = -1 ;
 					break ;
 				}
+			}
+
+			if ( i < 3 && detailLevel >= 1 )
+			{
+				int size = allOverlaps.size() ;
+				for ( i = 0, k = 0 ; i < size; ++i )
+				{
+					int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
+					if ( geneType != 3 )
+					{
+						allOverlaps[k] = allOverlaps[i] ;
+						++k ;
+					}
+				}
+				allOverlaps.resize( k ) ;
 			}
 		}
 		
@@ -3802,7 +3820,7 @@ public:
 						cdr2 = r ;
 				}
 			}
-
+			delete[] align ;
 		}
 		
 		char *cdr3 = NULL ;
@@ -3818,43 +3836,52 @@ public:
 			{
 				// The case that we have anchor.
 				// Find the motif for anchor
-				int startFrame = geneOverlap[0].seqStart % 3 ;
-				int ns = geneOverlap[0].readEnd ; //+ ( seqs[ geneOverlap[0].seqIdx ].consensusLen - 1 - geneOverlap[0].seqEnd ) ;
-				s = ns - ( ns - geneOverlap[0].readStart + startFrame ) % 3 ;
-				s = s + 6 < len ? s + 6 : s ;
-				startFrame = ( seqs[ geneOverlap[2].seqIdx ].consensusLen - 1 - geneOverlap[2].seqEnd ) % 3 ;
-				//e = geneOverlap[2].readStart + 
-				//	( geneOverlap[2].readEnd - geneOverlap[2].readStart + startFrame ) % 3 ;
-				e = geneOverlap[2].readStart ;
-				e = e - 6 >= 0 ? e - 6 : e ;
-				int adjustE = e ;
-				int locate = -1 ;
-				for ( i = adjustE ; i < geneOverlap[2].readEnd  && i + 11 < len ; ++i )
+				if ( geneOverlap[2].readEnd > geneOverlap[0].readEnd )
 				{
-					// A strong motif, should be used as the anchor.
-					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
-								DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
-							&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
-							&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+					int startFrame = geneOverlap[0].seqStart % 3 ;
+					int ns = geneOverlap[0].readEnd ; //+ ( seqs[ geneOverlap[0].seqIdx ].consensusLen - 1 - geneOverlap[0].seqEnd ) ;
+					s = ns - ( ns - geneOverlap[0].readStart + startFrame ) % 3 ;
+					s = s + 6 < len ? s + 6 : s ;
+					startFrame = ( seqs[ geneOverlap[2].seqIdx ].consensusLen - 1 - geneOverlap[2].seqEnd ) % 3 ;
+					//e = geneOverlap[2].readStart + 
+					//	( geneOverlap[2].readEnd - geneOverlap[2].readStart + startFrame ) % 3 ;
+					e = geneOverlap[2].readStart ;
+					e = e - 6 >= 0 ? e - 6 : e ;
+					int adjustE = e ;
+					int locate = -1 ;
+					for ( i = adjustE ; i < geneOverlap[2].readEnd  && i + 11 < len ; ++i )
 					{
-						locate = i ;
-						break ;
+						// A strong motif, should be used as the anchor.
+						if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
+									DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )  
+								&& DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'G' 
+								&& DnaToAa( read[i + 9], read[i + 10], read[i + 11] ) == 'G' )
+						{
+							locate = i ;
+							break ;
+						}
 					}
+
+					if ( locate != -1 )
+						e = locate ;
+
+					if ( e < s + 12 )
+						range += 15 ;
+
+					if ( s - range > boundS )
+						boundS = s - range ;
+					if ( e + range < boundE )
+						boundE = e + range ;
+
+					if ( locate != -1 )
+						s = s + ( e - s ) % 3 ;
 				}
-
-				if ( locate != -1 )
-					e = locate ;
-
-				if ( e < s + 12 )
-					range += 15 ;
-
-				if ( s - range > boundS )
-					boundS = s - range ;
-				if ( e + range < boundE )
-					boundE = e + range ;
-
-				if ( locate != -1 )
-					s = s + ( e - s ) % 3 ;
+				else
+				{
+					s = 0 ;
+					e = len ;
+					boundS = 1 ;
+				}	
 			
 			}
 			else if ( geneOverlap[2].seqIdx != -1 )
@@ -4215,7 +4242,6 @@ public:
 		{	
 			if ( i == 1 ) // skip the D gene.
 				continue ;
-
 			if ( geneOverlap[i].seqIdx != -1 )
 			{
 				int offset = strlen( buffer ) ;

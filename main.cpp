@@ -793,6 +793,7 @@ int main( int argc, char *argv[] )
 		}
 	}
 	
+	extendedSeq.UpdateAllConsensus() ;
 	lowFreqSeqSet.UpdateAllConsensus() ;
 	extendedSeq.InputSeqSet( lowFreqSeqSet, false ) ;	
 	

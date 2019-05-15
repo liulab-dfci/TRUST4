@@ -183,6 +183,7 @@ int main( int argc, char *argv[] )
 
 				for ( k = 0 ; k < 4 ; ++k )
 				{
+					//printf( "%c %c %d\n", numToNuc[k], seq[j], posWeight[j].count[k] ) ;
 					if ( numToNuc[k] != seq[j] && posWeight[j].count[k] > 1 &&  
 						( sum <= posWeight[j].count[k] * 3 
 							|| ( sum >= 20 && sum <= posWeight[j].count[k] * 4 ) ) )
@@ -247,14 +248,27 @@ int main( int argc, char *argv[] )
 					// Output the new seq
 					k = 0 ;
 					for ( j = 0 ; buffer[j] != ' ' ; ++j, ++k )
-					{
 						buffer2[k] = buffer[j] ;
-					}
 					buffer2[k] = '.' ;
 					sprintf( buffer2 + k + 1, "%d", id ) ;
 					++id ;
 					while ( buffer2[k] )
 						++k ;
+					// Length of the assembly.
+					buffer2[k] = buffer[j] ;
+					++k ; ++j ;
+					for ( ; buffer[j] != ' ' ; ++j, ++k )
+						buffer2[k] = buffer[j] ;
+					// Avg coverage
+					buffer2[k] = buffer[j] ;
+					++k ; ++j ;
+					sprintf( buffer2 + k, "1.00" ) ;	
+					while ( buffer2[k] )
+						++k ;
+					while ( buffer[j] != ' ' )
+						++j ;
+
+					// Other part
 					for ( ; buffer[j] != 'C' || buffer[j + 1] != 'D' || buffer[j + 2] != 'R' 
 						|| buffer[j + 3] != '3' ; ++j, ++k )	
 						buffer2[k] = buffer[j] ;
