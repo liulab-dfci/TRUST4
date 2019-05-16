@@ -3460,6 +3460,11 @@ public:
 		int gapAllow = kmerLength + 1 ;
 		if ( threshold >= 1 )
 			gapAllow = 3 ;
+		if ( a.seqIdx == -1 )
+			return false ;
+		if ( b.seqIdx == -1 )
+			return true ;
+
 		if ( GetGeneType( seqs[ a.seqIdx ].name ) == 2 ) 
 		{
 			if ( a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen 
@@ -3749,8 +3754,8 @@ public:
 							geneOverlap[ geneType ] = allOverlaps[i] ;
 						}
 					}
-					if ( geneOverlap[0].seqIdx == -1 )
-						geneOverlap[0] = orig ;
+					//if ( geneOverlap[0].seqIdx == -1 )
+					//	geneOverlap[0] = orig ;
 				}
 			}
 
@@ -4078,9 +4083,10 @@ public:
 			}
 			
 			int adjustE = e  ;
-			if ( locateS != -1 )
+			if ( 1 ) //locateS != -1 )
 			{
-				adjustE = e - ( e - locateS ) % 3 ; 
+				if ( locateS != -1 )
+					adjustE = e - ( e - locateS ) % 3 ; 
 				for ( i = adjustE ; i < boundE && i + 11 < len ; i += 3 )
 				{
 					if ( ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' || 
@@ -4112,9 +4118,12 @@ public:
 				if ( locateE == -1 )
 				{
 					// Use weaker motif.
-					adjustE = e - ( e - locateS ) % 3 ;
-					if ( adjustE + 3 < locateS + 18 )
+					if ( locateS != -1 )
+					{
+						adjustE = e - ( e - locateS ) % 3 ;
+						if ( adjustE + 3 < locateS + 18 )
 						adjustE = locateS + 15 ;
+					}
 					for ( i = adjustE ; i < boundE ; ++i )
 					{
 						// The GxG motif
@@ -4199,6 +4208,15 @@ public:
 					}
 				}
 			}
+
+			if ( locateE + 2 - locateS + 1 < 18 )
+			{
+				if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 )
+					locateS = -1 ;
+				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1  )
+					locateS = -1 ;
+			}
+
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
 			{
 				s = locateS ;
@@ -4235,6 +4253,59 @@ public:
 						cdr3Score += 100.0 / 6 ;
 
 			}
+			// Partial CDR3s
+			else if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
+				&& locateE + 11 < len && locateE > 15 && locateE <= 60 ) 
+			{
+				if ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
+					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' )
+				{
+					locateS = locateE % 3 ;			
+					cdr3Score = 0 ;
+
+					s = locateS ;
+					e = locateE + 2 ;
+					
+					if ( e - s + 1 >= 18 )
+					{
+						cdr3 = new char[e - s + 2  + 1 ] ;
+						memcpy( cdr3, read + s, e - s + 1 ) ;
+						cdr3[e - s + 1] = '\0' ;
+
+						cdr[2].seqIdx = 0 ;
+						cdr[2].readStart = s ;
+						cdr[2].readEnd = e ;
+					}
+				}
+			}
+			else if ( locateS != -1 && locateE == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 
+				&& locateS - 6 > 0 && locateS + 18 < len && locateS + 2 + 60 > len )
+			{
+				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
+					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
+					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+				{
+					locateE = len - 3 - ( len - 3 - locateS ) % 3 ;
+					cdr3Score = 0 ;
+				
+					s = locateS ;
+					e = locateE + 2 ;
+					
+					if ( e - s + 1 >= 18 )
+					{
+						cdr3 = new char[e - s + 2  + 1 ] ;
+						memcpy( cdr3, read + s, e - s + 1 ) ;
+						cdr3[e - s + 1] = '\0' ;
+
+						cdr[2].seqIdx = 0 ;
+						cdr[2].readStart = s ;
+						cdr[2].readEnd = e ;
+					}
+				}
+			}
+				
 		}
 
 		// Compute the name
