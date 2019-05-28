@@ -3465,19 +3465,38 @@ public:
 		if ( b.seqIdx == -1 )
 			return true ;
 
-		if ( GetGeneType( seqs[ a.seqIdx ].name ) == 2 ) 
+		if ( GetGeneType( seqs[ a.seqIdx ].name ) == 2 /*&& threshold < 1*/ ) 
 		{
-			if ( a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen 
-					&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow && b.readEnd >= seqs[b.seqIdx].consensusLen )
+			//printf( "hi %lf %lf %.1lf\n", a.similarity, b.similarity, threshold ) ;
+			if ( a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow /*&& a.readEnd >= seqs[a.seqIdx].consensusLen */
+					&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow /*&& b.readEnd >= seqs[b.seqIdx].consensusLen*/ )
 			{
 				//matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
-				if ( a.similarity - 0.1 > b.similarity )
+				if ( a.similarity - 0.1 > b.similarity 
+					&& a.seqEnd - a.seqStart > b.seqEnd - b.seqStart - kmerLength )
 				{
 					return true ;
 				}
+				else if ( a.similarity - 0.1 > b.similarity )
+				{
+					return true ;
+
+
+					int adjustMatchCntA = matchCnt ;
+					int adjustMatchCntB = b.matchCnt ;
+					if ( a.readEnd - a.readStart < b.readEnd - b.readStart )
+						adjustMatchCntA += ( b.readEnd - b.readStart - a.readEnd - a.readStart  ) / 2 ;
+					else
+						adjustMatchCntB += ( a.readEnd - a.readStart - b.readEnd - b.readStart  ) / 2 ;
+
+					if ( adjustMatchCntA > adjustMatchCntB * threshold )
+						return true ;
+				}
+				//else //if ( a.similarity > b.similarity )
+				//	matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
 			}
-			else if (  a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen )
-			{
+			else if (  a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen ) 
+			{	
 				return true ;
 			}
 		}
@@ -3684,6 +3703,11 @@ public:
 				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
 				if ( IsBetterGeneMatch( allOverlaps[i], geneOverlap[ geneType ], 1.0 ) )
 				{
+					//if ( geneOverlap[ geneType].seqIdx != -1 )
+					//	printf( "%s %s\n", seqs[ geneOverlap[ geneType ].seqIdx ].name, seqs[ allOverlaps[i].seqIdx ].name ) ;
+					//else
+					//	printf( "-1 %s\n", seqs[ allOverlaps[i].seqIdx ].name ) ;
+						
 					geneOverlap[ geneType ] = allOverlaps[i] ;
 				}
 			}
@@ -4021,7 +4045,6 @@ public:
 				}
 			}
 
-
 			if ( locateS == -1 )
 			{
 				for ( i = s ; i >= boundS ; i -= 3 )
@@ -4214,7 +4237,7 @@ public:
 				if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 )
 					locateS = -1 ;
 				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1  )
-					locateS = -1 ;
+					locateE = -1 ;
 			}
 
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
