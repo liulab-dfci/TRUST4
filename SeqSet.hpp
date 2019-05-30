@@ -1728,6 +1728,13 @@ public:
 		{
 			// Insert the kmers 
 			struct _seqWrapper ns ;
+			// Filter the gene with "/" sign
+			for ( i = 0 ; fa.id[i] ; ++i )
+				if ( fa.id[i] == '/' )
+					break ;
+			if ( fa.id[i] == '/' )
+				continue ;
+
 			ns.name = strdup( fa.id ) ;
 			ns.isRef = true ;
 
@@ -3472,28 +3479,23 @@ public:
 					&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow /*&& b.readEnd >= seqs[b.seqIdx].consensusLen*/ )
 			{
 				//matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
-				if ( a.similarity - 0.1 > b.similarity 
-					&& a.seqEnd - a.seqStart > b.seqEnd - b.seqStart - kmerLength )
+				if ( a.similarity - 0.1 > b.similarity )
 				{
-					return true ;
-				}
-				else if ( a.similarity - 0.1 > b.similarity )
-				{
-					return true ;
-
-
-					int adjustMatchCntA = matchCnt ;
-					int adjustMatchCntB = b.matchCnt ;
-					if ( a.readEnd - a.readStart < b.readEnd - b.readStart )
-						adjustMatchCntA += ( b.readEnd - b.readStart - a.readEnd - a.readStart  ) / 2 ;
-					else
-						adjustMatchCntB += ( a.readEnd - a.readStart - b.readEnd - b.readStart  ) / 2 ;
-
-					if ( adjustMatchCntA > adjustMatchCntB * threshold )
+					// Check whether a's high similarity coming from the sequence it matched is a 
+					bool directlyBetter = true ;
+					if ( a.seqEnd - a.seqStart < b.seqEnd - b.seqStart )
+					{
+						int mismatchCnt = 0 ;
+						int i, j ;
+						for ( i = a.seqEnd, j = b.seqEnd ; i >= a.seqStart ; --i, --j )
+							if ( seqs[ a.seqIdx ].consensus[i] != seqs[ b.seqIdx ].consensus[j] )
+								++mismatchCnt ;
+						if ( mismatchCnt <= 1 )
+							directlyBetter = false ;
+					}
+					if ( directlyBetter )
 						return true ;
 				}
-				//else //if ( a.similarity > b.similarity )
-				//	matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
 			}
 			else if (  a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen ) 
 			{	
@@ -3632,6 +3634,7 @@ public:
 				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + allOverlaps[i].seqEnd + 1, 
 					seqs[ seqIdx ].consensusLen - allOverlaps[i].seqEnd - 1, 
 					read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, 0, align ) ;
+				//printf( "%s\n", seqs[ seqIdx ].name ) ;
 				//AlignAlgo::VisualizeAlignment( seqs[ seqIdx ].consensus + allOverlaps[i].seqEnd + 1, 
 				//	seqs[ seqIdx ].consensusLen - allOverlaps[i].seqEnd - 1, 
 				//	read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, align ) ;

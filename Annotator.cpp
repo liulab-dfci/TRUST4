@@ -198,7 +198,7 @@ int main( int argc, char *argv[] )
 
 			// Naively build the alternative CDR3.
 			// So far, only handle one difference case.
-			if ( alterNuc.Size() > 0 && alterNuc.Size() <= 20 )
+			if ( alterNuc.Size() > 0 && alterNuc.Size() <= 1 )
 			{
 				int size = alterNuc.Size() ;
 				char *alterCDR = ( char * )malloc( sizeof( char ) * ( cdr[i].readEnd - cdr[i].readStart + 2 ) ) ;

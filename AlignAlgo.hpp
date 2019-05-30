@@ -664,7 +664,7 @@ public:
 		for ( i = 0 ; i <= lenp ; ++i )
 			for ( j = 0 ; j <= lent ; ++j )
 			{
-				int scoreThreshold = ( i + j ) * 0.5 * 0.75 * SCORE_MATCH ;
+				int scoreThreshold = ( i + j ) * 0.5 *(  0.8 * SCORE_MATCH + 0.2 * SCORE_MISMATCH ) ;
 				if ( m[i * bmax + j] < scoreThreshold )
 					continue ;
 				if ( m[i * bmax +j] > max )
