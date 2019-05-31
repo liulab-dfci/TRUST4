@@ -4242,6 +4242,10 @@ public:
 				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1  )
 					locateE = -1 ;
 			}
+			else if ( locateE + 2 - locateS + 1 >= 180 && ( geneOverlap[0].seqIdx == -1 || geneOverlap[1].seqIdx == -1 ) ) 
+			{
+				locateS = locateE = -1 ;
+			}
 
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
 			{
