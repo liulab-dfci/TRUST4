@@ -131,6 +131,7 @@ int main( int argc, char *argv[] )
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
 	bool flagNoTrim = false ;
+	bool hasMate = false ;
 
 	while ( 1 )
 	{
@@ -151,10 +152,12 @@ int main( int argc, char *argv[] )
 		else if ( c == '1' )
 		{
 			reads.AddReadFile( optarg, true ) ;
+			hasMate = true ;
 		}
 		else if ( c == '2' )
 		{
 			mateReads.AddReadFile( optarg, true ) ;
+			hasMate = true ;
 		}
 		else if ( c == 'o' )
 		{
@@ -204,6 +207,7 @@ int main( int argc, char *argv[] )
 		}*/
 
 		struct _sortRead nr ;
+		int rWeight = 1 ;
 		nr.read = strdup( reads.seq ) ;
 		nr.id = strdup( reads.id ) ;
 		if ( reads.qual != NULL )
@@ -279,7 +283,7 @@ int main( int argc, char *argv[] )
 						}
 					}
 				}
-				
+
 				// filter the mate.
 				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
 				mateR.read = NULL ;
@@ -297,9 +301,13 @@ int main( int argc, char *argv[] )
 				int len = offset + j ;
 				for ( j = 0 ; j < slen ; ++j )
 				{
-					r[j] = nr.read[j] ;
-					q[j] = nr.qual[j] ;
+					if ( 1 ) //j < offset || nr.qual[j] >= q[j] - 10 || r[j] == 'N' )
+					{
+						r[j] = nr.read[j] ;
+						q[j] = nr.qual[j] ;
+					}
 				}
+
 				if ( j > len ) 
 					len = j ;
 				r[len] = q[len] = '\0' ;
@@ -308,13 +316,14 @@ int main( int argc, char *argv[] )
 				free( nr.read ) ; free( nr.qual ) ;
 				nr.read = r ;
 				nr.qual = q ;
+				++rWeight ;
 			}
 			else
 			{
 				strcpy( mateR.read, mateReads.seq ) ;
 			}
 		}
-		else
+		else if ( hasMate ) 
 		{
 			fprintf( stderr, "The two mate-pair read files have different number of reads.\n" ) ;
 			exit( 1 ) ;
@@ -326,6 +335,26 @@ int main( int argc, char *argv[] )
 			sortedReads.push_back( nr ) ;
 			if ( countMyself )
 				kmerCount.AddCount( nr.read ) ;
+			
+			if ( rWeight == 2 )
+			{
+				struct _sortRead wr ;
+				wr.read = strdup( nr.read ) ;
+				if ( nr.qual != NULL )
+					wr.qual = strdup( nr.qual ) ;
+				else
+					wr.qual = NULL ;
+				int len = strlen( nr.id ) ;
+				wr.id = ( char * )malloc( sizeof( char ) * ( len + 3 ) ) ;
+				strcpy( wr.id, nr.id ) ;
+				wr.id[len] = '.' ;
+				wr.id[len + 1] = '1' ;
+				wr.id[len + 2] = '\0' ;
+
+				sortedReads.push_back( wr ) ;
+				if ( countMyself )
+					kmerCount.AddCount( wr.read ) ;
+			}
 
 			int len = strlen( nr.read ) ;
 			if ( len > maxReadLen )
