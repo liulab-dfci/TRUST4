@@ -905,11 +905,18 @@ public:
 			// Whether the overlap works.
 			int matchCnt = 0 ;
 			bool flag = true ;
+			
+			double similarityThreshold = 0.95 ;
+			if ( flen - j >= 100 )
+				similarityThreshold = 0.85 ;
+			else if ( flen - j >= 50 )
+				similarityThreshold = 0.85 + ( flen - j - 50 ) / 50.0 * 0.1 ;
+			
 			for ( k = 0 ; j + k < flen && k < slen ; ++k )
 			{
 				if ( fr[j + k] == sr[k] )
 					++matchCnt ;
-				if ( matchCnt + ( flen - ( j + k ) - 1 ) < int( ( flen - j ) * 0.95 ) )
+				if ( matchCnt + ( flen - ( j + k ) - 1 ) < int( ( flen - j ) * similarityThreshold ) )
 				{
 					flag = false ;
 					break ;
@@ -917,7 +924,7 @@ public:
 			}
 
 			if ( flag ) 
-			{	
+			{
 				offset = j ;
 				++offsetCnt ;
 				overlapSize = k ;

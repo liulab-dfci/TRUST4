@@ -291,32 +291,67 @@ int main( int argc, char *argv[] )
 			else if (  ( overlapSize = 
 				AlignAlgo::IsMateOverlap( nr.read, slen, mateR.read, flen, minOverlap2, offset, bestMatchCnt ) ) >= 0 )
 			{
-				char *r = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
-				char *q = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
-				for ( j = 0 ; j < flen ; ++j )
+				if ( bestMatchCnt >= 0.95 * overlapSize )
 				{
-					r[ offset + j ] = mateR.read[j] ;
-					q[ offset + j ] = mateR.qual[j] ;
-				}
-				int len = offset + j ;
-				for ( j = 0 ; j < slen ; ++j )
-				{
-					if ( 1 ) //j < offset || nr.qual[j] >= q[j] - 10 || r[j] == 'N' )
+					char *r = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
+					char *q = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
+					for ( j = 0 ; j < flen ; ++j )
 					{
-						r[j] = nr.read[j] ;
-						q[j] = nr.qual[j] ;
+						r[ offset + j ] = mateR.read[j] ;
+						q[ offset + j ] = mateR.qual[j] ;
+					}
+					int len = offset + j ;
+					for ( j = 0 ; j < slen ; ++j )
+					{
+						if ( 1 ) //j < offset || nr.qual[j] >= q[j] - 10 || r[j] == 'N' )
+						{
+							r[j] = nr.read[j] ;
+							q[j] = nr.qual[j] ;
+						}
+					}
+
+					if ( j > len ) 
+						len = j ;
+					r[len] = q[len] = '\0' ;
+					free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
+					mateR.read = NULL ;
+					free( nr.read ) ; free( nr.qual ) ;
+					nr.read = r ;
+					nr.qual = q ;
+					++rWeight ;
+				}
+				else
+				{
+					// Discard one of the read
+					bool useFirst = true ;
+					if ( nr.qual != NULL )
+					{
+						double avgQualR = 0, avgQualMate = 0 ;
+						for ( j = offset ; j < slen ; ++j )
+							avgQualR += nr.qual[j] - 32 ;
+						for ( j = flen - 1 ; j >= flen - overlapSize ; --j )
+							avgQualMate += mateR.qual[j] - 32 ;
+
+						avgQualR /= overlapSize ; avgQualMate /= overlapSize ;
+						if ( avgQualR + 10 < avgQualMate )
+							useFirst = false ;
+					}
+					if ( useFirst )
+					{
+						free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
+						mateR.read = NULL ;
+					}
+					else
+					{
+						free( nr.read ) ; free( nr.qual ) ;
+						free( mateR.id ) ;
+
+						nr.read = mateR.read ;
+						nr.qual = mateR.qual ;
+						strcpy( nr.read, mateReads.seq ) ;
+						mateR.read = NULL ;
 					}
 				}
-
-				if ( j > len ) 
-					len = j ;
-				r[len] = q[len] = '\0' ;
-				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
-				mateR.read = NULL ;
-				free( nr.read ) ; free( nr.qual ) ;
-				nr.read = r ;
-				nr.qual = q ;
-				++rWeight ;
 			}
 			else
 			{
@@ -492,8 +527,14 @@ int main( int argc, char *argv[] )
 						name[0] = s[0] ; name[1] = s[1] ; name[2] = s[2] ; name[3] = s[3] ;
 						name[4] = '\0' ;
 					}
-				addRet = seqSet.AddRead( sortedReads[i].read, name, 
-					sortedReads[i].minCnt >= 20 ? 0.97 : 0.9 ) ;
+
+				double similarityThreshold = 0.9 ;
+				if ( sortedReads[i].minCnt >= 4 )
+					similarityThreshold = 0.97 ;
+				else if ( sortedReads[i].minCnt >= 2 )
+					similarityThreshold = 0.95 ;
+
+				addRet = seqSet.AddRead( sortedReads[i].read, name, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
