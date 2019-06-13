@@ -2719,10 +2719,13 @@ public:
 						
 						// Lower the weight at the end for original sequence.
 						for ( i = 0 ; i < 2 ; ++i )
+						{
+							if ( i + shift >= len || r[i + shift] == 'N' )
+								continue ;
 							for ( j = 0 ; j < 4 ; ++j )
-								if ( seq.posWeight[i + shift].count[j] > 1 )
+								if ( r[i + shift] != numToNuc[j] && seq.posWeight[i + shift].count[j] > 1 )
 									--seq.posWeight[i + shift].count[j] ;
-
+						}
 						seq.posWeight.SetZero( 0, shift ) ;
 					}
 					if ( extendedOverlaps[0].readEnd < len - 1 )
@@ -2732,9 +2735,14 @@ public:
 						
 						// Lower the weight at the end for original sequence.
 						for ( i = seq.consensusLen - 2 ; i < seq.consensusLen ; ++i )
+						{
+							int pos = i - extendedOverlaps[0].seqStart ;
+							if ( pos < 0 || r[pos] == 'N' )
+								continue ;
 							for ( j = 0 ; j < 4 ; ++j )
-								if ( seq.posWeight[i].count[j] > 1 )
+								if ( r[pos] != numToNuc[j] && seq.posWeight[i].count[j] > 1 )
 									--seq.posWeight[i].count[j] ;
+						}
 					}
 					
 					// Update the anchor requirement
