@@ -3964,8 +3964,8 @@ public:
 			&& ( geneOverlap[2].seqIdx == -1 || geneOverlap[0].readStart < geneOverlap[2].readStart ) )
 		{
 			// Infer CDR1, 2
-			vAlign = new char[ 2 * len + 2 ] ;
 			struct _overlap vgene = geneOverlap[0] ; // Overlap with v-gene
+			vAlign = new char[ len + seqs[ vgene.seqIdx ].consensusLen + 2 ] ;
 			AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
 				read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
 			//AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
@@ -4184,8 +4184,8 @@ public:
 					// Left to right scan should be more stable.
 					if ( vAlign == NULL )
 					{
-						vAlign = new char[ 2 * len + 2 ] ;
 						struct _overlap vgene = geneOverlap[0] ; // Overlap with v-gene
+						vAlign = new char[ len + seqs[vgene.seqIdx].consensusLen + 2 ] ;
 						AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, 
 								vgene.seqEnd - vgene.seqStart + 1,
 								read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
@@ -4387,8 +4387,8 @@ public:
 					if ( dest != -1 /*&& dest >= geneOverlap[2].seqStart*/ )
 					{
 						// Left to right scan should be more stable.
-						align = new char[ 2 * len + 2 ] ;
 						struct _overlap jgene = geneOverlap[2] ; // Overlap with j-gene
+						align = new char[ len + seqs[ jgene.seqIdx ].consensusLen + 2 ] ;
 						AlignAlgo::GlobalAlignment( seqs[ jgene.seqIdx ].consensus + jgene.seqStart, 
 								jgene.seqEnd - jgene.seqStart + 1,
 								read + jgene.readStart, jgene.readEnd - jgene.readStart + 1, align ) ;
