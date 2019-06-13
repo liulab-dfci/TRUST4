@@ -184,7 +184,7 @@ int main( int argc, char *argv[] )
 				for ( k = 0 ; k < 4 ; ++k )
 				{
 					//printf( "%c %c %d\n", numToNuc[k], seq[j], posWeight[j].count[k] ) ;
-					if ( numToNuc[k] != seq[j] && posWeight[j].count[k] > 1 &&  
+					if ( numToNuc[k] != seq[j] && posWeight[j].count[k] >= 4 &&  
 						( sum <= posWeight[j].count[k] * 3 
 							|| ( sum >= 20 && sum <= posWeight[j].count[k] * 4 ) ) )
 					{

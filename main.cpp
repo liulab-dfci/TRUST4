@@ -303,7 +303,7 @@ int main( int argc, char *argv[] )
 					int len = offset + j ;
 					for ( j = 0 ; j < slen ; ++j )
 					{
-						if ( 1 ) //j < offset || nr.qual[j] >= q[j] - 10 || r[j] == 'N' )
+						if ( j < offset || nr.qual[j] >= q[j] - 14 || r[j] == 'N' )
 						{
 							r[j] = nr.read[j] ;
 							q[j] = nr.qual[j] ;
@@ -313,6 +313,19 @@ int main( int argc, char *argv[] )
 					if ( j > len ) 
 						len = j ;
 					r[len] = q[len] = '\0' ;
+					
+					if ( 0 )//len > 4 )
+					{
+						for ( j = 2 ; j <= len ; ++j )
+						{
+							r[j - 2] = r[j] ;
+							q[j - 2] = q[j] ;
+						}
+						r[len - 4] = '\0' ;
+						q[len - 4] = '\0' ;
+						len -= 4 ;
+					}
+					
 					free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
 					mateR.read = NULL ;
 					free( nr.read ) ; free( nr.qual ) ;
@@ -529,7 +542,7 @@ int main( int argc, char *argv[] )
 					}
 
 				double similarityThreshold = 0.9 ;
-				if ( sortedReads[i].minCnt >= 4 )
+				if ( sortedReads[i].minCnt >= 20 )
 					similarityThreshold = 0.97 ;
 				else if ( sortedReads[i].minCnt >= 2 )
 					similarityThreshold = 0.95 ;
@@ -663,6 +676,7 @@ int main( int argc, char *argv[] )
 		struct _assignRead nr ;
 		nr.id = sortedReads[ assembledReadIdx[i] ].id ;
 		nr.read = sortedReads[ assembledReadIdx[i] ].read ;
+		nr.info = assembledReadIdx[i] ;
 		nr.overlap.seqIdx = -1 ;
 		assembledReads.push_back( nr ) ;
 	}
@@ -761,9 +775,11 @@ int main( int argc, char *argv[] )
 		//if ( assembledReads[i].overlap.seqIdx != -1 && assembledReads[i + 1].overlap.seqIdx != -1 
 		//	&& assembledReads[i].overlap.seqIdx == assembledReads[i + 1].overlap.seqIdx )
 		{
-			++i ;
 			continue ;
 		}
+
+		if ( sortedReads[ assembledReads[i].info ].minCnt < 4 )
+			continue ;
 		
 		int nCnt = 0 ;
 		for ( j = 0 ; assembledReads[i].read[j] ; ++j )
@@ -771,14 +787,11 @@ int main( int argc, char *argv[] )
 				++nCnt ;
 		if ( nCnt >= 1 )
 		{
-			++i ;
 			continue ;
 		}
 
 		lowFreqKmerCount.AddCount( assembledReads[i].read ) ;
 		lowFreqReadsIdx.push_back(i) ;
-		
-		++i ;
 	}
 	k = 0 ;
 	int lowFreqCnt = lowFreqReadsIdx.size() ;
