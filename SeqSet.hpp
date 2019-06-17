@@ -25,6 +25,7 @@ struct _seqWrapper
 	int minLeftExtAnchor, minRightExtAnchor ; // only overlap with size larger than this can be counted as valid extension.
 
 	struct _pair info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1,2 and info[2].a for CDR3
+			// for novel, info[0] is used as identifier.
 } ;
 
 struct _hit
@@ -96,6 +97,15 @@ struct _assignRead
 	struct _overlap overlap ;
 } ;
 
+struct _assignHistory
+{
+	int curIdx ;
+	int curMateIdx ;
+
+	SimpleVector<int> readsAssignedTo ;
+	std::vector< std::vector<int> >  readsInSeq ;
+} ;
+
 
 class SeqSet
 {
@@ -105,6 +115,7 @@ private:
 	int kmerLength ;
 	int radius ;
 	int hitLenRequired ;
+	int gapN ;
 
 	// Some threshold
 	double novelSeqSimilarity ;
@@ -136,7 +147,15 @@ private:
 		return strcmp( a.id, b.id ) < 0 ;
 	}
 		
-	
+	static bool CompSortOverlapByCoord( const struct _overlap &a, const struct _overlap &b )	
+	{
+		if ( a.seqIdx != b.seqIdx )
+			return a.seqIdx < b.seqIdx ;
+		else if ( a.readStart != b.readStart )
+			return a.readStart < b.readStart ;
+		else
+			return a.readEnd < b.readEnd ;
+	}
 	bool IsReverseComplement( char *a, char *b )
 	{
 		int i, j ;
@@ -1700,6 +1719,8 @@ public:
 		refSeqSimilarity = 0.75 ; 
 		repeatSimilarity = 0.95 ; 
 
+		gapN = 7 ;
+
 		prevAddInfo.readStart = -1 ;
 	}
 	~SeqSet() 
@@ -2114,7 +2135,7 @@ public:
 					seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, 
 					overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd, 
 					overlaps[i].similarity ) ; 
-			//printf( "%s\n", seqs[  overlaps[i].seqIdx ].consensus ) ;
+			printf( "%s\n", seqs[  overlaps[i].seqIdx ].consensus ) ;
 			//if ( !seqs[ overlaps[i].seqIdx ].isRef )
 			/*if ( !strcmp( read, "TTACTGTAATATACGATATTTTGACTGGTTATTAAGAGGCGACCCAAGAATCAATACTACTTTGACTACTGGGGCCAGGGAACCCTGGTCACCGTCTCCT" ) )
 			{
@@ -2184,7 +2205,9 @@ public:
 					if ( extendedOverlaps[j].seqEnd == seqs[ extendedOverlaps[j].seqIdx ].consensusLen - 1 )
 						rightRadius = 0 ;
 					if ( overlaps[i].readStart >= extendedOverlaps[j].readStart - leftRadius  
-						&& overlaps[i].readEnd <= extendedOverlaps[j].readEnd + rightRadius )
+						&& overlaps[i].readEnd <= extendedOverlaps[j].readEnd + rightRadius 
+						&& ( overlaps[i].seqStart >= radius 
+							|| overlaps[i].seqEnd <= seqs[ overlaps[i].seqIdx ].consensusLen - radius - 1 ) )
 						break ;
 					
 					// Some extended is a subset of this one.
@@ -2217,7 +2240,9 @@ public:
 						if ( extendedOverlaps[j].seqEnd == seqs[ extendedOverlaps[j].seqIdx ].consensusLen - 1 )
 							rightRadius = 0 ;
 						if ( extendedOverlaps[k].readStart >= extendedOverlaps[j].readStart - leftRadius  
-								&& extendedOverlaps[k].readEnd <= extendedOverlaps[j].readEnd + rightRadius )
+								&& extendedOverlaps[k].readEnd <= extendedOverlaps[j].readEnd + rightRadius 
+								&& ( overlaps[i].seqStart > 0 
+									|| overlaps[i].seqEnd < seqs[ overlaps[i].seqIdx ].consensusLen - 1 ) )
 							break ;
 
 						// Some extended is a subset of this one.
@@ -2238,6 +2263,10 @@ public:
 					for ( j = 0 ; j < i ; ++j )
 					{
 						if ( seqs[ overlaps[j].seqIdx ].isRef )
+							continue ;
+
+						if ( extendedOverlaps[k].seqStart == 0 
+							&& extendedOverlaps[k].seqEnd == seqs[ extendedOverlaps[k].seqIdx ].consensusLen - 1 )
 							continue ;
 
 						if ( extendedOverlaps[k].readStart >= overlaps[j].readStart &&
@@ -2266,6 +2295,10 @@ public:
 					// The previous overlaps might just failed to extend at one side.
 					for ( j = 0 ; j < failedExtendedOverlapsCnt ; ++j )
 					{
+						if ( extendedOverlaps[k].seqStart == 0 
+							&& extendedOverlaps[k].seqEnd == seqs[ extendedOverlaps[k].seqIdx ].consensusLen - 1 )
+							continue ;
+						
 						if ( extendedOverlaps[k].readStart >= failedExtendedOverlaps[j].readStart &&
 							extendedOverlaps[k].readEnd <= failedExtendedOverlaps[j].readEnd )
 						{
@@ -2441,6 +2474,8 @@ public:
 						{
 							delete[] extendedOverlaps ;
 							delete[] failedExtendedOverlaps ;
+							free( rcRead ) ;
+							delete[] align ;
 							return -1 ;
 						}
 					}
@@ -2479,7 +2514,10 @@ public:
 						seqOffset[i] ) ;
 				}
 #endif
-
+				if ( extendedOverlaps[0].readStart > 0 )
+					memcpy( newConsensus, r, len ) ;
+				else
+					memcpy( newConsensus + extendedOverlaps[0].seqStart, r, len ) ;
 				// Copy the original consensus in.
 				// The earlier seq has higher weight.
 				for ( i = eOverlapCnt - 1 ; i >= 0 ; --i )
@@ -2488,34 +2526,25 @@ public:
 						seqs[ extendedOverlaps[i].seqIdx ].consensusLen ) ;	
 				}
 
-				// Fill in the gaps
-				if ( extendedOverlaps[0].readStart > 0 )
-					memcpy( newConsensus, r, extendedOverlaps[0].readStart ) ;		
-				
-				for ( i = 1 ; i < eOverlapCnt ; ++i )
-				{
-					if ( extendedOverlaps[i].readStart > extendedOverlaps[i - 1].readEnd + 1 )
-						memcpy( newConsensus + seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen,
-							r + extendedOverlaps[i - 1].readEnd + 1, 
-							extendedOverlaps[i].readStart - extendedOverlaps[i - 1].readEnd - 1 ) ;
-				}
-				
-
 				int newConsensusLen = 0 ;
-				if ( extendedOverlaps[i - 1].readEnd < len )
+				int lastEndExtendedOverlapIdx = eOverlapCnt - 1 ;
+				k = 0 ;
+				for ( i = 0 ; i < eOverlapCnt ; ++i )
+					if ( seqOffset[i] + seqs[ extendedOverlaps[i].seqIdx ].consensusLen > k )
+					{
+						k = seqOffset[i] + seqs[ extendedOverlaps[i].seqIdx ].consensusLen ;
+						lastEndExtendedOverlapIdx = i ;
+					}
+
+				if ( extendedOverlaps[lastEndExtendedOverlapIdx].readEnd < len )
 				{
-					memcpy( newConsensus + seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen,
-							r + extendedOverlaps[i - 1].readEnd + 1,
-							len - extendedOverlaps[i - 1].readEnd -1 ) ;
-					newConsensusLen = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen 
-					                     + ( len - extendedOverlaps[i - 1].readEnd - 1 ) ;
-					newConsensus[ newConsensusLen ] = '\0' ;
+					newConsensusLen = k + ( len - extendedOverlaps[ lastEndExtendedOverlapIdx ].readEnd - 1 ) ;
 				}
 				else
 				{
-					newConsensusLen = seqOffset[i - 1] + seqs[ extendedOverlaps[i - 1].seqIdx ].consensusLen ;
-					newConsensus[ newConsensusLen ] = '\0' ;
+					newConsensusLen = k ; 
 				}
+				newConsensus[ newConsensusLen ] = '\0' ;
 				//printf( "newconsensus %s %d\n", newConsensus, newConsensusLen ) ;
 				
 				// Rearrange the memory structure for posWeight.	
@@ -2649,7 +2678,8 @@ public:
 				
 				// Update the anchor requirement.
 				seqs[ newSeqIdx ].minLeftExtAnchor = seqs[ extendedOverlaps[0].seqIdx ].minLeftExtAnchor ;
-				seqs[ newSeqIdx ].minRightExtAnchor = seqs[ extendedOverlaps[ eOverlapCnt - 1 ].seqIdx ].minRightExtAnchor ;
+				seqs[ newSeqIdx ].minRightExtAnchor = 
+					seqs[ extendedOverlaps[ lastEndExtendedOverlapIdx ].seqIdx ].minRightExtAnchor ;
 				
 				// either one of the ends of read or seq should be 0.
 				readInConsensusOffset = 0 ;
@@ -3226,8 +3256,9 @@ public:
 		useInBranch.ExpandTo( seqCnt ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 			useInBranch[i] = true ;
-
+		
 		BuildBranchGraph( adj, leastOverlapLen, useInBranch ) ;
+
 		// Keep only the connections that representing overlapping information.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -3603,6 +3634,10 @@ public:
 	{
 		int i, j, k ;
 		
+		std::vector< std::vector< struct _overlap > > contigOverlaps ;
+		SimpleVector<struct _pair> contigs ; // the range of contigs
+		int contigCnt ;
+
 		std::vector<struct _overlap> overlaps ;
 		std::vector<struct _overlap> allOverlaps ;
 		int overlapCnt ;
@@ -3617,18 +3652,155 @@ public:
 			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
 
 		//sprintf( buffer, "%d", len ) ;
+		for ( i = 0 ; i < len ; ++i )
+		{
+			int NCnt = 0 ;
+			for ( j = i + 1 ; j < len ; ++j )
+			{
+				//printf( "%c %d %d %d\n", read[j], i, j, NCnt ) ;
+				if ( j >= i + gapN && read[j - gapN] == 'N' )
+					--NCnt ;
+				if ( read[j] == 'N' ) 
+					++NCnt ;
+				if ( NCnt >= gapN )
+					break ;
+
+			}
+
+			struct _pair nc ; 
+			nc.a = i ;
+			if ( j < len )
+				nc.b = j - gapN ; 
+			else
+				nc.b = len - 1 ;
+			contigs.PushBack( nc ) ;
+			i = j + 1 ;
+		}
+		
+		contigCnt = contigs.Size() ;
+		char *contigBuffer = new char[len + 1] ;
 		if ( detailLevel > 0 )
 			hitLenRequired = 17 ;	
-		overlapCnt = GetOverlapsFromRead( read, detailLevel == 0 ? 0 : 1, overlaps ) ;		
-		hitLenRequired = 31 ;
+		// Obtain the overlaps for each contig
+		contigOverlaps.resize( contigCnt ) ;
+		for ( k = 0 ; k < contigCnt ; ++k )
+		{
+			int contigLen = contigs[k].b - contigs[k].a + 1 ;
+			memcpy( contigBuffer, read + contigs[k].a, contigLen ) ;
+			contigBuffer[ contigLen ] = '\0' ;
+			contigOverlaps[k].clear() ;
 
+			int contigOverlapCnt = GetOverlapsFromRead( contigBuffer, detailLevel == 0 ? 0 : 1, contigOverlaps[k] ) ;		
+			for ( i = 0 ; i < contigOverlapCnt ; ++i )
+			{
+				contigOverlaps[k][i].readStart += contigs[k].a ;
+				contigOverlaps[k][i].readEnd += contigs[k].a ;
+			}
+			std::sort( contigOverlaps[k].begin(), contigOverlaps[k].end() ) ;
+			
+			//std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
+			//for ( i = 0 ; i < contigOverlapCnt ; ++i )
+			//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
+		}
+		hitLenRequired = 31 ;
+		delete[] contigBuffer ;
+
+
+		// Extend overlaps that can cross contigs
+		bool *seqUsed = new bool[ seqs.size() ] ;
+		if ( detailLevel >= 1 )
+		{
+			for ( k = 0 ; k < contigCnt ; ++k )	
+			{
+				memset( seqUsed, false, sizeof( bool ) * seqs.size() ) ;
+				int cnt = contigOverlaps[k].size() ;
+				std::vector<struct _overlap> &ovs = contigOverlaps[k] ;
+
+				for ( i = 0 ; i < cnt ; ++i )
+				{
+					if ( seqUsed[ ovs[i].seqIdx ] = false )
+						continue ;
+					
+					int effectiveLen = ovs[i].readEnd - ovs[i].readStart + 1 
+						+ ovs[i].seqEnd - ovs[i].seqStart +1 ;
+
+					for ( j = k - 1 ; j >= 0 ; --j )
+					{
+						int cnt2 = contigOverlaps[j].size() ;
+						int l ;
+						for ( l = 0 ; l < cnt2 ; ++l )
+						{
+							struct _overlap &o = contigOverlaps[j][l] ;
+							if ( o.seqIdx == ovs[i].seqIdx )
+							{
+								if ( o.seqEnd < ovs[i].seqStart + 6 
+									&& o.similarity >= ovs[i].similarity - 0.05 )
+								{
+									ovs[i].readStart = o.readStart ;
+									ovs[i].matchCnt += o.matchCnt ;
+									effectiveLen += o.readEnd - o.readStart + 1 
+										+ o.seqEnd - o.seqStart + 1 ;
+								}
+								break ;
+							}
+						}
+					}
+
+					for ( j = k + 1 ; j < contigCnt ; ++j )
+					{
+						int cnt2 = contigOverlaps[j].size() ;
+						int l ;
+						for ( l = 0 ; l < cnt2 ; ++l )
+						{
+							struct _overlap &o = contigOverlaps[j][l] ;
+							if ( o.seqIdx == ovs[i].seqIdx )
+							{
+								if ( o.seqStart > ovs[i].seqEnd - 6
+									&& o.similarity >= ovs[i].similarity - 0.05 )
+								{
+									ovs[i].readEnd = o.readEnd ;
+									ovs[i].matchCnt += o.matchCnt ;
+									effectiveLen += o.readEnd - o.readStart + 1 
+										+ o.seqEnd - o.seqStart + 1 ;
+								}
+								break ;
+							}
+						}
+					}
+					ovs[i].similarity = (double)ovs[i].matchCnt / effectiveLen ;
+					seqUsed[ ovs[i].seqIdx ] = true ;
+				}
+			}
+		}
+		
+		// Put the extended version of overlaps into overall overlaps
+		for ( k = 0 ; k < contigCnt ; ++k )
+		{
+			overlaps.insert( overlaps.end(), contigOverlaps[k].begin(), contigOverlaps[k].end() ) ;
+		}
+		std::sort( overlaps.begin(), overlaps.end() ) ;
+		k = 0 ;
+		memset( seqUsed, false, sizeof( bool ) * seqs.size() ) ;	
+		overlapCnt = overlaps.size() ;
+		for ( i = 0 ; i < overlapCnt ; ++i )
+		{
+			if ( !seqUsed[ overlaps[i].seqIdx ] && overlaps[i].similarity >= 0.8 )
+			{
+				seqUsed[ overlaps[i].seqIdx ] = true ;
+				overlaps[k] = overlaps[i] ;
+				++k ;
+			}
+		}
+		overlaps.resize( k ) ;
+		overlapCnt = k ;
+		delete[] seqUsed ; 
+		
 		if ( overlapCnt == 0 )
 		{
 			if ( detailLevel >= 2 )
 				sprintf( buffer + strlen( buffer ), " * * * CDR1(0-0):0.00=null CDR2(0-0):0.00=null CDR3(0-0):0.00=null" ) ;
 			return 0 ;
 		}
-		std::sort( overlaps.begin(), overlaps.end() ) ;
 		// Get the coverage of the genes.
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
@@ -3643,12 +3815,12 @@ public:
 
 			int geneType = GetGeneType( name ) ;
 			//printf( "%d %s %lf %d: %d %d. %d %d\n", i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
-			if ( overlaps[i].similarity < 0.8 )//&& geneType == 0 
+			/*if ( overlaps[i].similarity < 0.8 )//&& geneType == 0 
 				//&& ( overlaps[i].readEnd - overlaps[i].readStart + 1 <= 40 ||
 				//	overlaps[i].seqEnd - overlaps[i].seqStart + 1 <= 40 ) ) 
 			{
 				continue ;
-			}
+			}*/
 
 			if ( geneType >= 0 && geneOverlap[ geneType ].seqIdx == -1 )
 				geneOverlap[ geneType ] = overlaps[i] ;
@@ -3785,7 +3957,7 @@ public:
 				Reverse( rvs, seqs[seqIdx].consensus, allOverlaps[i].seqStart ) ;
 				//rvr[geneOverlap[i].readStart] = '\0' ;
 				//rvs[geneOverlap[i].seqStart] = '\0' ;
-				
+					
 				AlignAlgo::GlobalAlignment_OneEnd( rvs, allOverlaps[i].seqStart, rvr, allOverlaps[i].readStart, 0, align ) ;
 				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
@@ -3918,38 +4090,6 @@ public:
 				{
 					geneOverlap[0].seqIdx = -1 ;
 				}
-			}
-
-			// Use remaining overlaps to see whether we can extend the V genes.
-			if ( geneOverlap[0].seqIdx != -1 )
-			{
-				for ( i = 0 ; i < overlapCnt ; ++i )
-				{
-					if ( overlaps[i].seqIdx != geneOverlap[0].seqIdx )
-						continue ;
-					
-					if ( overlaps[i].readEnd < geneOverlap[0].readStart 
-						&& overlaps[i].seqEnd < geneOverlap[0].seqStart )
-					{
-						geneOverlap[0].readStart = overlaps[i].readStart ;
-						geneOverlap[0].seqStart = overlaps[i].seqStart ;
-
-						geneOverlap[0].matchCnt += overlaps[i].matchCnt ;
-					}
-					else if ( overlaps[i].readStart > geneOverlap[0].readEnd 
-						&& overlaps[i].seqStart > geneOverlap[0].seqEnd )
-					{
-						geneOverlap[0].readEnd = overlaps[i].readEnd ;
-						geneOverlap[0].seqEnd = overlaps[i].seqEnd ;
-
-						geneOverlap[0].matchCnt += overlaps[i].matchCnt ;
-					}
-				}
-				//printf( "%d %d. %d %d\n", geneOverlap[0].readStart, geneOverlap[0].readEnd , 
-				//	geneOverlap[0].seqStart, geneOverlap[0].seqEnd ) ;
-				geneOverlap[0].similarity = (double)geneOverlap[0].matchCnt 
-					/ ( geneOverlap[0].readEnd - geneOverlap[0].readStart + 1 
-						+ geneOverlap[0].seqEnd - geneOverlap[0].seqStart + 1 ) ;
 			}
 
 			delete[] align ;
@@ -4688,6 +4828,13 @@ public:
 					
 					if ( e - s + 1 >= 18 )
 					{
+						for ( i = s ; i <= s + 9 && e - i + 1 >= 18 ; i += 3 )
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' )
+							{
+								s = i ;
+								break ;
+							}
+						
 						cdr3 = new char[e - s + 2  + 1 ] ;
 						memcpy( cdr3, read + s, e - s + 1 ) ;
 						cdr3[e - s + 1] = '\0' ;
@@ -4710,9 +4857,17 @@ public:
 				
 					s = locateS ;
 					e = locateE + 2 ;
-					
+						
 					if ( e - s + 1 >= 18 )
 					{
+						for ( i = e ; i >= e - 9 && i - s + 1 >= 18 ; i -= 3 )
+							if ( DnaToAa( read[i - 2], read[i - 1], read[i] ) == 'W' 
+								|| DnaToAa( read[i - 2], read[i - 1], read[i] ) == 'F' )
+							{
+								e = i ;
+								break ;
+							}
+
 						cdr3 = new char[e - s + 2  + 1 ] ;
 						memcpy( cdr3, read + s, e - s + 1 ) ;
 						cdr3[e - s + 1] = '\0' ;
@@ -5021,10 +5176,10 @@ public:
 		}
 	}
 
-	// For those seqs with single read support, use its mate pair's sequence to decide extension
-	//    which can use a much smaller overlap criterion to add new terms to branch graph.
-	void AugmentBranchGraphByMate( std::vector<struct _overlap> *branchAdj, std::vector<struct _overlap> *prevAdj, 
-			std::vector<struct _overlap> *nextAdj, std::vector<struct _assignRead> &reads )
+	// For assemblies with no extension at all, allow gaps, and put that information in branch graph.
+	void AugmentBranchGraphByMate( std::vector<struct _overlap> *branchAdj, 
+			std::vector<struct _overlap> *prevAdj, std::vector<struct _overlap> *nextAdj, 
+			std::vector<struct _assignRead> &reads )
 	{
 		int i, j, k ;
 		int seqCnt = seqs.size() ;
@@ -5283,6 +5438,73 @@ public:
 		return ret ;
 	}
 	
+	bool CanGapExtend( int from, struct _overlap mateInfo, int direction )	
+	{
+		int i, j ;
+		if ( direction == -1 )
+		{
+			if ( mateInfo.readStart < 50 )
+				return true ;
+
+			for ( i = 0 ; i < 3 ; ++i )	
+				if ( seqs[from].info[i].a == -1 )
+					break ;
+			if ( i < 3 )
+			{
+				int to = mateInfo.seqIdx ;
+				for ( j = 0 ; j < 3 ; ++j )
+					if ( seqs[to].info[j].b >= mateInfo.seqEnd )
+						break ;
+
+				if ( j < i )
+					return true ;
+			}
+		}
+		else
+		{
+			if ( mateInfo.readEnd >= seqs[ from ].consensusLen - 50 )
+				return true ;
+
+			for ( i = 2 ; i >= 0 ; --i )
+				if ( seqs[from].info[i].a == -1 )
+					break ;
+			if ( i >= 0 )
+			{
+				int to = mateInfo.seqIdx ;
+				for ( j = 2 ; j >= 0 ; --j )
+					if ( seqs[to].info[j].a <= mateInfo.seqStart )
+						break ;
+
+				if ( i < j )
+					return true ;
+			}
+		}
+
+		return false ;
+	}
+
+	// Test whether it is reasonable to extend 
+	int GetGapExtendSeqCoord( int from, struct _overlap mateInfo, int direction, struct _overlap &coord )
+	{
+		if ( direction == -1 )
+		{
+			coord = mateInfo ; 
+			coord.readStart = 0 ;
+			coord.readEnd = seqs[from].consensusLen - 1 ; 
+			coord.matchCnt = 0 ;
+			return 1 ;
+		}
+		else 
+		{
+			coord = mateInfo ; 
+			coord.readStart = 0 ;
+			coord.readEnd = seqs[from].consensusLen - 1 ; 
+			coord.matchCnt = 0 ;
+			return 1 ;
+		}
+		return 0 ;
+	}
+	
 	// Extend seq where one mate is aligned the other mate is missing, and the mates overlap with each other.
 	void ExtendSeqFromMissingOverlapMate( std::vector< struct _assignRead> reads )
 	{
@@ -5416,7 +5638,7 @@ public:
 	}
 
 	// Use this set of reads to extend,rearrange the seq 
-	void ExtendSeqFromReads( std::vector<struct _assignRead> &reads, int leastOverlapLen )
+	void ExtendSeqFromReads( std::vector<struct _assignRead> &reads, int leastOverlapLen, SeqSet &refSet )
 	{
 		int i, j, k ;
 		int readCnt = 0 ;
@@ -5438,13 +5660,18 @@ public:
 		useInBranch.ExpandTo( seqCnt ) ;
 		useInBranch.SetZero( 0, seqCnt ) ;
 
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			seqs[i].info[0].a = seqs[i].info[0].b = i ;
+		}
+
 		// Directly use overlapped mate pairs for extension on 
 		//   singleton assembly where the other mate has no perfect alignment.
 		// Since these reads will not be applied on more sophisticated extension, it is fine 
 		//   to make it an independent component.
 		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
 		//ExtendSeqFromMissingOverlapMate( reads ) ;
-
+		
 		// Then do more sophisticated extension
 		// Build the mate adj graph.
 		for ( i = 0 ; i < readCnt ; ++i )
@@ -5456,7 +5683,8 @@ public:
 			if ( paired )
 			{
 				if ( reads[i].overlap.seqIdx == -1 || reads[i + 1].overlap.seqIdx == -1 
-					|| reads[i].overlap.strand == reads[i + 1].overlap.strand )				
+					|| reads[i].overlap.strand == reads[i + 1].overlap.strand 
+					|| reads[i].overlap.similarity < 0.99 || reads[i + 1].overlap.similarity < 0.99 )				
 				{
 					++i ;
 					continue ;
@@ -5507,8 +5735,40 @@ public:
 		
 		}
 
+		// Briefly annotate the reads
+		char *buffer = new char[10000] ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( !useInBranch[i] )
+				continue ;
+			struct _overlap geneOverlap[4] ;
+			struct _overlap cdr[3] ;
+			refSet.AnnotateRead( seqs[i].consensus, 0, geneOverlap, cdr, buffer ) ;
+			for ( j = 0 ; j < 4 ; ++j )
+			{
+				k = j ;
+				if ( j > 1 )
+					--k ;
+				if ( j == 1 )
+					continue ;
+				else if ( geneOverlap[j].seqIdx == -1 )	
+				{
+					seqs[i].info[k].a = -1 ;
+					seqs[i].info[k].b = -1 ;
+					continue ;
+				}
+				seqs[i].info[k].a = geneOverlap[j].readStart ;
+				seqs[i].info[k].b = geneOverlap[j].readEnd ;
+			}
+
+		}
+		delete[] buffer ;
+		
+		int backupHLR = hitLenRequired ;
+		hitLenRequired = leastOverlapLen ;
 		BuildBranchGraph( branchAdj, leastOverlapLen, useInBranch ) ;
-		//AugmentBranchGraphByMate( branchAdj, prevAdj, nextAdj, reads ) ;
+		hitLenRequired = backupHLR ;
+
 		
 		// Each Seq will be extend to left and right one step.
 		SimpleVector<int> toRemoveSeqIdx ;
@@ -5516,7 +5776,10 @@ public:
 		
 		// Find which seq id extend to.
 		SimpleVector<struct _pair> matePrevNext ; 
+		SimpleVector<struct _pair> matePrevNextType ; // 0: no extension(same with mateprevnext=-1); 
+							      // 1: overlapped extension; 2: gapped extension 
 		matePrevNext.ExpandTo( seqCnt ) ;
+		matePrevNextType.ExpandTo( seqCnt ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int prevAdjCnt = prevAdj[i].size() ;
@@ -5573,7 +5836,9 @@ public:
 			}
 			matePrevNext[i].a = prevTag ;
 			matePrevNext[i].b = nextTag ;
+			matePrevNextType[i].a = matePrevNextType[i].b = 0 ;
 		}
+		//AugmentBranchGraphByMate( branchAdj, matePrevNext, prevAdj, nextAdj, reads ) ;
 
 		// Figure out the seqs whose extension will create repeat sequence
 		// 	e.g.: end-to-end extension from two anchor seq.
@@ -5581,11 +5846,13 @@ public:
 		SimpleVector<int> uniqueSuccessorOf ;
 		extensionType.ExpandTo( seqCnt ) ;
 		uniqueSuccessorOf.ExpandTo( seqCnt ) ;
+		
+		// Filter out the connection that the heaviest mate pair edge has no sequence overlap with 
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int prevTag = matePrevNext[i].a ;
 			int nextTag = matePrevNext[i].b ;
-
+			
 			struct _overlap leftExtend, rightExtend ;
 			leftExtend.seqIdx = -1 ;
 			rightExtend.seqIdx = -1 ;
@@ -5593,20 +5860,30 @@ public:
 			if ( prevTag >= 0 )
 			{
 				extensionType[i].a = GetExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, branchAdj, false, leftExtend ) ;
-				if ( leftExtend.seqIdx == -1 )
+				if ( leftExtend.seqIdx != -1 )
+					matePrevNextType[i].a = 1 ;
+				else if ( CanGapExtend( i, prevAdj[i][ prevTag ], -1 ) )
+					//|| GetGapExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, leftExtend ) )
+					matePrevNextType[i].a = 2 ;
+				else
 					matePrevNext[i].a = -1 ;
-
+					
 			}
 			if ( nextTag >= 0 )
 			{
 				extensionType[i].b = GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, false, rightExtend ) ;
-				if ( rightExtend.seqIdx == -1 )
+				if ( rightExtend.seqIdx != -1 )
+					matePrevNextType[i].b = 1 ;
+				else if ( CanGapExtend( i, nextAdj[i][nextTag], 1 )  )
+					// || GetGapExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, rightExtend ) )
+					matePrevNextType[i].b = 2 ;
+				else
 					matePrevNext[i].b = -1 ;
 			}
 		}
 
 		// Rescue some partial extension. e.g.: 
-		// A |;  A<=B. A could not extend right due to no overlap, then we will put A=>B back.
+		// A |;  A<=B. A could not extend right due to no overlap for the heaviest mate, then we will put A=>B back.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int prevTag = matePrevNext[i].a ;
@@ -5615,7 +5892,8 @@ public:
 			if ( prevTag >= 0 )
 			{
 				int seqIdx = prevAdj[i][ prevTag ].seqIdx ;
-				if ( matePrevNext[ seqIdx ].b == -1 && extensionType[i].a == 2 )
+				if ( ( matePrevNext[ seqIdx ].b == -1 || matePrevNextType[ seqIdx ].b == 2 )
+					&& extensionType[i].a == 2 )
 				{
 					// rescue the connection.
 					int size = nextAdj[ seqIdx ].size() ;
@@ -5626,7 +5904,10 @@ public:
 							extensionType[ seqIdx ].b = GetExtendSeqCoord( seqIdx, nextAdj[ seqIdx ][j], 
 										1, branchAdj, false, tmp ) ;
 							if ( extensionType[ seqIdx ].b == 2 )
+							{
 								matePrevNext[ seqIdx ].b = j ;
+								matePrevNextType[ seqIdx ].b = 1 ;
+							}
 							break ;
 						}
 				}
@@ -5635,7 +5916,8 @@ public:
 			if ( nextTag >= 0 )
 			{
 				int seqIdx = nextAdj[i][ nextTag ].seqIdx ;
-				if ( matePrevNext[ seqIdx ].a == -1 && extensionType[i].b == 2 )
+				if ( ( matePrevNext[ seqIdx ].a == -1 || matePrevNextType[ seqIdx ].a == 2 )
+					&& extensionType[i].b == 2 )
 				{
 					int size = prevAdj[seqIdx].size() ;
 					for ( j = 0 ; j < size; ++j )
@@ -5645,7 +5927,10 @@ public:
 							extensionType[ seqIdx ].a = GetExtendSeqCoord( seqIdx, prevAdj[ seqIdx ][j], 
 										-1, branchAdj, false, tmp ) ;
 							if ( extensionType[ seqIdx ].a == 2 )
+							{
 								matePrevNext[ seqIdx ].a = j ;
+								matePrevNextType[ seqIdx ].a = 1 ;
+							}
 							break ;
 						}
 				}
@@ -5680,12 +5965,13 @@ public:
 
 			if ( prevTag >= 0 )
 			{
-				if ( extensionType[i].a == 2 )
+				if ( extensionType[i].a == 2 || matePrevNextType[i].a == 2 )
 				{
 					int seqIdx = prevAdj[i][ prevTag ].seqIdx ;
 					if ( matePrevNext[seqIdx].b >= 0 
 						&& nextAdj[ seqIdx ][ matePrevNext[ seqIdx ].b ].seqIdx == i 
-						&& extensionType[ seqIdx ].b == 2 )
+						&& ( extensionType[ seqIdx ].b == 2 
+							|| matePrevNextType[seqIdx].b == 2 ) )
 					{
 						uniqueSuccessorOf[i] = seqIdx ;
 					}
@@ -5721,10 +6007,12 @@ public:
 					              // Note that the ending of a seq might be trimmed when extension,
 						      //  the b(offset) will regard those trimmed part existing, and hence
 						      //  starts a bit earlier than the portion that is actually used.
+		SimpleVector<struct _pair> gapPos ;   // a: start of the gap, b: length of the gap.
 		chain.Reserve( seqCnt ) ;	    
 		offset.Reserve( seqCnt ) ;
 		range.Reserve( seqCnt ) ;
 		origRangeB.Reserve( seqCnt ) ; // the range.b that are not adjusted.
+		gapPos.Reserve( 10 ) ;
 
 		shiftSeq.ExpandTo( seqCnt ) ; 
 		for ( i = 0 ; i < seqCnt ; ++i )
@@ -5732,7 +6020,6 @@ public:
 			shiftSeq[i].a = i ;
 			shiftSeq[i].b = 0 ;
 		}
-
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			//if ( inCnt[i] > 0 )
@@ -5768,6 +6055,7 @@ public:
 			offset.Clear() ;
 			range.Clear() ; 
 			origRangeB.Clear() ;
+			gapPos.Clear() ;
 			struct _overlap leftMostExtend, rightMostExtend ;
 			leftMostExtend.seqIdx = -1 ;
 			rightMostExtend.seqIdx = -1 ;
@@ -5782,15 +6070,32 @@ public:
 				leftExtend.seqIdx = -1 ;
 				rightExtend.seqIdx = -1 ;
 				
-				if ( prevTag >= 0 )
+				if ( prevTag >= 0 && matePrevNextType[ chain[j] ].a == 1 )
 					GetExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1, branchAdj, j > 0, leftExtend ) ;
-				if ( nextTag >= 0 )
+				if ( nextTag >= 0 && matePrevNextType[ chain[j] ].b == 1 )
 					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, j < chainSize - 1, rightExtend ) ;
 				
-				if ( j == 0 && leftExtend.seqIdx != -1 )
+				if ( matePrevNextType[ chain[j] ].a == 2 )
+					GetGapExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1 ,leftExtend ) ;
+				if ( matePrevNextType[ chain[j] ].b == 2 )
+					GetGapExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, rightExtend ) ;
+				
+				if ( j == 0 )
 				{
-					newConsensusLen += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
-					leftMostExtend = leftExtend ;
+					if ( leftExtend.seqIdx != -1 )
+					{
+						newConsensusLen += leftExtend.seqEnd - leftExtend.seqStart + 1 ;
+						if ( matePrevNextType[ chain[j] ].a == 2 )
+						{
+							struct _pair ng ;
+							ng.a = newConsensusLen ;
+							ng.b = gapN ;
+							gapPos.PushBack( ng ) ;
+
+							newConsensusLen += gapN ;
+						}
+						leftMostExtend = leftExtend ;
+					}
 				}
 				offset[j] = newConsensusLen ;
 				if ( leftExtend.seqIdx != -1 )
@@ -5828,6 +6133,16 @@ public:
 				} 
 
 				newConsensusLen += range[j].b - range[j].a + 1 ;
+
+				if ( matePrevNextType[ chain[j] ].b == 2 )
+				{
+					struct _pair ng ;
+					ng.a = newConsensusLen ;
+					ng.b = gapN ;
+					gapPos.PushBack( ng ) ;
+					
+					newConsensusLen += gapN ;
+				}
 				if ( j == chainSize - 1 && rightExtend.seqIdx != -1 )
 				{
 					newConsensusLen += rightExtend.seqEnd - rightExtend.seqStart + 1 ;
@@ -5851,10 +6166,24 @@ public:
 			}
 			if ( rightMostExtend.seqIdx != -1 )
 			{
-				memcpy( newConsensus + offset[j - 1] + range[j - 1].b - range[j - 1].a + 1,
+				int lastOffset =  offset[j - 1] + range[j - 1].b - range[j - 1].a + 1 ;
+				if ( matePrevNextType[ chain[chainSize - 1] ].b == 2 )
+					lastOffset += gapN ;
+				memcpy( newConsensus + lastOffset,
 					seqs[ rightMostExtend.seqIdx ].consensus + rightMostExtend.seqStart,
 					rightMostExtend.seqEnd - rightMostExtend.seqStart + 1 ) ;
 			}
+			// Fill the gaps with Ns
+			int gapCnt = gapPos.Size() ;
+			for ( j = 0 ; j < gapCnt ; ++j )
+			{
+				int l ;
+				for ( l = gapPos[j].a ; l < gapPos[j].a + gapPos[j].b ; ++l )
+				{
+					newConsensus[l] = 'N' ;
+				}
+			}
+			
 			newConsensus[newConsensusLen] = '\0' ;
 
 			struct _seqWrapper ns ;
@@ -5867,6 +6196,7 @@ public:
 			ns.posWeight.SetZero( 0, newConsensusLen ) ;
 
 			// Assign the posWeight of the core part.	
+			int newSeqIdx = seqs.size() ;
 			for ( j = 0 ; j < chainSize ; ++j )
 			{
 				int l ;
@@ -5874,7 +6204,12 @@ public:
 				{
 					ns.posWeight[ offset[j] + l - range[j].a ] += seqs[ chain[j] ].posWeight[l] ;
 				}
+		
+				seqs[ chain[j] ].info[0].b = newSeqIdx ; // They are mapped to this new index.
 			}
+			ns.info[0].a = ns.info[1].b = newSeqIdx ;
+			ns.info[1].a = chain[0] ;
+			ns.info[1].b = chain[ chainSize - 1 ] ;
 
 			// Adjust the posWeight for the overhang part
 			if ( leftMostExtend.seqIdx != -1 )
@@ -5941,6 +6276,8 @@ public:
 					size = readIdx.Size() ;
 					int l ;
 					int lastOffset = offset[chainSize - 1] + range[chainSize - 1].b - range[chainSize - 1].a + 1 ; 
+					if ( matePrevNextType[ chain[ chainSize - 1] ].b == 2 )
+						lastOffset += gapN ;
 					for ( l = 0 ; l < size ; ++l )
 					{
 						int ridx ;
@@ -6038,6 +6375,15 @@ public:
 			ReleaseSeq( toRemoveSeqIdx[i] ) ;	
 		
 		// Recompute the seq id the read is assigned to.
+		/*for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( reads[i].seqIdx != -1 )
+			{
+				reads[i].seqIdx = shiftSeq[ reads[i].seqIdx ].a ;
+				reads[i].seqStart += shiftSeq[ reads[i].seqIdx ].b ;
+				reads[i].seqEnd += shiftSeq[ reads[i].seqIdx ].b ;
+			}
+		}*/
 
 		// Recompute the posweight that becomes negative 
 		// since the alignment might be changed when adding and after adding states

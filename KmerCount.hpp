@@ -183,6 +183,7 @@ public:
 		if ( k == 0 )
 		{
 			minCount = -len ;
+			read[0] = '\0' ;
 			return 0 ;
 		}
 		
@@ -214,6 +215,12 @@ public:
 				k = trimStart - kmerLength + 1 ;
 				read[ trimStart ] = '\0' ;
 				qual[ trimStart ] = '\0' ;
+			}
+			if ( trimStart > 0 && trimStart < kmerLength )
+			{
+				k = 0 ;
+				read[0] = '\0' ;
+				qual[0] = '\0' ;
 			}
 		}
 
