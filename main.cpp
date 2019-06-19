@@ -50,6 +50,8 @@ struct _sortRead
 	int medianCnt ;
 	double avgCnt ;
 
+	int strand ;
+
 	bool operator<( const struct _sortRead &b )
 	{
 		if ( minCnt != b.minCnt )
@@ -437,7 +439,6 @@ int main( int argc, char *argv[] )
 		else if ( !countMyself && i % 1000000 == 0 )
 			PrintLog( "Read in %d reads.", i ) ;*/
 	}
-	PrintLog( "Found %i reads.", i ) ;
 	if ( maxReadLen <= 0 )
 	{
 		return 0 ;
@@ -455,13 +456,32 @@ int main( int argc, char *argv[] )
 		else
 			kmerCount.GetCountStatsAndTrim( sortedReads[i].read, sortedReads[i].qual, 
 					sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+
 		if ( sortedReads[i].qual != NULL )
 		{
 			free( sortedReads[i].qual ) ;
 			sortedReads[i].qual = NULL ;
 		}
+		if ( sortedReads[i].read[0] == '\0' )
+		{
+			free( sortedReads[i].read ) ;
+			free( sortedReads[i].id ) ;
+			sortedReads[i].read = NULL ;
+		}
 	}
+	
+	k = 0 ;
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		if ( sortedReads[i].read == NULL )
+			continue ;
+		sortedReads[k] = sortedReads[i] ;
+		++k ;
+	}
+	readCnt = k ;
+	sortedReads.resize( k ) ;
 
+	PrintLog( "Found %i reads.", k ) ;
 #ifdef DEBUG
 	printf( "Finish put in the read kmer count.\n" ) ;
 #endif
@@ -504,6 +524,7 @@ int main( int argc, char *argv[] )
 			// If the order of V,D,J,C is wrong from this read, then we ignore this.
 			//   probably from read through in cyclic fragment. 
 			bool filter = false ;
+			int strand = 0 ;
 			for ( j = 0 ; j < 4 ; ++j )
 			{
 				int l ;
@@ -523,7 +544,6 @@ int main( int argc, char *argv[] )
 				if ( filter )
 					break ;
 			}
-
 			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].seqStart >= 100 ) // From constant gene.
 				filter = true ;
 
@@ -533,12 +553,14 @@ int main( int argc, char *argv[] )
 			{
 				char name[5] ;
 				name[0] = '\0' ;
+				strand = 0 ;
 				for ( j = 0 ; j < 4 ; ++j )
 					if ( geneOverlap[j].seqIdx != -1 )
 					{
 						char *s = refSet.GetSeqName( geneOverlap[j].seqIdx ) ;
 						name[0] = s[0] ; name[1] = s[1] ; name[2] = s[2] ; name[3] = s[3] ;
 						name[4] = '\0' ;
+						strand = geneOverlap[j].strand ;
 					}
 
 				double similarityThreshold = 0.9 ;
@@ -546,8 +568,8 @@ int main( int argc, char *argv[] )
 					similarityThreshold = 0.97 ;
 				else if ( sortedReads[i].minCnt >= 2 )
 					similarityThreshold = 0.95 ;
-
-				addRet = seqSet.AddRead( sortedReads[i].read, name, similarityThreshold ) ;
+				
+				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
@@ -563,6 +585,7 @@ int main( int argc, char *argv[] )
 					//printf( "hello %d %d. %d %d %d %d\n", i, addRet, geneOverlap[0].seqIdx,
 					//		geneOverlap[1].seqIdx, geneOverlap[2].seqIdx, geneOverlap[3].seqIdx ) ;
 				}
+				sortedReads[i].strand = strand ;
 			}
 		}
 		else
@@ -570,6 +593,8 @@ int main( int argc, char *argv[] )
 			//printf( "saved time\n" ) ;
 			if ( prevAddRet != -1 )
 				addRet = seqSet.RepeatAddRead( sortedReads[i].read ) ;
+		
+			sortedReads[i].strand = sortedReads[i - 1].strand ;
 		}
 		
 		if ( addRet == -2 )
@@ -626,7 +651,7 @@ int main( int argc, char *argv[] )
 #endif
 		int addRet = -1 ;
 		char name[2] = "" ;
-		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name,
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, 0, 
 			( sortedReads[ rescueReadIdx[i] ].minCnt >= 20 ? 0.97 : 0.9 ) ) ;
 		if ( addRet >= 0 )
 		{
@@ -678,6 +703,7 @@ int main( int argc, char *argv[] )
 		nr.read = sortedReads[ assembledReadIdx[i] ].read ;
 		nr.info = assembledReadIdx[i] ;
 		nr.overlap.seqIdx = -1 ;
+		nr.overlap.strand = sortedReads[ assembledReadIdx[i] ].strand ;
 		assembledReads.push_back( nr ) ;
 	}
 	//std::sort( assembledReads.begin(), assembledReads.end(), CompSortReadById ) ;	
@@ -708,7 +734,7 @@ int main( int argc, char *argv[] )
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
 		if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-			extendedSeq.AssignRead( assembledReads[i].read, 1.0, assign ) ;
+			extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.95, assign ) ;
 		assembledReads[i].overlap = assign ;	
 		if ( ( i + 1 ) % 100000 == 0 )
 		{
@@ -720,6 +746,14 @@ int main( int argc, char *argv[] )
 	extendedSeq.RecomputePosWeight( assembledReads ) ;
 	//fclose( fp ) ;
 	//exit( 1 ) ;
+
+#ifdef DEBUG
+	for ( i = 0 ; i < assembledReadCnt ; ++i )
+	{
+		printf( "%s %d %lf %d\n", assembledReads[i].id, assembledReads[i].overlap.seqIdx, assembledReads[i].overlap.similarity,
+			assembledReads[i].overlap.strand ) ;
+	}
+#endif
 
 	/*extendedSeq.BreakFalseAssembly( assembledReads ) ;
 	
@@ -744,7 +778,7 @@ int main( int argc, char *argv[] )
 		avgReadLen /= i ;
 	
 	PrintLog( "Extend assemblies by mate pair information." ) ;
-	extendedSeq.ExtendSeqFromReads( assembledReads, 31 ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
+	extendedSeq.ExtendSeqFromReads( assembledReads, 17, refSet ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
 	extendedSeq.UpdateAllConsensus() ;
 	
 	/*if ( outputPrefix[0] != '-' )
@@ -771,6 +805,7 @@ int main( int argc, char *argv[] )
 	std::vector<int> lowFreqReadsIdx ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
+		continue ;
 		if ( assembledReads[i].overlap.seqIdx != -1 ) 
 		//if ( assembledReads[i].overlap.seqIdx != -1 && assembledReads[i + 1].overlap.seqIdx != -1 
 		//	&& assembledReads[i].overlap.seqIdx == assembledReads[i + 1].overlap.seqIdx )
@@ -813,6 +848,7 @@ int main( int argc, char *argv[] )
 		nr.minCnt = minCntA ; 
 		nr.medianCnt = tmp ;
 		nr.avgCnt = tmpd ;
+		nr.strand = assembledReads[a].overlap.strand ;
 		lowFreqReads.push_back( nr ) ;
 	}
 	std::sort( lowFreqReads.begin(), lowFreqReads.end() ) ;
@@ -824,7 +860,7 @@ int main( int argc, char *argv[] )
 		
 	}*/
 	lowFreqCnt = lowFreqReads.size() ;
-	PrintLog( "Found %d low frequency reads.", lowFreqCnt ) ;
+	//PrintLog( "Found %d low frequency reads.", lowFreqCnt ) ;
 	for ( i = 0 ; i < lowFreqCnt ; ++i )
 	{
 		char name[10] = "" ;
@@ -832,7 +868,7 @@ int main( int argc, char *argv[] )
 		//printf( "%s\n", lowFreqReads[i].read ) ;
 		//fflush( stdout ) ;
 		//printf( ">r%d\n%s\n", i, lowFreqReads[i].read ) ;
-		extendedSeq.AssignRead( lowFreqReads[i].read, 0.95, assign ) ;
+		extendedSeq.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, 0.95, assign ) ;
 		if ( assign.seqIdx != -1 )
 		{
 			if ( assign.similarity < 1.0 )
@@ -843,13 +879,13 @@ int main( int argc, char *argv[] )
 		{
 			if ( lowFreqReads[i].minCnt < 2 )
 			{
-				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, 0.95, assign ) ;
+				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, 0.95, assign ) ;
 				if ( assign.seqIdx != -1 )
 				{
 					lowFreqSeqSet.AddAssignedRead( lowFreqReads[i].read, assign ) ;
 				}
 			}
-			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, 0.97 ) < 0 )
+			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, 0, 0.97 ) < 0 )
 			{
 				struct _overlap geneOverlap[4] ;
 				//buffer[0] = '\0' ;
