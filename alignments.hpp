@@ -286,8 +286,14 @@ public:
 		std::string ss( s ) ;
 		if ( chrNameToId.find( ss ) == chrNameToId.end() )
 		{
-			printf( "Unknown genome name: %s\n", s ) ;
-			exit( 1 ) ;
+			std::string ns( s + 3 ) ;
+			if ( chrNameToId.find( ns ) == chrNameToId.end() )
+			{
+				printf( "Unknown genome name: %s\n", s ) ;
+				exit( 1 ) ;
+			}
+			else
+				return chrNameToId[ ns ] ;
 		}
 		return chrNameToId[ss] ;
 	}

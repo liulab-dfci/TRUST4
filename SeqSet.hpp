@@ -5980,7 +5980,7 @@ public:
 							found = 1 ;
 							break ;
 						}
-						else if ( CanGapExtend( i, prevAdj[i][ prevTag ], -1 ) )
+						else if ( CanGapExtend( i, prevAdj[i][j], -1 ) )
 						{
 							matePrevNextType[i].a = 2 ;
 							matePrevNext[i].a = j ;
@@ -6023,7 +6023,7 @@ public:
 							found = 1 ;
 							break ;
 						}
-						else if ( CanGapExtend( i, nextAdj[i][ prevTag ], 1 ) )
+						else if ( CanGapExtend( i, nextAdj[i][j], 1 ) )
 						{
 							matePrevNextType[i].b = 2 ;
 							matePrevNext[i].b = j ;
