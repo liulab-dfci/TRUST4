@@ -477,18 +477,37 @@ public:
 
 	void GetReadSeq( char *buffer )
 	{
-		int i = 0 ;
-		for ( i = 0 ; i < b->core.l_qseq ; ++i )
+		int i, j ;
+		if ( !IsReverse() )
 		{
-			int bit = bam1_seqi( bam1_seq( b ), i ) ;
-			switch ( bit )
+			for ( i = 0 ; i < b->core.l_qseq ; ++i )
 			{
-				case 1: buffer[i] = 'A'; break ;
-				case 2: buffer[i] = 'C'; break ;
-				case 4: buffer[i] = 'G'; break ;
-				case 8: buffer[i] = 'T'; break ;
-				default: buffer[i] = 'N' ;
-			
+				int bit = bam1_seqi( bam1_seq( b ), i ) ;
+				switch ( bit )
+				{
+					case 1: buffer[i] = 'A'; break ;
+					case 2: buffer[i] = 'C'; break ;
+					case 4: buffer[i] = 'G'; break ;
+					case 8: buffer[i] = 'T'; break ;
+					default: buffer[i] = 'N' ;
+
+				}
+			}
+		}
+		else
+		{
+			for ( i = 0, j = b->core.l_qseq - 1 ; j >= 0 ; ++i, --j )
+			{
+				int bit = bam1_seqi( bam1_seq( b ), j ) ;
+				switch ( bit )
+				{
+					case 1: buffer[i] = 'T'; break ;
+					case 2: buffer[i] = 'G'; break ;
+					case 4: buffer[i] = 'C'; break ;
+					case 8: buffer[i] = 'A'; break ;
+					default: buffer[i] = 'N' ;
+
+				}
 			}
 		}
 		buffer[i] = '\0' ;
@@ -496,9 +515,18 @@ public:
 
 	void GetQual( char *buffer )
 	{
-		int i = 0 ;
-		for ( i = 0 ; i < b->core.l_qseq ; ++i )
-			buffer[i] = *( bam1_qual( b ) + i ) + 33 ;
+		int i, j ;
+		
+		if ( !IsReverse() )
+		{
+			for ( i = 0 ; i < b->core.l_qseq ; ++i )
+				buffer[i] = *( bam1_qual( b ) + i ) + 33 ;
+		}
+		else
+		{
+			for ( i = 0, j = b->core.l_qseq - 1 ; j >= 0 ; ++i, --j )
+				buffer[i] = *( bam1_qual( b ) + j ) + 33 ;
+		}
 		buffer[i] = '\0' ;
 	}
 
