@@ -808,30 +808,59 @@ private:
 		int matchCnt, mismatchCnt, indelCnt ;
 		int leftOverhangSize = MIN( overlap.readStart, overlap.seqStart ) ;
 		int ret = 1 ;
+		int i, k ;
+		int goodLeftOverhangSize = 0 ;
 
-		//AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqStart - leftOverhangSize, 
+		//AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqStart - leftOverhangSize,
 		AlignAlgo::GlobalAlignment_PosWeight( seq.posWeight.BeginAddress() + overlap.seqStart - leftOverhangSize, 
 				leftOverhangSize, 
 				r + overlap.readStart - leftOverhangSize, leftOverhangSize, align ) ;
-
 		GetAlignStats( align, false, matchCnt, mismatchCnt, indelCnt ) ;
 		if ( indelCnt > 0 )
 		{
 			leftOverhangSize = 0 ;
 			ret = 0 ;
 		}
+		for ( i = 0 ; align[i] != -1 ; ++i )
+			;
+		--i ;
+		int tmpMatchCnt = 0  ;
+		for ( i = i - 1, k = 1 ; i >= 0 ; --i, ++k )
+		{
+			if ( align[i] == EDIT_MATCH )
+			{
+				++tmpMatchCnt ;
+				if ( tmpMatchCnt > 0.75 * k )
+					goodLeftOverhangSize = k ;
+			}
+			else if ( align[i] != EDIT_MISMATCH )
+				break ;
+		}
 		// Extension to 3'-end ( right end )
 		int rightOverhangSize = MIN( len - 1 - overlap.readEnd, seq.consensusLen - 1 - overlap.seqEnd ) ;
-
+		int goodRightOverhangSize = 0 ;
 		//AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqEnd + 1, 
 		AlignAlgo::GlobalAlignment_PosWeight( seq.posWeight.BeginAddress() + overlap.seqEnd + 1, 
 				rightOverhangSize,
 				r + overlap.readEnd + 1, rightOverhangSize, align ) ;
+		int oldIndelCnt = indelCnt ;
 		GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;
-		if ( indelCnt > 0 )
+		if ( indelCnt > oldIndelCnt )
 		{
 			rightOverhangSize = 0 ;
 			ret = 0 ;
+		}
+		tmpMatchCnt = 0 ;
+		for ( i = 0 ; align[i] != -1 ; ++i )
+		{
+			if ( align[i] == EDIT_MATCH )
+			{
+				++tmpMatchCnt ;
+				if ( tmpMatchCnt > 0.75 * ( i + 1 ) )
+					goodRightOverhangSize = i + 1 ;
+			}
+			else if ( align[i] != EDIT_MISMATCH )
+				break ;
 		}
 
 		int mismatchThreshold = 2 ;
@@ -839,7 +868,6 @@ private:
 			++mismatchThreshold ;
 		if ( rightOverhangSize >= 2 )
 			++mismatchThreshold ;
-		
 		if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
 			ret = 0 ;
 
@@ -852,12 +880,20 @@ private:
 		extendedOverlap.matchCnt = 2 * matchCnt + overlap.matchCnt ;
 		extendedOverlap.similarity = (double)( 2 * matchCnt + overlap.matchCnt ) / 
 			( extendedOverlap.readEnd - extendedOverlap.readStart + 1 + extendedOverlap.seqEnd - extendedOverlap.seqStart + 1 ) ;	
-		
+			
 		if ( ( seqs[ extendedOverlap.seqIdx ].isRef && extendedOverlap.similarity < refSeqSimilarity ) 
 			|| ( !seqs[ extendedOverlap.seqIdx ].isRef && extendedOverlap.similarity < novelSeqSimilarity ) )
 		{
 			extendedOverlap = overlap ;
 			ret = 0 ;
+		}
+
+		if ( ret == 0 )
+		{
+			extendedOverlap.readStart = overlap.readStart - goodLeftOverhangSize ;
+			extendedOverlap.readEnd = overlap.readEnd + goodRightOverhangSize ;
+			extendedOverlap.seqStart = overlap.seqStart - goodLeftOverhangSize ;
+			extendedOverlap.seqEnd = overlap.seqEnd + goodRightOverhangSize ;
 		}
 
 		/*if ( !seqs[ extendedOverlap.seqIdx ].isRef && 
@@ -2207,12 +2243,13 @@ public:
 			int seqIdx ;
 			int tag ;
 			bool sortExtendedOverlaps = true ;
+			struct _pair *oldMinExtAnchor = new struct _pair[ overlapCnt ] ;
 
 			if ( overlaps[0].strand == 1 )
 				r = read ;
 			else
 				r = rcRead ;
-
+			
 #ifdef DEBUG
 			if ( overlaps[0].strand == -1 )
 				printf( "rc: %s\n", r ) ;
@@ -2239,9 +2276,11 @@ public:
 				}
 				overlapCnt = cnt ;
 			}*/
-
+	
 			for ( i = 0 ; i < overlapCnt ; ++i )
 			{
+				oldMinExtAnchor[i].a = seqs[ overlaps[i].seqIdx ].minLeftExtAnchor ;
+				oldMinExtAnchor[i].b = seqs[ overlaps[i].seqIdx ].minRightExtAnchor ;
 				for ( j = 0 ; j < k ; ++j )
 				{
 					// If is contained in extended sequence.
@@ -2390,7 +2429,7 @@ public:
 					++failedExtendedOverlapsCnt ;
 				}
 			}
-			
+				
 			if ( k == 1 && 
 				extendedOverlaps[0].readStart <= radius && extendedOverlaps[0].readEnd >= len - radius )
 			{
@@ -2406,7 +2445,10 @@ public:
 						continue ;
 				
 					if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
+					{
+						j = i ;
 						++k ;
+					}
 				}
 
 				if ( k > 2 )
@@ -2415,24 +2457,38 @@ public:
 				}
 				else if ( k == 2 )
 				{
-					if ( extendedOverlaps[0].seqEnd == seqs[ extendedOverlaps[0].seqIdx ].consensusLen - 1  
-						&& extendedOverlaps[1].seqStart == 0  )
+					if ( extendedOverlaps[1].readStart > 0 )
 					{
-						// no need to change.
-						sortExtendedOverlaps = false ;
+						if ( oldMinExtAnchor[j].a >= extendedOverlaps[1].readEnd - extendedOverlaps[1].readStart + 1 )
+							k = 1 ;
 					}
-					else if ( extendedOverlaps[0].seqStart == 0 && 
-						extendedOverlaps[1].seqEnd == seqs[ extendedOverlaps[1].seqIdx ].consensusLen - 1 )
+					if ( extendedOverlaps[1].readEnd < len - 1 )
 					{
-						// swap 0, 1
-						sortExtendedOverlaps = false ;
-						
-						struct _overlap tmp = extendedOverlaps[0] ; 
-						extendedOverlaps[0] = extendedOverlaps[1] ;
-						extendedOverlaps[1] = tmp ;
+						if ( oldMinExtAnchor[j].b >= extendedOverlaps[1].readEnd - extendedOverlaps[1].readStart + 1 )
+							k = 1 ;
 					}
-					else
-						k = 1 ;
+					
+					if ( k == 2 )
+					{
+						if ( extendedOverlaps[0].seqEnd == seqs[ extendedOverlaps[0].seqIdx ].consensusLen - 1  
+								&& extendedOverlaps[1].seqStart == 0  )
+						{
+							// no need to change.
+							sortExtendedOverlaps = false ;
+						}
+						else if ( extendedOverlaps[0].seqStart == 0 && 
+								extendedOverlaps[1].seqEnd == seqs[ extendedOverlaps[1].seqIdx ].consensusLen - 1 )
+						{
+							// swap 0, 1
+							sortExtendedOverlaps = false ;
+
+							struct _overlap tmp = extendedOverlaps[0] ; 
+							extendedOverlaps[0] = extendedOverlaps[1] ;
+							extendedOverlaps[1] = tmp ;
+						}
+						else
+							k = 1 ;
+					}
 				}
 			}
 
@@ -2932,6 +2988,7 @@ public:
 			
 			free( rcRead ) ;
 			delete[] align ;
+			delete[] oldMinExtAnchor ;
 		}
 
 		k = 0 ;

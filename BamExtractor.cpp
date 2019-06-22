@@ -68,6 +68,8 @@ bool ValidAlternativeChrom( char *chrom )
 		if ( chrom[0] == 'c' && chrom[3] >= '0' && chrom[3] <= '9' )
 			return true ;
 	}
+	else if ( ( chrom[0] == 'G' && chrom[1] == 'I' ) || ( chrom[0] == 'G' && chrom[1] == 'L' ) )
+		return true ;
 	return false ;
 }
 
