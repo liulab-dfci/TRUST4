@@ -941,7 +941,7 @@ private:
 					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
 
 					int size = indexHit.Size() ;
-					if ( size >= 100 )
+					if ( size >= 100 && puse == NULL )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -987,7 +987,7 @@ private:
 
 					int size = indexHit.Size() ;
 
-					if ( size >= 100 )
+					if ( size >= 100 && puse == NULL )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -1064,9 +1064,11 @@ private:
 			filterHits = 1 ;
 		}
 		int overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
-
+		
+		//if ( !strcmp( read, "TAGTAATCACTACTGGGCCTGGATCCGCCAGCCCCCAGGGAAAGGGCTGGAGTGGATTGGGAGTATCCATTCTAGTGGGAGCACCTACTTCAACCCGTCCCTCAAGAGTCGAGTCTCCACATCCGTAGACACGTCCGACAATCAAGTCTCCCTGAAGCTGAGGTCTGTGACCGCCGCAGACACGGCTGTGTATTACTGTGCGAGACAGTTTCTCCATCTGGACCCCATGTCCAACTGGTTCGACCCCCGG") && filterHits == 0  )
 		//for ( i = 0 ; i < overlapCnt ; ++i )
-		//	printf( "%d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
+		//	fprintf( stderr, "small test %d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
+		
 		// Determine whether we want to add this reads by looking at the quality of overlap
 		if ( overlapCnt == 0 )
 		{
@@ -1436,6 +1438,43 @@ private:
 							overlaps[i].seqStart, overlaps[i].seqEnd, similarity ) ;
 			}
 			assert( overlaps[i].similarity <= 1 ) ;*/
+
+			if ( !seqs[ overlaps[i].seqIdx ].isRef && readType == 1 
+				 && overlaps[i].similarity < novelSeqSimilarity )
+			{
+				// Look for the core part that with high identity.
+				// since similarity is greater than 0, we already know there is no indel in the hits.
+				int maxLen = 0 ;
+				int maxS = 0, maxE = 0 ;
+				for ( j = 0 ; j < hitCnt ;  )
+				{
+					for ( k = j + 1 ; k < hitCnt ; ++k )
+					{
+						if ( hitCoords[k].a > hitCoords[k - 1].a + kmerLength - 1 
+							|| hitCoords[k].a - hitCoords[k].b != hitCoords[k-1].a - hitCoords[k-1].b )	
+							break ;
+					}
+
+					int len = hitCoords[k - 1].a - hitCoords[j].a + kmerLength ;
+					if ( len > maxLen )
+					{
+						maxLen = len ;
+						maxS = j ;
+						maxE = k - 1 ;
+					}
+					j = k ;
+				}
+				
+				if ( maxLen >= hitLenRequired )
+				{
+					overlaps[i].readStart = hitCoords[maxS].a ;
+					overlaps[i].readEnd = hitCoords[maxE].a + kmerLength - 1 ;
+					overlaps[i].seqStart = hitCoords[ maxS ].b ;
+					overlaps[i].seqEnd = hitCoords[ maxE ].b + kmerLength - 1 ;
+					overlaps[i].similarity = 1.0 ;
+					overlaps[i].matchCnt = 2 * maxLen ;
+				}
+			}
 		} // for i
 		delete[] rcRead ;
 
@@ -1673,10 +1712,16 @@ private:
 
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
-
+			
+			double backupSimilarity = novelSeqSimilarity ;
+			novelSeqSimilarity = repeatSimilarity ;
 			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, 1, overlaps, &use ) ;
+			novelSeqSimilarity = backupSimilarity ;
+
+			//printf( "%d %d\n", i, overlapCnt ) ;
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
+				//printf( "%d: %d %d %d %d\n", i, j, overlaps[j].seqIdx, overlaps[j].readStart, overlaps[j].readEnd ) ;
 				if ( overlaps[j].strand == -1 ) // Note that all the seqs are from 5'->3' on its strand.
 					continue ;
 
@@ -1738,10 +1783,14 @@ private:
 				extendedOverlap.similarity = (double)extendedOverlap.matchCnt / 
 					( extendedOverlap.readEnd - extendedOverlap.readStart + 1 +
 					  extendedOverlap.seqEnd - extendedOverlap.seqStart + 1 ) ;
+				//printf( "%d %d %d %lf\n", extendedOverlap.seqIdx, extendedOverlap.readStart,
+				//	extendedOverlap.readEnd, extendedOverlap.similarity ) ;
 				if ( extendedOverlap.readEnd - extendedOverlap.readStart + 1 < leastOverlapLen )
 					continue ;
 
 				//printf( "hahaha %d %d\n", extendedOverlap.readEnd - extendedOverlap.readStart + 1, extendedOverlap.matchCnt ) ;
+				if ( extendedOverlap.similarity < repeatSimilarity )
+					extendedOverlap = overlaps[j] ;
 				if ( extendedOverlap.similarity >= repeatSimilarity ) 
 				{
 					adj[i].push_back( extendedOverlap ) ;
@@ -5557,9 +5606,32 @@ public:
 		return ret ;
 	}
 	
-	bool CanGapExtend( int from, struct _overlap mateInfo, int direction )	
+	bool CanGapExtend( int from, struct _overlap mateInfo, int direction, std::vector<struct _overlap> *branchAdj )	
 	{
 		int i, j ;
+		int size = branchAdj[from].size() ;
+		for ( i = 0 ; i < size ; ++i )
+			if ( branchAdj[from][i].seqIdx == mateInfo.seqIdx )
+			{
+				int bs, be, ms, me ;
+				bs = branchAdj[from][i].seqStart ;
+				be = branchAdj[from][i].seqEnd ;
+				ms = mateInfo.seqStart ;
+				me = mateInfo.seqEnd ;
+				
+				if ( bs <= ms && be >= me )
+					return false ;
+				if ( ms <= bs && me >= be ) 
+					return false ;
+				if ( be <= ms || bs >= me )
+					continue ;
+				
+				if ( bs <= ms && be <= me && be - ms + 1 >= 17 )
+					return false ;
+				else if ( bs >= ms && be >= me && me - bs + 1 >= 17 )
+					return false ;
+			}
+
 		if ( direction == -1 )
 		{
 			if ( mateInfo.readStart < 50 )
@@ -6012,7 +6084,7 @@ public:
 				extensionType[i].a = GetExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, branchAdj, false, leftExtend ) ;
 				if ( leftExtend.seqIdx != -1 )
 					matePrevNextType[i].a = 1 ;
-				else if ( CanGapExtend( i, prevAdj[i][ prevTag ], -1 ) )
+				else if ( CanGapExtend( i, prevAdj[i][ prevTag ], -1, branchAdj ) )
 				{
 					//printf( "hi %d<N=%d\n", prevAdj[i][prevTag], i ) ;
 					//|| GetGapExtendSeqCoord( i, prevAdj[i][ prevTag ], -1, leftExtend ) )
@@ -6037,7 +6109,7 @@ public:
 							found = 1 ;
 							break ;
 						}
-						else if ( CanGapExtend( i, prevAdj[i][j], -1 ) )
+						else if ( CanGapExtend( i, prevAdj[i][j], -1, branchAdj ) )
 						{
 							matePrevNextType[i].a = 2 ;
 							matePrevNext[i].a = j ;
@@ -6055,7 +6127,7 @@ public:
 				extensionType[i].b = GetExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, branchAdj, false, rightExtend ) ;
 				if ( rightExtend.seqIdx != -1 )
 					matePrevNextType[i].b = 1 ;
-				else if ( CanGapExtend( i, nextAdj[i][nextTag], 1 )  )
+				else if ( CanGapExtend( i, nextAdj[i][nextTag], 1, branchAdj )  )
 				{
 					// || GetGapExtendSeqCoord( i, nextAdj[i][ nextTag ], 1, rightExtend ) )
 					//printf( "hi %d=N>%d\n", i, nextAdj[i][nextTag] ) ;
@@ -6080,7 +6152,7 @@ public:
 							found = 1 ;
 							break ;
 						}
-						else if ( CanGapExtend( i, nextAdj[i][j], 1 ) )
+						else if ( CanGapExtend( i, nextAdj[i][j], 1, branchAdj ) )
 						{
 							matePrevNextType[i].b = 2 ;
 							matePrevNext[i].b = j ;

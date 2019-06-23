@@ -49,6 +49,7 @@ struct _sortRead
 	int minCnt ;
 	int medianCnt ;
 	double avgCnt ;
+	int len ;
 
 	int strand ;
 
@@ -60,6 +61,8 @@ struct _sortRead
 			return medianCnt > b.medianCnt ;
 		else if ( avgCnt != b.avgCnt )
 			return avgCnt > b.avgCnt ;
+		else if ( len != b.len )
+			return len > b.len ;
 		else 
 			return strcmp( read, b.read ) < 0 ;
 	}
@@ -476,6 +479,7 @@ int main( int argc, char *argv[] )
 		if ( sortedReads[i].read == NULL )
 			continue ;
 		sortedReads[k] = sortedReads[i] ;
+		sortedReads[k].len = strlen( sortedReads[i].read ) ;
 		++k ;
 	}
 	readCnt = k ;
