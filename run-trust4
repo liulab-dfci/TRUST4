@@ -23,7 +23,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
 
 sub system_call
 {
-	print STDERR "SYSTEM CALL: ".join(" ",@_)."\n";
+	print STDERR "[".localtime()."] SYSTEM CALL: ".join(" ",@_)."\n";
 	system(@_) == 0
 		or die "system @_ failed: $?";
 	#print STDERR " finished\n";
@@ -52,24 +52,26 @@ my $vdjcRef = "" ;
 my $mainArgs = "" ;
 
 
+print STDERR "[".localtime()."] TRUST4 begins.\n" ;
+
 for ( $i = 0 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "-1" )
 	{
 		push @firstMateFiles, $ARGV[$i + 1] ;
-		$mainArgs .= $ARGV[$i]." ".$ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "-2" )
 	{	
 		push @secondMateFiles, $ARGV[$i + 1] ;
-		$mainArgs .= $ARGV[$i]." ".$ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[ $i ] eq "-u" ) 
 	{
 		push @singleFiles, $ARGV[ $i + 1 ] ;
-		$mainArgs .= $ARGV[$i]." ".$ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "-b" )
@@ -80,13 +82,13 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "-f" )
 	{	
 		$vdjcFasta = $ARGV[$i + 1] ;
-		$mainArgs .= $ARGV[$i]." ".$ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "-o" )
 	{
 		$prefix = $ARGV[$i + 1] ;
-		$mainArgs .= $ARGV[$i]." ".$ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--ref" )
@@ -166,4 +168,5 @@ else
 	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa > ${prefix}_annot.out" ) ;
 }
 
+print STDERR "[".localtime()."] TRUST4 finishes.\n" ;
 # Filter and output.
