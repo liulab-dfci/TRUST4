@@ -24,7 +24,7 @@ struct _seqWrapper
 
 	int minLeftExtAnchor, minRightExtAnchor ; // only overlap with size larger than this can be counted as valid extension.
 
-	struct _pair info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1,2 and info[2].a for CDR3
+	struct _triple info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1,2 and info[2].a for CDR3
 			// for novel, info[0] is used as identifier.
 } ;
 
@@ -356,6 +356,15 @@ private:
 		if ( lowCnt >= 2 )
 			return true ;
 		return false ;
+	}
+
+	bool IsEquivalentConstantGene( char *a, char *b )
+	{
+		int i ;
+		for ( i = 0 ; i < 4 ; ++i )
+			if ( a[i] != b[i] )
+				return false ;
+		return true ;
 	}
 
 	void SetPrevAddInfo( int seqIdx, int readStart, int readEnd, int seqStart, int seqEnd, int strand )
@@ -5610,27 +5619,30 @@ public:
 	{
 		int i, j ;
 		int size = branchAdj[from].size() ;
-		for ( i = 0 ; i < size ; ++i )
-			if ( branchAdj[from][i].seqIdx == mateInfo.seqIdx )
-			{
-				int bs, be, ms, me ;
-				bs = branchAdj[from][i].seqStart ;
-				be = branchAdj[from][i].seqEnd ;
-				ms = mateInfo.seqStart ;
-				me = mateInfo.seqEnd ;
-				
-				if ( bs <= ms && be >= me )
-					return false ;
-				if ( ms <= bs && me >= be ) 
-					return false ;
-				if ( be <= ms || bs >= me )
-					continue ;
-				
-				if ( bs <= ms && be <= me && be - ms + 1 >= 17 )
-					return false ;
-				else if ( bs >= ms && be >= me && me - bs + 1 >= 17 )
-					return false ;
-			}
+		if ( branchAdj != NULL )
+		{
+			for ( i = 0 ; i < size ; ++i )
+				if ( branchAdj[from][i].seqIdx == mateInfo.seqIdx )
+				{
+					int bs, be, ms, me ;
+					bs = branchAdj[from][i].seqStart ;
+					be = branchAdj[from][i].seqEnd ;
+					ms = mateInfo.seqStart ;
+					me = mateInfo.seqEnd ;
+
+					if ( bs <= ms && be >= me )
+						return false ;
+					if ( ms <= bs && me >= be ) 
+						return false ;
+					if ( be <= ms || bs >= me )
+						continue ;
+
+					if ( bs <= ms && be <= me && be - ms + 1 >= 17 )
+						return false ;
+					else if ( bs >= ms && be >= me && me - bs + 1 >= 17 )
+						return false ;
+				}
+		}
 
 		if ( direction == -1 )
 		{
@@ -5644,7 +5656,7 @@ public:
 			{
 				int to = mateInfo.seqIdx ;
 				for ( j = 0 ; j < 3 ; ++j )
-					if ( seqs[to].info[j].b >= mateInfo.seqEnd )
+					if ( seqs[to].info[j].b + 3 >= mateInfo.seqEnd )
 						break ;
 
 				if ( j < i )
@@ -5663,7 +5675,7 @@ public:
 			{
 				int to = mateInfo.seqIdx ;
 				for ( j = 2 ; j >= 0 ; --j )
-					if ( seqs[to].info[j].a >= 0 && seqs[to].info[j].a <= mateInfo.seqStart )
+					if ( seqs[to].info[j].a >= 0 && seqs[to].info[j].a - 3 <= mateInfo.seqStart )
 						break ;
 
 				if ( i < j )
@@ -5967,10 +5979,12 @@ public:
 				{
 					seqs[i].info[k].a = -1 ;
 					seqs[i].info[k].b = -1 ;
+					seqs[i].info[k].c = -1 ;
 					continue ;
 				}
 				seqs[i].info[k].a = geneOverlap[j].readStart ;
 				seqs[i].info[k].b = geneOverlap[j].readEnd ;
+				seqs[i].info[k].c = geneOverlap[j].seqIdx ;
 			}
 
 		}
@@ -6016,7 +6030,7 @@ public:
 					prevTag = j ;
 					max = prevAdj[i][j].matchCnt ;
 				}
-				else if ( prevAdj[i][j].matchCnt == max )
+				else if ( prevAdj[i][j].matchCnt >= max * 0.9 )
 				{
 					if ( prevAdj[i][j].seqEnd - prevAdj[i][j].seqStart > 
 							prevAdj[i][ prevTag ].seqEnd - prevAdj[i][prevTag].seqStart )
@@ -6042,7 +6056,7 @@ public:
 					nextTag = j ;
 					max = nextAdj[i][j].matchCnt ;
 				}
-				else if ( nextAdj[i][j].matchCnt == max )
+				else if ( nextAdj[i][j].matchCnt >= max * 0.9 )
 				{
 					if ( nextAdj[i][j].seqEnd - nextAdj[i][j].seqStart > 
 							nextAdj[i][ nextTag ].seqEnd - nextAdj[i][nextTag].seqStart )
@@ -6094,7 +6108,7 @@ public:
 				{
 					// Try to use the secondary mate edge
 					int size = prevAdj[i].size() ;
-					int threshold = prevAdj[i][ prevTag ].matchCnt * 0.9 ;	
+					int threshold = prevAdj[i][0].matchCnt * 0.5 ; // prevTag>=0 makes sure size>=0	
 					int found = 0 ;
 					for ( j = 0 ; j < size ; ++j )
 					{
@@ -6137,7 +6151,7 @@ public:
 				{
 					// Try to use the secondary mate edge
 					int size = nextAdj[i].size() ;
-					int threshold = nextAdj[i][ nextTag ].matchCnt * 0.9 ;	
+					int threshold = nextAdj[i][0].matchCnt * 0.5 ;	
 					int found = 0 ;
 					for ( j = 0 ; j < size ; ++j )
 					{
@@ -6342,8 +6356,12 @@ public:
 			origRangeB.Clear() ;
 			gapPos.Clear() ;
 			struct _overlap leftMostExtend, rightMostExtend ;
+			struct _overlap leftMostGapExtend, rightMostExtend ;
 			leftMostExtend.seqIdx = -1 ;
 			rightMostExtend.seqIdx = -1 ;
+			leftMostGapExtend.seqIdx = -1 ;
+			rightMostExtend.seqIdx = -1 ;
+
 			offset.ExpandTo( chainSize ) ;
 			range.ExpandTo( chainSize ) ;
 			origRangeB.ExpandTo( chainSize ) ;
@@ -6356,10 +6374,44 @@ public:
 				rightExtend.seqIdx = -1 ;
 				
 				if ( prevTag >= 0 && matePrevNextType[ chain[j] ].a == 1 )
-					GetExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1, branchAdj, j > 0, leftExtend ) ;
+				{
+					bool aggressive = true ;
+					if ( j == 0 )
+					{
+						aggressive = false ;
+					}
+					GetExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1, branchAdj, aggressive, leftExtend ) ;
+				}
 				if ( nextTag >= 0 && matePrevNextType[ chain[j] ].b == 1 )
-					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, j < chainSize - 1, rightExtend ) ;
-				
+				{
+					bool aggressive = true ;
+					if ( j == chainSize - 1 )
+					{
+						aggressive = false ;
+						if ( seqs[ chain[j] ].info[2].c == -1 
+							&& seqs[ nextAdj[ chain[j] ][nextTag].seqIdx ].info[2].c != -1 
+							&& nextAdj[ chain[j] ][nextTag].seqEnd < 
+								seqs[ nextAdj[ chain[j] ][nextTag].seqIdx ].info[2].a )
+						{
+							int size = nextAdj[ chain[j] ].size() ;
+							for ( k = 0 ; k < size ; ++k )
+							{
+								if ( k == nextTag || seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].c == -1 )
+									continue ;
+
+								if ( seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].c 
+										== seqs[ nextAdj[ chain[j] ][ nextTag ].seqIdx ].info[2].c
+									&& nextAdj[ chain[j] ][k].seqEnd > 
+										seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].a )
+								{
+									aggressive = true ;
+									break ;
+								}
+							}
+						}
+					}
+					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, aggressive, rightExtend ) ;
+				}
 				if ( matePrevNextType[ chain[j] ].a == 2 )
 					GetGapExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1 ,leftExtend ) ;
 				if ( matePrevNextType[ chain[j] ].b == 2 )
