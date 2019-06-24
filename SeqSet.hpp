@@ -6356,10 +6356,7 @@ public:
 			origRangeB.Clear() ;
 			gapPos.Clear() ;
 			struct _overlap leftMostExtend, rightMostExtend ;
-			struct _overlap leftMostGapExtend, rightMostExtend ;
 			leftMostExtend.seqIdx = -1 ;
-			rightMostExtend.seqIdx = -1 ;
-			leftMostGapExtend.seqIdx = -1 ;
 			rightMostExtend.seqIdx = -1 ;
 
 			offset.ExpandTo( chainSize ) ;
