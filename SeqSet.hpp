@@ -4149,6 +4149,8 @@ public:
 				//	read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
+					if ( read[ allOverlaps[i].readEnd + 1 ] == 'N' && read[ allOverlaps[i].readEnd + 2] == 'N' )
+						break ;
 					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
 					{
 						++allOverlaps[i].readEnd ;
@@ -4179,6 +4181,11 @@ public:
 				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
+					if ( allOverlaps[i].readStart > 1 && read[ allOverlaps[i].readStart - 1 ] == 'N' 
+						&& read[ allOverlaps[i].readStart - 2 ] == 'N' )
+					{
+						break ;
+					}
 					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
 					{
 						--allOverlaps[i].readStart ;
@@ -5027,7 +5034,45 @@ public:
 					cdr3Score = 0 ;
 				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 && e + 50 < len )
 					cdr3Score = 0 ;
-
+				
+				// Now consider whether the gaps could create some false positive score CDR3.
+				int nCnt = 0 ;
+				for ( i = s ; i <= e ; ++i )
+					if ( read[i] == 'N' )
+					{
+						++nCnt ;
+						if ( nCnt >= 2 )
+						{
+							cdr3Score = 0 ;
+							break ;
+						}
+					}
+				
+				if ( cdr3Score < 100 )
+				{
+					for ( i = 1 ; i < contigCnt ; ++i )
+					{
+						if ( s >= contigs[i].a && s < contigs[i].a + 18 
+							&& geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
+							&& DnaToAa( read[i], read[i + 1], read[i + 2] ) != 'C' )
+						{
+							cdr3Score = 0 ;
+							break ;
+						}	
+					}
+					for ( i = contigCnt - 1 ; i > 0 ; --i )
+					{
+						if ( e <= contigs[i].b && e > contigs[i].b - 18 
+								&& geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart >= contigs[i + 1].a 
+								&& DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) != 'W' &&
+								  DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) != 'F' )
+						{
+							cdr3Score =0  ;
+							break ;
+						}
+					}
+					
+				}
 			}
 			// Partial CDR3s
 			else if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
