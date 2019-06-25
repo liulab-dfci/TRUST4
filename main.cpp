@@ -137,6 +137,7 @@ int main( int argc, char *argv[] )
 	int maxReadLen = -1 ;
 	bool flagNoTrim = false ;
 	bool hasMate = false ;
+	int constantGeneEnd = 200 ;
 
 	while ( 1 )
 	{
@@ -548,9 +549,18 @@ int main( int argc, char *argv[] )
 				if ( filter )
 					break ;
 			}
-			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].seqStart >= 100 ) // From constant gene.
-				filter = true ;
-
+			if ( geneOverlap[3].seqIdx != -1 ) // From constant gene.
+			{
+				//if ( geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 < sortedReads[i].len )
+				//{
+				if ( geneOverlap[3].seqStart >= constantGeneEnd )
+					filter = true ;
+				else if ( geneOverlap[3].seqStart >= 100 && ( geneOverlap[3].strand == 1 
+					|| geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 < sortedReads[i].len ) )
+					filter = true ;
+				//}
+				
+			}
 			if ( filter ) 
 				addRet = -1 ;
 			else
@@ -571,8 +581,13 @@ int main( int argc, char *argv[] )
 				if ( sortedReads[i].minCnt >= 20 )
 					similarityThreshold = 0.97 ;
 				else if ( sortedReads[i].minCnt >= 2 )
+				{
+					//double tmp = 1.0 - 4.0 / sortedReads[i].len ;
+					//similarityThreshold = tmp < 0.95 ? tmp : 0.95 ;
+					//if ( similarityThreshold < 0.9 )
+					//	similarityThreshold = 0.9 ;
 					similarityThreshold = 0.95 ;
-				
+				}
 				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
@@ -595,9 +610,11 @@ int main( int argc, char *argv[] )
 		else
 		{
 			//printf( "saved time\n" ) ;
-			if ( prevAddRet != -1 )
+			if ( prevAddRet != -1 && prevAddRet != -3 )
 				addRet = seqSet.RepeatAddRead( sortedReads[i].read ) ;
-		
+			else if ( prevAddRet == -3 )
+				addRet = -3 ;
+
 			sortedReads[i].strand = sortedReads[i - 1].strand ;
 		}
 		
@@ -735,6 +752,18 @@ int main( int argc, char *argv[] )
 		//	assembledReads[i].overlap.readEnd ) ;
 	}*/
 	//fp = fopen( "assign_results.out", "w" ) ;
+
+	// Add the distant constant genes from the annotation
+	/*int refSetSize = refSet.GetSeqCnt() ;
+	int constantGeneAddCnt = 0 ;
+	for ( i = 0 ; i < refSetSize ; ++i )
+	{
+		char *name = GetSeqName( i ) ;
+		if ( refSet.GetGeneType( name ) != 3 || refSet.GetSeqConsensusLen( i ) <= constantGeneEnd )
+			continue ;
+		extendedSeq.InputRefSeq( name, refSet.GetSeqConsensus( i ) + constantGeneEnd ) ;
+	}*/
+
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
 		if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
@@ -784,7 +813,7 @@ int main( int argc, char *argv[] )
 	PrintLog( "Extend assemblies by mate pair information." ) ;
 	extendedSeq.ExtendSeqFromReads( assembledReads, 17, refSet ) ; //( avgReadLen / 30 < 31 ) ? 31 : ( avgReadLen / 3 )  ) ;
 	extendedSeq.UpdateAllConsensus() ;
-	
+		
 	/*if ( outputPrefix[0] != '-' )
 	{
 		sprintf( buffer, "%s_extended.out", outputPrefix ) ;

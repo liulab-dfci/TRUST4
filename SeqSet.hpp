@@ -1996,6 +1996,35 @@ public:
 			InputNovelRead( fa.id, fa.seq, 1 ) ;
 	}
 
+	int InputRefSeq( char *id, char *read )
+	{
+		struct _seqWrapper ns ;
+		ns.name = strdup( id ) ;
+		ns.isRef = true ;
+
+		int seqIdx = seqs.size() ;
+		seqs.push_back( ns ) ;
+
+		struct _seqWrapper &sw = seqs[ seqIdx ] ;
+		int seqLen = strlen( read ) ;
+		sw.consensus = strdup( read ) ;
+		sw.consensusLen = seqLen ;	
+		int i ;
+		sw.posWeight.ExpandTo( sw.consensusLen ) ;
+		sw.posWeight.SetZero( 0, sw.consensusLen ) ;
+		for ( i = 0 ; i < sw.consensusLen ; ++i )
+		{
+			if ( sw.consensus[i] != 'N' )
+				sw.posWeight[i].count[ nucToNum[ sw.consensus[i] - 'A' ] ] = 1 ;
+		}
+		KmerCode kmerCode( kmerLength ) ;
+		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
+	
+		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
+		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
+		return seqIdx ;
+	}	
+
 	int InputNovelRead( char *id, char *read, int strand )
 	{
 		struct _seqWrapper ns ;
@@ -2374,6 +2403,12 @@ public:
 				// Only extend the novel seqs.
 				if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 				{
+					if ( extendedOverlaps[k].similarity < similarityThreshold )
+						continue ;
+					//if ( !strcmp( read, "CCGGCAGCCCCCAGGGAAGGGACTTGAATGGATTGGCTATATCTATTACACTGGGAGCACCATCTACAATCCCTC") )
+					//{
+					//	fprintf( stderr, "%d %d can be extended.\n", i, overlaps[i].seqIdx ) ;
+					//}
 					// Double check whether there is subset relationship.
 					for ( j = 0 ; j < k ; ++j )
 					{
@@ -2414,16 +2449,19 @@ public:
 							continue ;
 
 						if ( extendedOverlaps[k].readStart >= overlaps[j].readStart &&
-							extendedOverlaps[k].readEnd <= overlaps[j].readEnd )
+							extendedOverlaps[k].readEnd <= overlaps[j].readEnd && 
+							( overlaps[j].readEnd - overlaps[j].readStart >= 
+								extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 10 
+							  || overlaps[j].similarity + 0.02 >= extendedOverlaps[k].similarity ) )
 						{
-							if ( extendedOverlaps[k].readStart > 0 )
+							if ( extendedOverlaps[k].readStart > 0 ) //&& extendedOverlaps[k].similarity >= 0.98 )
 							{
 								if ( seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor < 
 										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
 									seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor = 
 										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 ;
 							}
-							if ( extendedOverlaps[k].readEnd < len - 1 )
+							if ( extendedOverlaps[k].readEnd < len - 1 ) //&& extendedOverlaps[k].similarity >= 0.98 )
 							{
 								if ( seqs[ extendedOverlaps[k].seqIdx ].minRightExtAnchor < 
 										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
@@ -2444,16 +2482,17 @@ public:
 							continue ;
 						
 						if ( extendedOverlaps[k].readStart >= failedExtendedOverlaps[j].readStart &&
-							extendedOverlaps[k].readEnd <= failedExtendedOverlaps[j].readEnd )
+							extendedOverlaps[k].readEnd <= failedExtendedOverlaps[j].readEnd ) 
+							//failedExtendedOverlaps[j].similarity + 0.02 >= extendedOverlaps[k].similarity )
 						{
-							if ( extendedOverlaps[k].readStart > 0 )
+							if ( extendedOverlaps[k].readStart > 0 ) //&& extendedOverlaps[k].similarity >= 0.98 )
 							{
 								if ( seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor < 
 										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
 									seqs[ extendedOverlaps[k].seqIdx ].minLeftExtAnchor = 
 										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 ;
 							}
-							if ( extendedOverlaps[k].readEnd < len - 1 )
+							if ( extendedOverlaps[k].readEnd < len - 1 ) //&& extendedOverlaps[k].similarity >= 0.98 )
 							{
 								if ( seqs[ extendedOverlaps[k].seqIdx ].minRightExtAnchor < 
 										extendedOverlaps[k].readEnd - extendedOverlaps[k].readStart + 1 )
@@ -3790,7 +3829,9 @@ public:
 
 		if ( matchCnt > b.matchCnt * threshold )
 			return true ;
-		else if ( threshold < 1.0 && a.matchCnt + 10 >= b.matchCnt )
+		else if ( threshold < 1.0 && 
+			( a.matchCnt + 10 >= b.matchCnt || (
+				a.similarity > b.similarity + 0.01 && a.matchCnt + 2 * kmerLength >= b.matchCnt ) ) )
 			return true ;
 		else
 			return false ;
@@ -4162,6 +4203,7 @@ public:
 						( allOverlaps[i].seqEnd - allOverlaps[i].seqStart + 1 + 
 							allOverlaps[i].readEnd - allOverlaps[i].readStart + 1 ) ;
 			}
+			std::sort( allOverlaps.begin(), allOverlaps.end() ) ;
 			
 			for ( i = 0 ; i < 4 ; ++i )
 			{
@@ -6386,25 +6428,30 @@ public:
 					{
 						aggressive = false ;
 						if ( seqs[ chain[j] ].info[2].c == -1 
-							&& seqs[ nextAdj[ chain[j] ][nextTag].seqIdx ].info[2].c != -1 
-							&& nextAdj[ chain[j] ][nextTag].seqEnd < 
-								seqs[ nextAdj[ chain[j] ][nextTag].seqIdx ].info[2].a )
+							&& seqs[ nextAdj[ chain[j] ][nextTag].seqIdx ].info[2].c != -1 )
 						{
-							int size = nextAdj[ chain[j] ].size() ;
-							for ( k = 0 ; k < size ; ++k )
+							if ( nextAdj[ chain[j] ][nextTag].seqEnd < 
+									seqs[ nextAdj[ chain[j] ][nextTag].seqIdx ].info[2].a )
 							{
-								if ( k == nextTag || seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].c == -1 )
-									continue ;
-
-								if ( seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].c 
-										== seqs[ nextAdj[ chain[j] ][ nextTag ].seqIdx ].info[2].c
-									&& nextAdj[ chain[j] ][k].seqEnd > 
-										seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].a )
+								int size = nextAdj[ chain[j] ].size() ;
+								for ( k = 0 ; k < size ; ++k )
 								{
-									aggressive = true ;
-									break ;
+									if ( k == nextTag || 
+										seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].c == -1 )
+										continue ;
+
+									if ( seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].c 
+											== seqs[ nextAdj[ chain[j] ][ nextTag ].seqIdx ].info[2].c
+											&& nextAdj[ chain[j] ][k].seqEnd > 
+											seqs[ nextAdj[ chain[j] ][k].seqIdx ].info[2].a )
+									{
+										aggressive = true ;
+										break ;
+									}
 								}
 							}
+							else
+								aggressive = true ;
 						}
 					}
 					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, aggressive, rightExtend ) ;
@@ -6796,6 +6843,16 @@ public:
 	char *GetSeqName( int seqIdx )
 	{
 		return seqs[ seqIdx ].name ;
+	}
+	
+	char *GetSeqConsensus( int seqIdx )
+	{
+		return seqs[ seqIdx ].consensus ;
+	}
+
+	int GetSeqConsensusLen( int seqIdx )
+	{
+		return seqs[ seqIdx ].consensusLen ;
 	}
 
 } ;

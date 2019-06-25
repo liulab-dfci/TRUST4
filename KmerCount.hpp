@@ -146,6 +146,9 @@ public:
 	{
 		int i, k ;
 		int sum ;
+		//minCount = medianCount = avgCount = 1 ;
+		//return 0 ;
+
 		if ( maxReadLen == -1 )
 			return 0 ;
 
