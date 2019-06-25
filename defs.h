@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-//#define DEBUG
+#define DEBUG
 
 extern char nucToNum[26] ; 
 extern char numToNuc[26] ;
@@ -25,6 +25,10 @@ struct _pair64
 	int64_t a, b ;
 } ;
 
+struct _triple
+{
+	int a, b, c ;
+} ;
 /*struct _pair_b64
 {
 	int a ;
