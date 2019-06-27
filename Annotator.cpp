@@ -2,6 +2,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <vector>
 
@@ -15,7 +16,8 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-a STRING: path to the assembly file\n"
 		"\t-r STRING: path to the reads used in the assembly\n"
 		"Optional:\n"
-		"\t--fasta: the assembly file is in fasta format (default: false)\n";
+		"\t--fasta: the assembly file is in fasta format (default: false)\n"
+		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -29,12 +31,37 @@ char buffer2[10241] = "" ;
 char weightBuffer[100241] = "" ;
 char seq[10241] = "" ;
 
-static const char *short_options = "f:a:r:" ;
+static const char *short_options = "f:a:r:p:" ;
 static struct option long_options[] = {
 			{ "fasta", no_argument, 0, 10000 },
 			{ "radius", required_argument, 0, 10001 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
+
+struct _annotate
+{
+	struct _overlap geneOverlap[4] ;
+	struct _overlap cdr[3] ;
+} ;
+
+struct _CDR3info
+{
+	char *seq ;
+	int count ;
+} ;
+
+void PrintLog( const char *fmt, ... )
+{
+	va_list args ;
+	va_start( args, fmt ) ;
+	vsprintf( buffer, fmt, args ) ;
+
+	time_t mytime = time(NULL) ;
+	struct tm *localT = localtime( &mytime ) ;
+	char stime[500] ;
+	strftime( stime, sizeof( stime ), "%c", localT ) ;
+	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+}
 
 int main( int argc, char *argv[] )
 {
@@ -48,6 +75,7 @@ int main( int argc, char *argv[] )
 	}
 
 	SeqSet refSet( 7 ) ;
+	SeqSet seqSet( 17 ) ;
 	int c, option_index ;
 	FILE *fpAssembly = NULL ;
 	struct _overlap geneOverlap[4] ;
@@ -55,6 +83,7 @@ int main( int argc, char *argv[] )
 	option_index = 0 ;
 	bool ignoreWeight = false ;
 	ReadFiles reads ;
+	char outputPrefix[1024] = "trust" ;
 
 	while ( 1 )
 	{
@@ -74,6 +103,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 'r' )
 		{
 			reads.AddReadFile( optarg, false ) ;
+		}
+		else if ( c == 'o' )
+		{
+			strcpy( outputPrefix, optarg ) ;
 		}
 		else if ( c == 10000 )
 		{
@@ -96,19 +129,14 @@ int main( int argc, char *argv[] )
 		return EXIT_FAILURE ;
 	}
 	
-	// Obtain the kmer count
-	int kmerLength = 31 ;
-	KmerCount kmerCount( kmerLength ) ;	
-	while ( reads.Next() )
-		kmerCount.AddCount( reads.seq ) ;
-
-
 	if ( fpAssembly == NULL )
 	{
 		fprintf( stderr, "Need to use -a to specify the assembly file.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+
 	refSet.SetRadius( radius ) ;
+	PrintLog( "Annotate assemblies." ) ;
 	while ( fgets( buffer, sizeof( buffer ), fpAssembly ) != NULL )
 	{
 		if ( buffer[0] != '>' )
@@ -145,148 +173,156 @@ int main( int argc, char *argv[] )
 				}
 			}
 		}
-
 		for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
 			;
-		if ( buffer[i] != ' ' )
-			buffer[i] = ' ' ;
-		buffer[i + 1] = '\0' ;
+		buffer[i] = '\0' ;
+		
 		int len = strlen( seq ) ;
 		if ( seq[len - 1] == '\n' )
 		{
 			seq[len - 1] = '\0' ;
 			--len ;
 		}
-		//TODO: adjust the average depth 
-		sprintf( buffer + i + 1, "%d %.2lf", len, depthSum / len ) ;
-		refSet.AnnotateRead( seq, 2, geneOverlap, cdr, buffer + strlen( buffer ) ) ;
-		printf( "%s\n%s\n", buffer, seq ) ;
 
-		// Extract the alternative sequence of CDR1,2,3. Only do cdr3 now.
-		for ( i = 2 ; i < 3 && !ignoreWeight ; ++i )
-		{
-			if ( cdr[i].seqIdx == -1 )
-				continue ;
-			
-			SimpleVector<struct _pair> alterNuc ;
-			alterNuc.Reserve( cdr[i].readEnd - cdr[i].readStart + 1 ) ;
-			for ( j = cdr[i].readStart ; j <= cdr[i].readEnd ; ++j )
-			{
-				int sum = 0 ;
-				int max = 0 ;
-				for ( k = 0 ; k < 4 ; ++k )
-				{
-					sum += posWeight[j].count[k] ;
-					if ( posWeight[j].count[k] > max )
-						max = posWeight[j].count[k] ;
-				}
-
-				for ( k = 0 ; k < 4 ; ++k )
-				{
-					//printf( "%c %c %d\n", numToNuc[k], seq[j], posWeight[j].count[k] ) ;
-					if ( numToNuc[k] != seq[j] && posWeight[j].count[k] >= 4 &&  
-						( sum <= posWeight[j].count[k] * 3 
-							|| ( sum >= 20 && sum <= posWeight[j].count[k] * 4 ) ) )
-					{
-						struct _pair na ;
-						na.a = j ;
-						na.b = k ;
-						alterNuc.PushBack( na ) ;
-					}
-				}
-			}
-
-			// Naively build the alternative CDR3.
-			// So far, only handle one difference case.
-			if ( alterNuc.Size() > 0 && alterNuc.Size() <= 1 )
-			{
-				int size = alterNuc.Size() ;
-				char *alterCDR = ( char * )malloc( sizeof( char ) * ( cdr[i].readEnd - cdr[i].readStart + 2 ) ) ;
-				char *newSeq = strdup( seq ) ;
-				int cdrLen = cdr[i].readEnd - cdr[i].readStart + 1 ;
-				alterCDR[ cdrLen ] = '\0' ;
-				int id = 1 ;
-				int n, l ;
-				for ( n = 1 ; n < (1<<size) ; ++n )
-				{
-					memcpy( alterCDR, seq + cdr[i].readStart, cdrLen ) ;
-					strcpy( newSeq, seq ) ;
-					for ( l = 0 ; l < size ; ++l )
-					{
-						if ( n & ( 1 << l ) )
-						{
-							alterCDR[ alterNuc[l].a - cdr[i].readStart ] = numToNuc[ alterNuc[l].b ] ; 
-							newSeq[ alterNuc[l].a ] = numToNuc[ alterNuc[l].b ] ;
-						}
-					}
-					//sprintf( buffer + strlen( buffer ), " minorCDR%d=%s", i + 1, alterCDR ) ;
-					// Check whether this CDR3 is in the read or not. 
-					if ( cdrLen < kmerLength )
-					{
-						if ( cdr[i].readEnd + kmerLength - cdrLen < len )
-						{
-							if ( kmerCount.GetCount( seq + cdr[i].readStart ) <= 0 )
-								continue ;
-						}
-						else
-						{
-							if ( kmerCount.GetCount( seq + cdr[i].readStart - ( kmerLength - cdrLen ) ) <= 0 )
-								continue ;
-						}
-					}
-					else
-					{
-						bool fail = false ; 
-						// Naive implementation
-						for ( l = cdr[i].readStart ; l + kmerLength - 1 <= cdr[i].readEnd ; ++l )
-							if ( kmerCount.GetCount( seq + l ) <= 0 )
-								fail = true ;
-						if ( fail )
-							continue ;
-					}
-
-					// Output the new seq
-					k = 0 ;
-					for ( j = 0 ; buffer[j] != ' ' ; ++j, ++k )
-						buffer2[k] = buffer[j] ;
-					buffer2[k] = '.' ;
-					sprintf( buffer2 + k + 1, "%d", id ) ;
-					++id ;
-					while ( buffer2[k] )
-						++k ;
-					// Length of the assembly.
-					buffer2[k] = buffer[j] ;
-					++k ; ++j ;
-					for ( ; buffer[j] != ' ' ; ++j, ++k )
-						buffer2[k] = buffer[j] ;
-					// Avg coverage
-					buffer2[k] = buffer[j] ;
-					++k ; ++j ;
-					sprintf( buffer2 + k, "1.00" ) ;	
-					while ( buffer2[k] )
-						++k ;
-					while ( buffer[j] != ' ' )
-						++j ;
-
-					// Other part
-					for ( ; buffer[j] != 'C' || buffer[j + 1] != 'D' || buffer[j + 2] != 'R' 
-						|| buffer[j + 3] != '3' ; ++j, ++k )	
-						buffer2[k] = buffer[j] ;
-
-					for ( ; buffer[j] != '=' ; ++j, ++k )
-						buffer2[k] = buffer[j] ;
-					buffer2[k] = '=' ;
-					++k ;
-					strcpy( buffer2 + k, alterCDR ) ;
-					printf( "%s\n%s\n", buffer2, newSeq ) ;
-				}
-				free( alterCDR ) ;
-				free( newSeq ) ;
-			}
-		}
-		
+		if ( !ignoreWeight )
+			seqSet.InputNovelSeq( buffer, seq, posWeight ) ;
+		else 
+			seqSet.InputNovelRead( buffer, seq, 1 ) ;
 	}
 	fclose( fpAssembly ) ;
 
+	int seqCnt = seqSet.Size() ;
+	struct _annotate *annotations = new struct _annotate[ seqCnt ] ;
+	for ( i = 0 ; i < seqCnt ; ++i )
+	{
+		int weightSum = seqSet.GetSeqWeightSum( i ) ; 
+		int len = seqSet.GetSeqConsensusLen( i ) ;
+		sprintf( buffer, ">%s %d %.2lf", seqSet.GetSeqName( i ), len, (double)weightSum / 500.0 ) ;
+		refSet.AnnotateRead( seqSet.GetSeqConsensus( i ), 2, annotations[i].geneOverlap, annotations[i].cdr, buffer + strlen( buffer ) ) ;
+		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
+	}
+	
+	// Output more CDR3 information 
+	if ( reads.GetFpUsed() > 0 )
+	{
+		struct _overlap assign ;
+		std::vector< std::vector<struct _CDR3info> > cdr3Infos ;
+		cdr3Infos.resize( seqCnt ) ;
+		k = 0 ;
+		buffer2[0] = '\0' ;
+		PrintLog( "Start to realign reads." ) ;
+		while ( reads.Next() )	
+		{
+			if ( strcmp( reads.seq, buffer2 ) ) 
+			{
+				strcpy( buffer2, reads.seq ) ;
+				seqSet.AssignRead( reads.seq, 0, 0.95, assign ) ;	
+				if ( assign.seqIdx == -1 )
+					continue ;
+			}
+
+			if ( assign.seqIdx == -1 )
+				continue ;
+
+			if ( annotations[assign.seqIdx].cdr[2].seqIdx != -1 
+					&& assign.seqStart <= annotations[ assign.seqIdx ].cdr[2].readStart 
+					&& assign.seqEnd >=  annotations[ assign.seqIdx ].cdr[2].readEnd )
+			{
+				std::vector<struct _CDR3info> &info = cdr3Infos[ assign.seqIdx ] ;
+				int size = info.size() ;
+				int cdr3Len =  annotations[ assign.seqIdx ].cdr[2].readEnd -
+					annotations[ assign.seqIdx ].cdr[2].readStart + 1 ;
+				memcpy( buffer, reads.seq + assign.readStart +
+						annotations[ assign.seqIdx ].cdr[2].readStart - assign.seqStart, 
+						sizeof( char ) * cdr3Len ) ;
+				buffer[cdr3Len] = '\0' ;
+
+				for ( i = 0 ; i < size ; ++i )
+					if ( !strcmp( info[i].seq, buffer ) )
+					{
+						++info[i].count ;
+						break ;
+					}
+				if ( i >= size )
+				{
+					struct _CDR3info nc ;
+					nc.seq = strdup( buffer ) ;
+					nc.count = 1 ;
+
+					info.push_back( nc ) ;
+				}
+			}
+			++k ;
+			if ( k % 100000 == 0 )
+			{
+				PrintLog( "Realigned %d reads.", k ) ;
+			}
+		}
+
+		// Output different CDR3s from each main assembly.
+		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;
+		FILE *fpOutput = fopen( buffer, "w" ) ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( annotations[i].cdr[2].seqIdx == -1 )
+				continue ;
+
+			std::vector<struct _CDR3info> &info = cdr3Infos[i] ;
+			int size = info.size() ;
+			if ( size == 0 )
+			{
+				struct _CDR3info nc ;
+				int len =  annotations[i].cdr[2].readEnd - annotations[i].cdr[2].readStart + 1 ;
+				nc.seq = (char *)malloc( sizeof( char) * ( len + 1 ) ) ;
+				memcpy( nc.seq, seqSet.GetSeqConsensus( i ) + annotations[i].cdr[2].readStart, len ) ;
+				nc.seq[ len ] = '\0' ;
+				nc.count = 1 ;
+
+				info.push_back( nc ) ;
+				size = 1 ;
+			}
+			// Output each CDR3 information
+			for ( j = 0 ; j < size ; ++j )
+			{
+				fprintf( fpOutput, "%s\t%d\t", seqSet.GetSeqName( i ), j ) ;
+				// The gene ids
+				for ( k = 0 ; k < 4 ; ++k )
+				{
+					if ( k == 1 )
+						continue ;
+					if ( annotations[i].geneOverlap[k].seqIdx == -1 )
+						fprintf( fpOutput, "*\t" ) ;	
+					else
+						fprintf( fpOutput, "%s\t", 
+							refSet.GetSeqName( annotations[i].geneOverlap[k].seqIdx ) ) ;
+				}
+				// Output CDR1,2
+				for ( k = 0 ; k < 2 ; ++k )
+				{
+					if ( annotations[i].cdr[k].seqIdx == -1 )
+						fprintf( fpOutput, "*\t" ) ;
+					else
+					{
+						int len = annotations[i].cdr[k].readEnd - annotations[i].cdr[k].readStart + 1 ;
+						memcpy( buffer, seqSet.GetSeqConsensus( i ) + annotations[i].cdr[k].readStart, len ) ;
+						buffer[len] = '\0' ;
+						fprintf( fpOutput, "%s\t", buffer ) ;
+					}
+				}
+				fprintf( fpOutput, "%s\t%d\n", info[j].seq, info[j].count ) ;
+			}
+			
+		}
+		// Free up memory
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int size = cdr3Infos[i].size() ;
+			for ( j = 0 ; j < size; ++j )
+				free( cdr3Infos[i][j].seq ) ;
+		}
+		fclose( fpOutput ) ;
+	}
+	
+	delete[] annotations ;
 	return 0 ;
 }

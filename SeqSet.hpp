@@ -2024,7 +2024,7 @@ public:
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 		return seqIdx ;
 	}	
-
+	
 	int InputNovelRead( char *id, char *read, int strand )
 	{
 		struct _seqWrapper ns ;
@@ -2058,6 +2058,28 @@ public:
 #ifdef DEBUG
 		printf( "add novel seq: %d\n", seqIdx ) ;
 #endif
+		return seqIdx ;
+	}
+
+	int InputNovelSeq( char *name, char *seq, SimpleVector<struct _posWeight> &posWeight )
+	{
+		struct _seqWrapper ns ;
+		ns.name = strdup( name ) ;
+		ns.isRef = false ;
+		int seqIdx = seqs.size() ;
+		seqs.push_back( ns ) ;
+
+		struct _seqWrapper &sw = seqs[ seqIdx ] ;
+		int seqLen = strlen( seq ) ;
+		sw.consensus = strdup( seq ) ;
+		sw.consensusLen = seqLen ;	
+		sw.posWeight = posWeight ;
+		KmerCode kmerCode( kmerLength ) ;
+		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
+	
+		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
+		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
+
 		return seqIdx ;
 	}
 
@@ -2603,7 +2625,26 @@ public:
 				}
 				k = cnt ;
 			}
+			
+			if ( k > 1 )
+			{
+				// For merging, if all the overlaps look bad, don't merge them
+				for ( i = 0 ; i < k ; ++i )
+				{
+					if ( extendedOverlaps[i].similarity >= 0.95 )
+						break ;
+				}
 
+				if ( i >= k )
+				{
+					int maxtag = 0 ;
+					for ( i = 1 ; i < k ; ++i )
+						if ( extendedOverlaps[i] < extendedOverlaps[ maxtag ] )
+							maxtag = i ;
+					extendedOverlaps[0] = extendedOverlaps[maxtag] ;
+					k = 1 ;
+				}
+			}
 #ifdef DEBUG
 			for ( i = 0 ; i < k ; ++i )
 				printf( "extended %d: %d %s. %d. %d %d %d %d %lf\n", i, extendedOverlaps[i].seqIdx, 
@@ -3090,14 +3131,14 @@ public:
 
 		k = 0 ;
 		// See whether there is a reference seq match is sequence if it does not match any novel seq.
-		int refSeqIdx = -1 ;
+		int anchorSeqIdx = -1 ;
 		if ( addNew )
 		{
 			for ( i = 0 ; i < overlapCnt ; ++i )
 			{
 				if ( seqs[ overlaps[i].seqIdx ].isRef )
 				{
-					refSeqIdx = overlaps[i].seqIdx ;
+					anchorSeqIdx = overlaps[i].seqIdx ;
 					break ;
 				}
 			}
@@ -3115,32 +3156,32 @@ public:
 					}
 			}*/
 		}
-
-		if ( addNew )
+		if ( anchorSeqIdx == -1 )
 		{
-			// A novel sequence
-			// Go through the reference to annotate this read.
-			for ( i = 0 ; i < overlapCnt ; ++i )					
+			for ( i = 0 ; i < overlapCnt ; ++i )
 			{
-				// Check whether this overlap is used.
-				for ( j = 0 ; j < k ; ++j )
+				if ( overlaps[i].matchCnt >= 2 * hitLenRequired 
+					&& ( overlaps[i].readStart < 3 
+						|| overlaps[i].readEnd >= len - 3 ) )
 				{
-					;
+					anchorSeqIdx = i ;
+					break ;
 				}
 			}
-			// TODO: If overlaps on C-gene, it should not be truncated.  
-			
+		}
+		if ( addNew )
+		{
 			// Add the sequence to SeqSet
 			int idx = seqs.size() ;
 			struct _seqWrapper ns ;
 			
-			if ( refSeqIdx >=0 )
-				ns.name = strdup( seqs[ refSeqIdx ].name ) ;
+			if ( anchorSeqIdx >=0 )
+				ns.name = strdup( seqs[ anchorSeqIdx ].name ) ;
 			else
 				ns.name = strdup( "unknown" ) ;
 			ns.consensus = strdup( read ) ;
 			ns.consensusLen = strlen( read ) ;
-			if ( overlaps[0].strand == -1 )
+			if ( overlaps[ anchorSeqIdx ].strand == -1 )
 				ReverseComplement( ns.consensus, read, len ) ;
 			ns.isRef = false ;
 			
@@ -5141,6 +5182,8 @@ public:
 					}
 				}
 			}
+
+			cdr[2].similarity = cdr3Score ;
 				
 		}
 		if ( vAlign != NULL )
@@ -6898,6 +6941,15 @@ public:
 	int GetSeqConsensusLen( int seqIdx )
 	{
 		return seqs[ seqIdx ].consensusLen ;
+	}
+
+	int GetSeqWeightSum( int seqIdx )
+	{
+		int ret = 0 ;
+		int i ;
+		for ( i = 0 ; i < seqs[ seqIdx ].consensusLen ; ++i )
+			ret += seqs[seqIdx].posWeight[i].Sum() ;
+		return ret ;
 	}
 
 } ;
