@@ -527,7 +527,9 @@ int main( int argc, char *argv[] )
 			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, buffer ) ;
 			
 			// If the order of V,D,J,C is wrong from this read, then we ignore this.
-			//   probably from read through in cyclic fragment. 
+			//   probably from read through in cyclic fragment.
+			// We do not need to worry about the strand here, since if the strand is -1, the coordinate
+			//   is relative to the reversed-complementary read.
 			bool filter = false ;
 			int strand = 0 ;
 			for ( j = 0 ; j < 4 ; ++j )
@@ -561,6 +563,10 @@ int main( int argc, char *argv[] )
 				//}
 				
 			}
+
+			/*for ( j = 0 ; j < 4 ; ++j )
+				printf( "%d ", geneOverlap[j].seqIdx ) ;
+			printf( "\n" ) ;*/
 			if ( filter ) 
 				addRet = -1 ;
 			else
@@ -588,14 +594,51 @@ int main( int argc, char *argv[] )
 					//	similarityThreshold = 0.9 ;
 					similarityThreshold = 0.95 ;
 				}
+
+				//if ( similarityThreshold > 0.9 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
+				//	&& geneOverlap[0].readEnd < geneOverlap[2].readStart )
+				//	similarityThreshold = 1.0 ;
+
 				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
+					// Check the overall hit length.
+					int matchCnt = 0 ;
+					for ( j = 0 ; j < 4 ; ++j )
+					{
+						if ( geneOverlap[j].seqIdx != -1 )
+							matchCnt += geneOverlap[j].matchCnt / 2 ;
+					}
+					filter = true ;
+					if ( matchCnt >= 31 )
+						filter = false ;
+					else
+					{
+						// The anchor is very close to the end of V or J gene
+						if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
+							&& geneOverlap[0].readEnd < geneOverlap[2].readStart )
+						{
+							filter = false ;
+						}
+						else if ( geneOverlap[0].seqIdx != -1 )
+						{
+							if ( geneOverlap[0].seqEnd >= 
+								refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) - 17 )
+								filter = false ;
+						}
+						else if ( geneOverlap[2].seqIdx != -1 )
+						{
+							if ( geneOverlap[2].seqStart <= 17 )
+								filter = false ;
+						}
+					}
 					for ( j = 0 ; j < 4 ; ++j )
 						if ( geneOverlap[j].seqIdx != -1 )
+						{
 							break ;
-					if ( j < 4 )
+						}
+					if ( !filter )
 					{
 						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
 							sortedReads[i].read, geneOverlap[j].strand ) ;
@@ -672,8 +715,20 @@ int main( int argc, char *argv[] )
 #endif
 		int addRet = -1 ;
 		char name[2] = "" ;
-		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, 0, 
-			( sortedReads[ rescueReadIdx[i] ].minCnt >= 20 ? 0.97 : 0.9 ) ) ;
+		
+		double similarityThreshold = 0.9 ;
+		if ( sortedReads[ rescueReadIdx[i] ].minCnt >= 20 )
+			similarityThreshold = 0.97 ;
+		else if ( sortedReads[ rescueReadIdx[i] ].minCnt >= 2 )
+		{
+			//double tmp = 1.0 - 4.0 / sortedReads[i].len ;
+			//similarityThreshold = tmp < 0.95 ? tmp : 0.95 ;
+			//if ( similarityThreshold < 0.9 )
+			//	similarityThreshold = 0.9 ;
+			similarityThreshold = 0.95 ;
+		}
+
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, 0, similarityThreshold ) ;
 		if ( addRet >= 0 )
 		{
 			++assembledReadCnt ;
@@ -733,7 +788,8 @@ int main( int argc, char *argv[] )
 	fp = fopen( buffer, "w" ) ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
-		fprintf( fp, ">%s %d %d\n%s\n", assembledReads[i].id, sortedReads[ assembledReadIdx[i] ].minCnt, 
+		fprintf( fp, ">%s %d %d %d\n%s\n", assembledReads[i].id, assembledReads[i].overlap.strand,
+			sortedReads[ assembledReadIdx[i] ].minCnt, 
 			sortedReads[ assembledReadIdx[i] ].medianCnt,
 			assembledReads[i].read ) ;
 	}

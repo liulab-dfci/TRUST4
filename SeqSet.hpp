@@ -3929,8 +3929,8 @@ public:
 		
 		contigCnt = contigs.Size() ;
 		char *contigBuffer = new char[len + 1] ;
-		if ( detailLevel > 0 )
-			hitLenRequired = 17 ;	
+		//if ( detailLevel > 0 )
+		hitLenRequired = 17 ;	
 		// Obtain the overlaps for each contig
 		contigOverlaps.resize( contigCnt ) ;
 		for ( k = 0 ; k < contigCnt ; ++k )
@@ -5095,7 +5095,7 @@ public:
 					{
 						if ( s >= contigs[i].a && s < contigs[i].a + 18 
 							&& geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
-							&& DnaToAa( read[i], read[i + 1], read[i + 2] ) != 'C' )
+							&& DnaToAa( read[s], read[s + 1], read[s + 2] ) != 'C' )
 						{
 							cdr3Score = 0 ;
 							break ;
@@ -5105,8 +5105,8 @@ public:
 					{
 						if ( e <= contigs[i].b && e > contigs[i].b - 18 
 								&& geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart >= contigs[i + 1].a 
-								&& DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) != 'W' &&
-								  DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) != 'F' )
+								&& DnaToAa( read[e - 2], read[e - 1], read[e] ) != 'W' &&
+								  DnaToAa( read[e - 2], read[e - 1], read[e] ) != 'F' )
 						{
 							cdr3Score =0  ;
 							break ;
@@ -6094,7 +6094,15 @@ public:
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( !useInBranch[i] )
+			{
+				for ( k = 0 ; k < 3 ; ++k )
+				{
+					seqs[i].info[k].a = -1 ;
+					seqs[i].info[k].b = -1 ;
+					seqs[i].info[k].c = -1 ;
+				}
 				continue ;
+			}
 			struct _overlap geneOverlap[4] ;
 			struct _overlap cdr[3] ;
 			refSet.AnnotateRead( seqs[i].consensus, 0, geneOverlap, cdr, buffer ) ;

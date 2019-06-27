@@ -82,9 +82,8 @@ int main( int argc, char *argv[] )
 	struct _overlap cdr[3] ; // the coordinate for cdr1,2,3
 	option_index = 0 ;
 	bool ignoreWeight = false ;
-	ReadFiles reads ;
 	char outputPrefix[1024] = "trust" ;
-
+	FILE *fpReads = NULL ;
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -102,7 +101,7 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 'r' )
 		{
-			reads.AddReadFile( optarg, false ) ;
+			fpReads = fopen( optarg, "r" ) ;
 		}
 		else if ( c == 'o' )
 		{
@@ -185,9 +184,9 @@ int main( int argc, char *argv[] )
 		}
 
 		if ( !ignoreWeight )
-			seqSet.InputNovelSeq( buffer, seq, posWeight ) ;
+			seqSet.InputNovelSeq( buffer + 1, seq, posWeight ) ;
 		else 
-			seqSet.InputNovelRead( buffer, seq, 1 ) ;
+			seqSet.InputNovelRead( buffer + 1, seq, 1 ) ;
 	}
 	fclose( fpAssembly ) ;
 
@@ -203,20 +202,22 @@ int main( int argc, char *argv[] )
 	}
 	
 	// Output more CDR3 information 
-	if ( reads.GetFpUsed() > 0 )
+	if ( fpReads != NULL )
 	{
 		struct _overlap assign ;
 		std::vector< std::vector<struct _CDR3info> > cdr3Infos ;
 		cdr3Infos.resize( seqCnt ) ;
+		int strand, minCnt, medCnt ;
 		k = 0 ;
 		buffer2[0] = '\0' ;
 		PrintLog( "Start to realign reads." ) ;
-		while ( reads.Next() )	
+		while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
 		{
-			if ( strcmp( reads.seq, buffer2 ) ) 
+			fscanf( fpReads, "%s", seq ) ; 
+			if ( strcmp( seq, buffer2 ) ) 
 			{
-				strcpy( buffer2, reads.seq ) ;
-				seqSet.AssignRead( reads.seq, 0, 0.95, assign ) ;	
+				strcpy( buffer2, seq ) ;
+				seqSet.AssignRead( seq, strand, 0.9, assign ) ;	
 				if ( assign.seqIdx == -1 )
 					continue ;
 			}
@@ -232,9 +233,20 @@ int main( int argc, char *argv[] )
 				int size = info.size() ;
 				int cdr3Len =  annotations[ assign.seqIdx ].cdr[2].readEnd -
 					annotations[ assign.seqIdx ].cdr[2].readStart + 1 ;
-				memcpy( buffer, reads.seq + assign.readStart +
-						annotations[ assign.seqIdx ].cdr[2].readStart - assign.seqStart, 
-						sizeof( char ) * cdr3Len ) ;
+
+				int offset = assign.readStart +
+					annotations[ assign.seqIdx ].cdr[2].readStart - assign.seqStart ;
+				if ( assign.strand == 1 )
+				{
+					memcpy( buffer, seq + offset, sizeof( char ) * cdr3Len ) ;
+				}
+				else if ( assign.strand == -1 )
+				{
+					int len = strlen( seq ) ;
+					seqSet.ReverseComplement( buffer, seq + ( len - 1 - offset ) - cdr3Len + 1, cdr3Len ) ;
+				}
+				else
+					continue ;
 				buffer[cdr3Len] = '\0' ;
 
 				for ( i = 0 ; i < size ; ++i )
@@ -309,7 +321,7 @@ int main( int argc, char *argv[] )
 						fprintf( fpOutput, "%s\t", buffer ) ;
 					}
 				}
-				fprintf( fpOutput, "%s\t%d\n", info[j].seq, info[j].count ) ;
+				fprintf( fpOutput, "%s\t%.2lf\t%d\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count ) ;
 			}
 			
 		}
@@ -321,6 +333,7 @@ int main( int argc, char *argv[] )
 				free( cdr3Infos[i][j].seq ) ;
 		}
 		fclose( fpOutput ) ;
+		fclose( fpReads ) ; 
 	}
 	
 	delete[] annotations ;
