@@ -1041,6 +1041,6 @@ int main( int argc, char *argv[] )
 			free( sortedReads[i].qual ) ;
 	}
 
-	PrintLog( "Finished." ) ;
+	PrintLog( "Finish assembly." ) ;
 	return 0 ;
 }

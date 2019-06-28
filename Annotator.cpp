@@ -135,7 +135,7 @@ int main( int argc, char *argv[] )
 	}
 
 	refSet.SetRadius( radius ) ;
-	PrintLog( "Annotate assemblies." ) ;
+	PrintLog( "Start to annotate assemblies." ) ;
 	while ( fgets( buffer, sizeof( buffer ), fpAssembly ) != NULL )
 	{
 		if ( buffer[0] != '>' )
@@ -210,7 +210,7 @@ int main( int argc, char *argv[] )
 		int strand, minCnt, medCnt ;
 		k = 0 ;
 		buffer2[0] = '\0' ;
-		PrintLog( "Start to realign reads." ) ;
+		PrintLog( "Start to realign reads for CDR3 analysis." ) ;
 		while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
 		{
 			fscanf( fpReads, "%s", seq ) ; 
@@ -337,5 +337,6 @@ int main( int argc, char *argv[] )
 	}
 	
 	delete[] annotations ;
+	PrintLog( "Finish annotation." ) ;
 	return 0 ;
 }

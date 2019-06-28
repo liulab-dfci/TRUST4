@@ -2,6 +2,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include <vector>
 #include <algorithm>
@@ -28,6 +29,7 @@ char buffer[100001] ;
 char buffer2[100001] ;
 char bufferQual[100001] ;
 char bufferQual2[100001] ;
+char seqBuffer[100001] ;
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
@@ -71,6 +73,19 @@ bool ValidAlternativeChrom( char *chrom )
 	else if ( ( chrom[0] == 'G' && chrom[1] == 'I' ) || ( chrom[0] == 'G' && chrom[1] == 'L' ) )
 		return true ;
 	return false ;
+}
+
+void PrintLog( const char *fmt, ... )
+{
+	va_list args ;
+	va_start( args, fmt ) ;
+	vsprintf( buffer, fmt, args ) ;
+
+	time_t mytime = time(NULL) ;
+	struct tm *localT = localtime( &mytime ) ;
+	char stime[500] ;
+	strftime( stime, sizeof( stime ), "%c", localT ) ;
+	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
 }
 
 bool IsLowComplexity( char *seq )
@@ -126,7 +141,8 @@ int main( int argc, char *argv[] )
 	char prefix[127] = "toassemble" ;
 	Alignments alignments ;
 	bool filterUnalignedFragment = false ;
-	SeqSet refSet( 21 ) ;
+	int kmerLength = 21 ;
+	SeqSet refSet( kmerLength ) ;
 
 	std::map<std::string, struct _candidate> candidates ; 
 
@@ -181,6 +197,7 @@ int main( int argc, char *argv[] )
 	char strand[3] ;
 
 	std::vector<struct _interval> genes ;
+	PrintLog( "Start to extract candidate reads from bam file." ) ;
 
 	while ( fscanf( fpRef, "%s %s %d %d %s", geneName, chrom, &start, &end, strand ) != EOF )
 	{
@@ -260,7 +277,7 @@ int main( int argc, char *argv[] )
 					return EXIT_FAILURE ;
 				}
 
-				if ( ( refSet.HasHitInSet( buffer2 ) || refSet.HasHitInSet( buffer ) ) 
+				if ( ( refSet.HasHitInSet( buffer2, seqBuffer, kmerLength ) || refSet.HasHitInSet( buffer, seqBuffer, kmerLength ) ) 
 					&& ( !IsLowComplexity( buffer2 ) && !IsLowComplexity( buffer ) ) )
 				{
 					if ( !alignments.IsFirstMate() )
@@ -289,7 +306,7 @@ int main( int argc, char *argv[] )
 					candidates[name].mate2 = NULL ;
 				}
 			}
-			else if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer ) )
+			else if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer, 21 ) )
 			{
 				//alignments.GetReadSeq( buffer ) ;
 				OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
@@ -346,7 +363,7 @@ int main( int argc, char *argv[] )
 	}
 	// Case of pair-end data set.
 	// Go through the BAM file again to output the candidates 
-	fprintf( stderr, "Finish obtaining the candidate read ids.\n" ) ;
+	PrintLog( "Finish obtaining the candidate read ids." ) ;
 
 
 	while ( alignments.Next() )
@@ -396,5 +413,6 @@ int main( int argc, char *argv[] )
 	fclose( fp2 ) ;
 
 	fclose( fpRef ) ;
+	PrintLog( "Finish extracting reads." ) ;
 	return 0 ;
 }

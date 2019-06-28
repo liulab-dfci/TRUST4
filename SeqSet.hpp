@@ -950,7 +950,7 @@ private:
 					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
 
 					int size = indexHit.Size() ;
-					if ( size >= 100 && puse == NULL )
+					if ( size >= 100 && puse == NULL && i != kmerLength - 1 && i != len - 1 )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -996,7 +996,7 @@ private:
 
 					int size = indexHit.Size() ;
 
-					if ( size >= 100 && puse == NULL )
+					if ( size >= 100 && puse == NULL && i != kmerLength - 1 && i != len - 1 )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -2113,47 +2113,50 @@ public:
 	}
 	
 	// Test whether the read share a kmer hit on the seqs.
-	bool HasHitInSet( char *read )
+	bool HasHitInSet( char *read, char *rcRead, int minHitRequired )
 	{
-		int i ;
+		int i, k ;
 		int len = strlen( read ) ;
 		if ( len < kmerLength )
 			return false ;
 
 		KmerCode kmerCode( kmerLength ) ;
-
-		for ( i = 0 ; i < kmerLength - 1 ; ++i )
-			kmerCode.Append( read[i] ) ;
-		for ( ; i < len ; ++i )
-		{
-			kmerCode.Append( read[i] ) ;
-			SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
-			int size = indexHit.Size() ;
-			if ( size > 0 )
-				return true ;
-		}
 		
-		// Locate the hits from the opposite-strand case.
-		char *rcRead =  new char[len + 1] ;
-		ReverseComplement( rcRead, read, len ) ;		
-		kmerCode.Restart() ;
-		for ( i = 0 ; i < kmerLength - 1 ; ++i )
-			kmerCode.Append( rcRead[i] ) ;
-		
-		for ( ; i < len ; ++i )
+		for ( k = 0 ; k < 2 ; ++k )
 		{
-			kmerCode.Append( rcRead[i] ) ;
-			SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
-
-			int size = indexHit.Size() ;
-			if ( size > 0 )
+			int prevHit = -1 ;
+			int hitLen = 0 ;
+			char *r ;
+			if ( k == 0 )	
+				r = read ;
+			else
 			{
-				delete[] rcRead ;
-				return true ;
+				kmerCode.Restart() ;
+				ReverseComplement( rcRead, read, len ) ;		
+				r = rcRead ;	
+			}
+
+			for ( i = 0 ; i < kmerLength - 1 ; ++i )
+				kmerCode.Append( r[i] ) ;
+			for ( ; i < len ; ++i )
+			{
+				kmerCode.Append( r[i] ) ;
+				SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+				int size = indexHit.Size() ;
+				if ( size == 0 )
+					continue ;
+
+				if ( prevHit == -1 || prevHit + kmerLength - 1 < i )
+					hitLen += kmerLength ;
+				else
+					hitLen += i - prevHit ;
+
+				if ( hitLen >= minHitRequired )
+					return true ;
+				prevHit = i ;
 			}
 		}
 
-		delete[] rcRead ;
 		return false ;
 	}
 
