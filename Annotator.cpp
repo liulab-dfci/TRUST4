@@ -31,7 +31,7 @@ char buffer2[10241] = "" ;
 char weightBuffer[100241] = "" ;
 char seq[10241] = "" ;
 
-static const char *short_options = "f:a:r:p:" ;
+static const char *short_options = "f:a:r:p:o:" ;
 static struct option long_options[] = {
 			{ "fasta", no_argument, 0, 10000 },
 			{ "radius", required_argument, 0, 10001 },
@@ -47,7 +47,8 @@ struct _annotate
 struct _CDR3info
 {
 	char *seq ;
-	int count ;
+	double count ;
+	double TPM ;
 } ;
 
 void PrintLog( const char *fmt, ... )
@@ -61,6 +62,88 @@ void PrintLog( const char *fmt, ... )
 	char stime[500] ;
 	strftime( stime, sizeof( stime ), "%c", localT ) ;
 	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+}
+
+bool CompSortAssignedReadsByAssign( const struct _assignRead &a, const struct _assignRead &b )
+{
+	return a.overlap.seqIdx < b.overlap.seqIdx ;
+}
+
+// We already make sure they overlap before calling this function
+bool IsCDR3Compatible( const struct _assignRead &r, const struct _CDR3info &cdr3, const struct _overlap cdr3Coord )
+{
+	int rOffset ;
+	int cOffset ;
+	if ( r.overlap.seqStart <= cdr3Coord.readStart )
+	{
+		rOffset = r.overlap.readStart + cdr3Coord.readStart - r.overlap.seqStart ;
+		cOffset = 0 ;
+	}
+	else if ( r.overlap.seqStart > cdr3Coord.readStart ) 
+	{
+		rOffset = r.overlap.readStart ;
+		cOffset = r.overlap.seqStart - cdr3Coord.readStart ;
+	}
+
+	int i ;
+	for ( i = 0 ; r.read[i + rOffset] && cdr3.seq[i + cOffset] ; ++i )
+	{
+		if ( r.read[i + rOffset] != cdr3.seq[i + cOffset] )
+			return false ;
+	}
+	//printf( "%s\n%s\n", r.read, cdr3.seq ) ;
+	//printf( "%d %d %d\n", i, rOffset, cOffset ) ;
+	return true ;
+}
+
+
+// Could be improved by using BitTable and compress the read covering the same set of CDR3s.
+void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector< struct _CDR3info >& info )
+{
+	int i, j, k, t ;
+	double endD = 1e-3 ;
+	int cCnt = info.size() ;
+	int rCnt = compat.size() ;
+
+	SimpleVector<double> abundance ;
+	abundance.ExpandTo( cCnt ) ;
+	
+	for ( i = 0 ; i < cCnt ; ++i )
+		abundance[i] = 1.0 / cCnt ;
+	for ( t = 0 ; t < 1000 ; ++t )
+	{
+		double d = 0 ;
+		for ( i = 0 ; i < cCnt ; ++i )
+			info[i].count = 0 ;
+		// E-step
+		double sum = 0 ;
+		for ( i = 0 ; i < rCnt ; ++i )
+		{
+			int size = compat[i].Size() ;
+			sum = 0 ;
+			for ( j = 0 ; j < size ; ++j )
+			{
+				//printf( "%d %d %d\n", i, j, compat[i][j] ) ;
+				sum += abundance[ compat[i][j] ] ;
+			}
+			for ( j = 0 ; j < size ; ++j )
+				info[ compat[i][j] ].count += abundance[ compat[i][j] ] / sum ;
+		}
+
+		// M-step
+		sum = 0 ;
+		for ( i = 0 ; i < cCnt ; ++i )
+			sum += info[i].count ;
+		for ( i = 0 ; i < cCnt ; ++i )
+		{
+			double tmp = abundance[i] ;
+			abundance[i] = info[i].count / sum ;
+			d += ABS( tmp - abundance[i] ) ; 
+		}
+
+		if ( d < endD )
+			return ;
+	}
 }
 
 int main( int argc, char *argv[] )
@@ -211,6 +294,7 @@ int main( int argc, char *argv[] )
 		k = 0 ;
 		buffer2[0] = '\0' ;
 		PrintLog( "Start to realign reads for CDR3 analysis." ) ;
+		std::vector<struct _assignRead> cdr3Reads ; // Keep the information of the reads aligned to cdr3 region.
 		while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
 		{
 			fscanf( fpReads, "%s", seq ) ; 
@@ -224,7 +308,25 @@ int main( int argc, char *argv[] )
 
 			if ( assign.seqIdx == -1 )
 				continue ;
-
+			
+			// Store the read overlap with CDR3 region 
+			if ( annotations[ assign.seqIdx ].cdr[2].seqIdx != -1 
+				&& assign.seqEnd > annotations[ assign.seqIdx ].cdr[2].readStart + 3 
+				&& assign.seqStart < annotations[ assign.seqIdx ].cdr[2].readEnd - 3 )
+			{
+				struct  _assignRead nr ;
+				nr.id = NULL ; 
+				nr.read = strdup( seq ) ;
+				nr.overlap = assign ;
+				if ( assign.strand == -1 )
+				{
+					seqSet.ReverseComplement( nr.read, seq, strlen( seq ) ) ;
+					nr.overlap.strand = 1 ;
+				}
+				cdr3Reads.push_back( nr ) ;
+			}
+			
+			// Process the CDR3 region
 			if ( annotations[assign.seqIdx].cdr[2].seqIdx != -1 
 					&& assign.seqStart <= annotations[ assign.seqIdx ].cdr[2].readStart 
 					&& assign.seqEnd >=  annotations[ assign.seqIdx ].cdr[2].readEnd )
@@ -263,6 +365,7 @@ int main( int argc, char *argv[] )
 
 					info.push_back( nc ) ;
 				}
+				//printf( "%s\n%s %d\n", cdr3Reads[ cdr3Reads.size() - 1 ].read, buffer, i ) ;
 			}
 			++k ;
 			if ( k % 100000 == 0 )
@@ -270,10 +373,9 @@ int main( int argc, char *argv[] )
 				PrintLog( "Realigned %d reads.", k ) ;
 			}
 		}
-
-		// Output different CDR3s from each main assembly.
-		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;
-		FILE *fpOutput = fopen( buffer, "w" ) ;
+		
+		// Compute the abundance for each CDR3.
+		// If there is no read span the whole CDR3 region, use consensus.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( annotations[i].cdr[2].seqIdx == -1 )
@@ -291,8 +393,59 @@ int main( int argc, char *argv[] )
 				nc.count = 1 ;
 
 				info.push_back( nc ) ;
-				size = 1 ;
 			}
+		}
+
+		// Distribute the reads.
+		std::sort( cdr3Reads.begin(), cdr3Reads.end(), CompSortAssignedReadsByAssign  ) ;
+		int cdr3ReadCnt = cdr3Reads.size() ;
+		for ( i = 0 ; i < cdr3ReadCnt ; )
+		{
+			for ( j = i + 1 ; j < cdr3ReadCnt ; ++j )
+			{
+				if ( cdr3Reads[j].overlap.seqIdx != cdr3Reads[i].overlap.seqIdx )
+					break ;
+			}
+			
+			std::vector<struct _CDR3info> &info = cdr3Infos[ cdr3Reads[i].overlap.seqIdx ] ;
+			int size = info.size() ;
+			if ( size == 1 )
+			{
+				info[0].count = j - i ;
+				i = j ;
+				continue ;
+			}
+			// Create the compatility relation
+			std::vector< SimpleVector<int> > compat ; // read k is compatible to CDR3 l
+			compat.resize( j - i ) ;
+			for ( k = i ; k < j ; ++k )
+			{
+				int l ;
+				compat[k - i].Clear() ;
+				for ( l = 0 ; l < size ; ++l )
+				{
+					if ( IsCDR3Compatible( cdr3Reads[k], info[l], annotations[ cdr3Reads[i].overlap.seqIdx ].cdr[2] ) )
+					{
+						//printf( "%d=>%d\n", k, l ) ;
+						compat[k - i].PushBack( l ) ;
+					}
+				}
+			}
+			// EM algorithm to estimate the count
+			AbundanceEstimation( compat, info ) ;
+
+			i = j ;
+		}
+		// Output different CDR3s from each main assembly.
+		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;
+		FILE *fpOutput = fopen( buffer, "w" ) ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( annotations[i].cdr[2].seqIdx == -1 )
+				continue ;
+
+			std::vector<struct _CDR3info> &info = cdr3Infos[i] ;
+			int size = info.size() ;
 			// Output each CDR3 information
 			for ( j = 0 ; j < size ; ++j )
 			{
@@ -321,11 +474,13 @@ int main( int argc, char *argv[] )
 						fprintf( fpOutput, "%s\t", buffer ) ;
 					}
 				}
-				fprintf( fpOutput, "%s\t%.2lf\t%d\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count ) ;
+				fprintf( fpOutput, "%s\t%.2lf\t%.2lf\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count ) ;
 			}
 			
 		}
 		// Free up memory
+		for ( i = 0 ; i < cdr3ReadCnt ; ++i )
+			free( cdr3Reads[i].read ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int size = cdr3Infos[i].size() ;
