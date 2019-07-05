@@ -202,13 +202,9 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 	for ( i = 0 ; i < cnt ; ++i )
 	{
 		int k = pick[i] ;
-		if ( arg.candidates[k].mate2 == NULL )
+		OutputSeq( info.fp1, arg.candidates[k].name, arg.candidates[k].mate1, arg.candidates[k].qual1 ) ;
+		if ( arg.candidates[k].mate2 != NULL )
 		{
-			OutputSeq( info.fp1, arg.candidates[k].name, arg.candidates[k].mate1, arg.candidates[k].qual1 ) ;
-		}
-		else
-		{
-			OutputSeq( info.fp1, arg.candidates[k].name, arg.candidates[k].mate1, arg.candidates[k].qual1 ) ;
 			OutputSeq( info.fp2, arg.candidates[k].name, arg.candidates[k].mate2, arg.candidates[k].qual2 ) ;
 		}
 
@@ -221,17 +217,11 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 	cnt = arg.candidates.size() ;
 	for ( i = 0 ; i < cnt ; ++i )
 	{
-		if ( arg.candidates[i].mate2 == NULL )
+		free( arg.candidates[i].name ) ;
+		free( arg.candidates[i].mate1 ) ;
+		free( arg.candidates[i].qual1 ) ;
+		if ( arg.candidates[i].mate2 != NULL )
 		{
-			free( arg.candidates[i].name ) ;
-			free( arg.candidates[i].mate1 ) ;
-			free( arg.candidates[i].qual1 ) ;
-		}
-		else
-		{
-			free( arg.candidates[i].name ) ;
-			free( arg.candidates[i].mate1 ) ;
-			free( arg.candidates[i].qual1 ) ;
 			free( arg.candidates[i].mate2 ) ;
 			free( arg.candidates[i].qual2 ) ;
 		}
@@ -265,6 +255,7 @@ void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr
 	for ( i = 0 ; i < threadCnt ; ++i )
 	{
 		struct _threadInfo &info = (*threadArgs)[i].info ;
+		info.tid = i ;
 		info.freeThreads = freeThreads ;
 		info.ftCnt = ftCnt ;
 		info.lockOutput = lockOutput ;
