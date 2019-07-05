@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <pthread.h>
 
 #include <vector>
 #include <algorithm>
@@ -18,9 +19,10 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"\t-b STRING: path to BAM file\n"
 		"Optional:\n"
 		"\t-o STRING: prefix to the output file\n"
+		"\t-t INT: number of threads (default: 1)\n"
 		"\t-u: filter unaligned read-pair (default: no filter)\n" ;
 
-static const char *short_options = "f:b:o:u" ;
+static const char *short_options = "f:b:o:t:u" ;
 static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
@@ -62,6 +64,41 @@ struct _candidate
 	char *qual1 ;
 	char *qual2 ;
 } ;
+
+struct _unmappedCandidate
+{
+	char *name ;
+
+	char *mate1 ;
+	char *mate2 ;
+
+	char *qual1 ;
+	char *qual2 ;
+} ; 
+
+// Pre-determined information
+struct _threadInfo
+{
+	int tid ;
+	
+	FILE *fp1, *fp2 ;
+	SeqSet *refSet ;
+	char *seqBuffer ;
+	int kmerLength ;
+	
+	int *freeThreads ;
+	int *ftCnt ;
+	pthread_mutex_t *lockOutput ;
+	pthread_mutex_t *lockFreeThreads ;
+	pthread_cond_t *condFreeThreads ;
+} ;
+
+struct _threadArg
+{
+	std::vector<struct _unmappedCandidate> candidates ;
+	struct _threadInfo info ;
+} ;
+
 
 bool ValidAlternativeChrom( char *chrom )
 {
@@ -127,6 +164,187 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
 	fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
 }
 
+void *ProcessUnmappedReads_Thread( void *pArg )
+{
+	int i ;
+	struct _threadArg &arg = *( (struct _threadArg *)pArg ) ;
+	struct _threadInfo &info = arg.info ;
+	int cnt = arg.candidates.size() ;
+	SimpleVector<int> pick ;
+	for ( i = 0 ; i < cnt ; ++i )
+	{
+		if ( arg.candidates[i].mate2 == NULL )
+		{
+			// single-end 
+			if ( info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer, info.kmerLength )
+				&& !IsLowComplexity( arg.candidates[i].mate1 ) )
+			{
+				pick.PushBack( i ) ;
+			}
+		}
+		else
+		{
+			// paired-end
+			if ( ( info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer, info.kmerLength ) 
+				|| info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer, info.kmerLength ) )
+				&& ( !IsLowComplexity( arg.candidates[i].mate1 ) && !IsLowComplexity( arg.candidates[i].mate2 ) ) )
+			{
+				pick.PushBack( i ) ;
+			}
+		}
+	}
+	
+	// Output
+	cnt = pick.Size() ;
+	pthread_mutex_lock( info.lockOutput ) ;
+	info.freeThreads[ *( info.ftCnt ) ] = info.tid ;
+	++*(info.ftCnt) ;
+	for ( i = 0 ; i < cnt ; ++i )
+	{
+		int k = pick[i] ;
+		if ( arg.candidates[k].mate2 == NULL )
+		{
+			OutputSeq( info.fp1, arg.candidates[k].name, arg.candidates[k].mate1, arg.candidates[k].qual1 ) ;
+		}
+		else
+		{
+			OutputSeq( info.fp1, arg.candidates[k].name, arg.candidates[k].mate1, arg.candidates[k].qual1 ) ;
+			OutputSeq( info.fp2, arg.candidates[k].name, arg.candidates[k].mate2, arg.candidates[k].qual2 ) ;
+		}
+
+	}
+	if ( *info.ftCnt == 1 )
+		pthread_cond_signal( info.condFreeThreads ) ;
+	pthread_mutex_unlock( info.lockOutput ) ;
+	
+	// Release memory
+	cnt = arg.candidates.size() ;
+	for ( i = 0 ; i < cnt ; ++i )
+	{
+		if ( arg.candidates[i].mate2 == NULL )
+		{
+			free( arg.candidates[i].name ) ;
+			free( arg.candidates[i].mate1 ) ;
+			free( arg.candidates[i].qual1 ) ;
+		}
+		else
+		{
+			free( arg.candidates[i].name ) ;
+			free( arg.candidates[i].mate1 ) ;
+			free( arg.candidates[i].qual1 ) ;
+			free( arg.candidates[i].mate2 ) ;
+			free( arg.candidates[i].qual2 ) ;
+		}
+	}
+
+
+	pthread_exit( NULL ) ;
+	return NULL ;
+}
+
+// Framework of work distribute model
+void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr_t &attr, int threadCnt )
+{
+	int i ;
+	struct _threadInfo info ;
+	
+	*threads = new pthread_t[ threadCnt ] ;
+	*threadArgs = new struct _threadArg[ threadCnt ] ;
+	pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+	int *freeThreads = new int[ threadCnt ] ;
+	int *ftCnt = new int ;
+	*ftCnt = 0 ;
+	pthread_mutex_t *lockOutput = new pthread_mutex_t ;
+	pthread_mutex_t *lockFreeThreads = new pthread_mutex_t ;
+	pthread_cond_t *condFreeThreads = new pthread_cond_t ;
+	
+	pthread_mutex_init( lockOutput, NULL ) ;
+	pthread_mutex_init( lockFreeThreads, NULL ) ;
+	pthread_cond_init( condFreeThreads, NULL ) ;
+	for ( i = 0 ; i < threadCnt ; ++i )
+	{
+		struct _threadInfo &info = (*threadArgs)[i].info ;
+		info.freeThreads = freeThreads ;
+		info.ftCnt = ftCnt ;
+		info.lockOutput = lockOutput ;
+		info.lockFreeThreads = lockFreeThreads ;
+		info.condFreeThreads = condFreeThreads ;
+	}
+}
+
+// Customize your own parameters here.
+void InitCustomData( FILE *fp1, FILE *fp2, SeqSet *refSet, int kmerLength, struct _threadArg *threadArgs, int threadCnt )
+{
+	int i ; 
+	for ( i = 0 ; i < threadCnt ; ++i )
+	{
+		threadArgs[i].info.fp1 = fp1 ;			
+		threadArgs[i].info.fp2 = fp2 ;			
+		threadArgs[i].info.refSet = refSet ;
+		threadArgs[i].info.kmerLength = kmerLength ;
+		threadArgs[i].info.seqBuffer = new char[100001] ;
+	}
+}
+
+void DistributeWork( std::vector<struct _unmappedCandidate> &work,
+	struct _threadArg *threadArgs, pthread_t *threads, pthread_attr_t &attr, int threadCnt )
+{
+	int tid ;
+	struct _threadInfo &info = threadArgs[0].info ;
+
+	// Determine which thread to use
+	pthread_mutex_lock( info.lockFreeThreads ) ;
+	if ( *(info.ftCnt) == 0 )
+		pthread_cond_wait( info.condFreeThreads, info.lockFreeThreads ) ;
+	tid = info.freeThreads[ *( info.ftCnt - 1 ) ] ;
+	--*( info.ftCnt ) ;
+	pthread_mutex_unlock( info.lockFreeThreads ) ;
+
+	// Call the thread
+	threadArgs[tid].candidates = work ;
+	work.clear() ;
+	pthread_create( &threads[tid], &attr, ProcessUnmappedReads_Thread, (void *)( threadArgs + tid ) ) ;
+}
+
+void AddWorkQueue( struct _unmappedCandidate &c, std::vector<struct _unmappedCandidate> &work, 
+	struct _threadArg *threadArgs, pthread_t *threads, pthread_attr_t &attr, int workLoad, int threadCnt )
+{
+	work.push_back( c ) ;
+	if ( work.size() >= workLoad )
+		DistributeWork( work, threadArgs, threads, attr, threadCnt ) ; 
+}
+
+void ReleaseCustomData( struct _threadArg *threadArgs, int threadCnt )
+{
+	int i ;
+	for ( i = 0 ; i < threadCnt ; ++i )
+		delete[] threadArgs[i].info.seqBuffer ;
+}
+
+void FinishWork( std::vector<struct _unmappedCandidate> work,  
+	struct _threadArg *threadArgs, pthread_t *threads, pthread_attr_t &attr, int threadCnt )
+{	
+	int i ;
+	DistributeWork( work, threadArgs, threads, attr, threadCnt ) ; 
+
+	for ( i = 0 ; i < threadCnt ; ++i )
+		pthread_join( threads[i], NULL ) ;
+
+	// Release memory 
+	delete[] threads ;
+	pthread_attr_destroy( &attr ) ;
+	struct _threadInfo &info = threadArgs[0].info ;
+	delete[] info.freeThreads ;
+	delete info.ftCnt ;
+	pthread_mutex_destroy( info.lockOutput ) ;
+	pthread_mutex_destroy( info.lockFreeThreads ) ;
+	pthread_cond_destroy( info.condFreeThreads ) ;
+	ReleaseCustomData( threadArgs, threadCnt ) ;
+	delete[] threadArgs ;
+}
+
+
 int main( int argc, char *argv[] )
 {
 	if ( argc <= 1 )
@@ -143,6 +361,7 @@ int main( int argc, char *argv[] )
 	bool filterUnalignedFragment = false ;
 	int kmerLength = 21 ;
 	SeqSet refSet( kmerLength ) ;
+	int threadCnt = 1 ;
 
 	std::map<std::string, struct _candidate> candidates ; 
 
@@ -169,6 +388,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 'u' )
 		{
 			filterUnalignedFragment = true ;
+		}
+		else if ( c == 't' )
+		{
+			threadCnt = atoi( optarg ) ;
 		}
 		else
 		{
@@ -220,8 +443,8 @@ int main( int argc, char *argv[] )
 	
 	int tag = 0 ;
 	
-	FILE *fp1 ;
-	FILE *fp2 ;
+	FILE *fp1 = NULL ;
+	FILE *fp2 = NULL ;
 	if ( alignments.fragStdev == 0 )
 	{
 		sprintf( buffer, "%s.fq", prefix ) ;
@@ -233,6 +456,16 @@ int main( int argc, char *argv[] )
 		fp1 = fopen( buffer, "w" ) ;
 		sprintf( buffer, "%s_2.fq", prefix ) ;
 		fp2 = fopen( buffer, "w" ) ;
+	}
+	
+	pthread_t *threads ;
+	struct _threadArg *threadArgs ;
+	pthread_attr_t attr ;
+	std::vector<struct _unmappedCandidate> threadsWorkQueue ;
+	if ( threadCnt > 1 )
+	{
+		InitWork( &threads, &threadArgs, attr, threadCnt - 1 ) ;
+		InitCustomData( fp1, fp2, &refSet, kmerLength, threadArgs, threadCnt - 1 ) ;
 	}
 
 	// assuming the input is sorted by coordinate.
@@ -277,19 +510,44 @@ int main( int argc, char *argv[] )
 					return EXIT_FAILURE ;
 				}
 
-				if ( ( refSet.HasHitInSet( buffer2, seqBuffer, kmerLength ) || refSet.HasHitInSet( buffer, seqBuffer, kmerLength ) ) 
-					&& ( !IsLowComplexity( buffer2 ) && !IsLowComplexity( buffer ) ) )
+
+				if ( threadCnt == 1 )
 				{
+					if ( ( refSet.HasHitInSet( buffer2, seqBuffer, kmerLength ) || refSet.HasHitInSet( buffer, seqBuffer, kmerLength ) ) 
+							&& ( !IsLowComplexity( buffer2 ) && !IsLowComplexity( buffer ) ) )
+					{
+						if ( !alignments.IsFirstMate() )
+						{
+							OutputSeq( fp1, name.c_str(), buffer2, bufferQual2 ) ;
+							OutputSeq( fp2, name.c_str(), buffer, bufferQual  ) ;
+						}
+						else
+						{
+							OutputSeq( fp1, name.c_str(), buffer, bufferQual ) ;
+							OutputSeq( fp2, name.c_str(), buffer2, bufferQual2 ) ;
+						}
+					}
+				}
+				else
+				{
+					struct _unmappedCandidate nw ;
+					nw.name = strdup( name.c_str() ) ;
 					if ( !alignments.IsFirstMate() )
 					{
-						OutputSeq( fp1, name.c_str(), buffer2, bufferQual2 ) ;
-						OutputSeq( fp2, name.c_str(), buffer, bufferQual  ) ;
+						nw.mate1 = strdup( buffer2 ) ;
+						nw.qual1 = strdup( bufferQual2 ) ;
+						nw.mate2 = strdup( buffer ) ;
+						nw.qual2 = strdup( bufferQual ) ;
 					}
 					else
 					{
-						OutputSeq( fp1, name.c_str(), buffer, bufferQual ) ;
-						OutputSeq( fp2, name.c_str(), buffer2, bufferQual2 ) ;
+						nw.mate1 = strdup( buffer ) ;
+						nw.qual1 = strdup( bufferQual ) ;
+						nw.mate2 = strdup( buffer2 ) ;
+						nw.qual2 = strdup( bufferQual2 ) ;
 					}
+
+					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 1024, threadCnt - 1 ) ;
 				}
 				continue ;
 			}
@@ -297,6 +555,7 @@ int main( int argc, char *argv[] )
 			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
 			{
+				// reads from bad chromosomes.
 				std::string name( alignments.GetReadId() ) ;
 				TrimName( name ) ;	
 
@@ -306,10 +565,28 @@ int main( int argc, char *argv[] )
 					candidates[name].mate2 = NULL ;
 				}
 			}
-			else if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer, 21 ) )
+			else 
 			{
-				//alignments.GetReadSeq( buffer ) ;
-				OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
+				// single-end
+				if ( threadCnt == 1 )
+				{
+					if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer, 21 ) )
+					{
+						//alignments.GetReadSeq( buffer ) ;
+						// No need to trim read id for single-end data.
+						OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
+					}
+				}
+				else
+				{
+					struct _unmappedCandidate nw ;
+					nw.name = strdup( alignments.GetReadId() ) ;
+					nw.mate1 = strdup( buffer ) ;
+					nw.qual1 = strdup( bufferQual ) ;
+					nw.mate2 = NULL ; 
+					nw.qual2 = NULL ; 
+					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 1024, threadCnt - 1 ) ;
+				}
 			}
 			continue ;
 		}
@@ -354,6 +631,12 @@ int main( int argc, char *argv[] )
 			OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 		}
 	}
+
+	if ( threadCnt > 1 )
+	{
+		FinishWork( threadsWorkQueue, threadArgs, threads, attr, threadCnt - 1 ) ;
+	}
+
 	alignments.Rewind() ;
 	if ( alignments.fragStdev == 0 ) // Single-end can terminate here.
 	{
