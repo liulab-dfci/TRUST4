@@ -66,7 +66,10 @@ void PrintLog( const char *fmt, ... )
 
 bool CompSortAssignedReadsByAssign( const struct _assignRead &a, const struct _assignRead &b )
 {
-	return a.overlap.seqIdx < b.overlap.seqIdx ;
+	if ( a.overlap.seqIdx != b.overlap.seqIdx )
+		return a.overlap.seqIdx < b.overlap.seqIdx ;
+	else
+		return strcmp( a.id, b.id ) < 0 ;
 }
 
 // We already make sure they overlap before calling this function
@@ -101,22 +104,29 @@ bool IsCDR3Compatible( const struct _assignRead &r, const struct _CDR3info &cdr3
 void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector< struct _CDR3info >& info )
 {
 	int i, j, k, t ;
-	double endD = 1e-3 ;
+	double endD = 1e-6 ;
 	int cCnt = info.size() ;
 	int rCnt = compat.size() ;
+	double sum = 0 ;
 
 	SimpleVector<double> abundance ;
 	abundance.ExpandTo( cCnt ) ;
-	
+	abundance.SetZero( 0, cCnt ) ;
+
+	for ( i = 0 ; i < rCnt ; ++i )
+		if ( compat[i].Size() == 1 )
+			++abundance[ compat[i][0] ] ;
 	for ( i = 0 ; i < cCnt ; ++i )
-		abundance[i] = 1.0 / cCnt ;
+		sum += abundance[i] ;
+	for ( i = 0 ; i < cCnt ; ++i )
+		abundance[i] /= sum ;
+
 	for ( t = 0 ; t < 1000 ; ++t )
 	{
 		double d = 0 ;
 		for ( i = 0 ; i < cCnt ; ++i )
 			info[i].count = 0 ;
 		// E-step
-		double sum = 0 ;
 		for ( i = 0 ; i < rCnt ; ++i )
 		{
 			int size = compat[i].Size() ;
@@ -138,9 +148,11 @@ void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector<
 		{
 			double tmp = abundance[i] ;
 			abundance[i] = info[i].count / sum ;
-			d += ABS( tmp - abundance[i] ) ; 
+			double diff = ABS( tmp - abundance[i] ) ;
+			if ( diff > d )
+				d = diff ;
 		}
-
+		//printf( "%lf %lf %lf\n", abundance[0], abundance[1], d ) ;
 		if ( d < endD )
 			return ;
 	}
@@ -309,13 +321,16 @@ int main( int argc, char *argv[] )
 			if ( assign.seqIdx == -1 )
 				continue ;
 			
+			int cdr3Len =  annotations[ assign.seqIdx ].cdr[2].readEnd -
+				annotations[ assign.seqIdx ].cdr[2].readStart + 1 ;
+			
 			// Store the read overlap with CDR3 region 
 			if ( annotations[ assign.seqIdx ].cdr[2].seqIdx != -1 
-				&& assign.seqEnd > annotations[ assign.seqIdx ].cdr[2].readStart + 3 
+				&& assign.seqEnd > annotations[ assign.seqIdx ].cdr[2].readStart + 3
 				&& assign.seqStart < annotations[ assign.seqIdx ].cdr[2].readEnd - 3 )
 			{
 				struct  _assignRead nr ;
-				nr.id = NULL ; 
+				nr.id = strdup( buffer + 1 ) ; // skip the > sign. 
 				nr.read = strdup( seq ) ;
 				nr.overlap = assign ;
 				if ( assign.strand == -1 )
@@ -333,8 +348,6 @@ int main( int argc, char *argv[] )
 			{
 				std::vector<struct _CDR3info> &info = cdr3Infos[ assign.seqIdx ] ;
 				int size = info.size() ;
-				int cdr3Len =  annotations[ assign.seqIdx ].cdr[2].readEnd -
-					annotations[ assign.seqIdx ].cdr[2].readStart + 1 ;
 
 				int offset = assign.readStart +
 					annotations[ assign.seqIdx ].cdr[2].readStart - assign.seqStart ;
@@ -411,25 +424,51 @@ int main( int argc, char *argv[] )
 			int size = info.size() ;
 			if ( size == 1 )
 			{
-				info[0].count = j - i ;
+				int cnt = 0 ;
+				for ( k = i ; k < j ; ++k )
+				{
+					if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
+						++k ;
+					++cnt ;
+				}
+				info[0].count = cnt ;
 				i = j ;
 				continue ;
 			}
 			// Create the compatility relation
 			std::vector< SimpleVector<int> > compat ; // read k is compatible to CDR3 l
-			compat.resize( j - i ) ;
 			for ( k = i ; k < j ; ++k )
 			{
 				int l ;
-				compat[k - i].Clear() ;
-				for ( l = 0 ; l < size ; ++l )
+				SimpleVector<int> nc ;
+				
+				if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
 				{
-					if ( IsCDR3Compatible( cdr3Reads[k], info[l], annotations[ cdr3Reads[i].overlap.seqIdx ].cdr[2] ) )
+					// Fragment overlap with the region.
+					for ( l = 0 ; l < size ; ++l )
 					{
-						//printf( "%d=>%d\n", k, l ) ;
-						compat[k - i].PushBack( l ) ;
+						if ( IsCDR3Compatible( cdr3Reads[k], info[l], annotations[ cdr3Reads[i].overlap.seqIdx ].cdr[2] ) 
+							&& IsCDR3Compatible( cdr3Reads[k + 1], info[l], 
+									annotations[ cdr3Reads[i].overlap.seqIdx ].cdr[2] ) )
+						{
+							nc.PushBack( l ) ;
+						}
+					}
+					++k ;
+				}
+				else
+				{
+					for ( l = 0 ; l < size ; ++l )
+					{
+						if ( IsCDR3Compatible( cdr3Reads[k], info[l], annotations[ cdr3Reads[i].overlap.seqIdx ].cdr[2] ) )
+						{
+							//printf( "%d=>%d\n", k, l ) ;
+							nc.PushBack( l ) ;
+						}
 					}
 				}
+
+				compat.push_back( nc ) ;
 			}
 			// EM algorithm to estimate the count
 			AbundanceEstimation( compat, info ) ;

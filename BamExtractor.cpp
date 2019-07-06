@@ -88,6 +88,7 @@ struct _threadInfo
 	
 	int *freeThreads ;
 	int *ftCnt ;
+	bool *initThreads ;
 	pthread_mutex_t *lockOutput ;
 	pthread_mutex_t *lockFreeThreads ;
 	pthread_cond_t *condFreeThreads ;
@@ -240,11 +241,13 @@ void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr
 	
 	*threads = new pthread_t[ threadCnt ] ;
 	*threadArgs = new struct _threadArg[ threadCnt ] ;
+	pthread_attr_init( &attr ) ;
 	pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
 
 	int *freeThreads = new int[ threadCnt ] ;
 	int *ftCnt = new int ;
-	*ftCnt = 0 ;
+	bool *initThreads = new bool[threadCnt] ;
+	*ftCnt = threadCnt ;
 	pthread_mutex_t *lockOutput = new pthread_mutex_t ;
 	pthread_mutex_t *lockFreeThreads = new pthread_mutex_t ;
 	pthread_cond_t *condFreeThreads = new pthread_cond_t ;
@@ -257,10 +260,14 @@ void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr
 		struct _threadInfo &info = (*threadArgs)[i].info ;
 		info.tid = i ;
 		info.freeThreads = freeThreads ;
+		info.initThreads = initThreads ;
 		info.ftCnt = ftCnt ;
 		info.lockOutput = lockOutput ;
 		info.lockFreeThreads = lockFreeThreads ;
 		info.condFreeThreads = condFreeThreads ;
+
+		freeThreads[i] = i ;
+		initThreads[i] = false ;
 	}
 }
 
@@ -285,16 +292,23 @@ void DistributeWork( std::vector<struct _unmappedCandidate> &work,
 	struct _threadInfo &info = threadArgs[0].info ;
 
 	// Determine which thread to use
+	//printf( "Threads status %d/%d.\n", *(info.ftCnt), threadCnt ) ;
 	pthread_mutex_lock( info.lockFreeThreads ) ;
 	if ( *(info.ftCnt) == 0 )
 		pthread_cond_wait( info.condFreeThreads, info.lockFreeThreads ) ;
-	tid = info.freeThreads[ *( info.ftCnt - 1 ) ] ;
+	tid = info.freeThreads[ *( info.ftCnt ) - 1 ] ;
 	--*( info.ftCnt ) ;
 	pthread_mutex_unlock( info.lockFreeThreads ) ;
+	
+	// Make sure the thread ends.
+	if ( info.initThreads[tid] )
+		pthread_join( threads[ tid ], NULL ) ;
 
 	// Call the thread
 	threadArgs[tid].candidates = work ;
 	work.clear() ;
+	info.initThreads[tid] = true ;
+	//printf( "%d %lld %lld %lld\n", tid, threads, &attr, threadArgs + tid ) ;
 	pthread_create( &threads[tid], &attr, ProcessUnmappedReads_Thread, (void *)( threadArgs + tid ) ) ;
 }
 
@@ -318,16 +332,19 @@ void FinishWork( std::vector<struct _unmappedCandidate> work,
 {	
 	int i ;
 	DistributeWork( work, threadArgs, threads, attr, threadCnt ) ; 
+	struct _threadInfo &info = threadArgs[0].info ;
 
 	for ( i = 0 ; i < threadCnt ; ++i )
-		pthread_join( threads[i], NULL ) ;
-
+	{
+		if ( info.initThreads[i])
+			pthread_join( threads[i], NULL ) ;
+	}
 	// Release memory 
 	delete[] threads ;
 	pthread_attr_destroy( &attr ) ;
-	struct _threadInfo &info = threadArgs[0].info ;
 	delete[] info.freeThreads ;
 	delete info.ftCnt ;
+	delete[] info.initThreads ;
 	pthread_mutex_destroy( info.lockOutput ) ;
 	pthread_mutex_destroy( info.lockFreeThreads ) ;
 	pthread_cond_destroy( info.condFreeThreads ) ;
@@ -538,7 +555,7 @@ int main( int argc, char *argv[] )
 						nw.qual2 = strdup( bufferQual2 ) ;
 					}
 
-					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 1024, threadCnt - 1 ) ;
+					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 2048, threadCnt - 1 ) ;
 				}
 				continue ;
 			}
@@ -576,7 +593,7 @@ int main( int argc, char *argv[] )
 					nw.qual1 = strdup( bufferQual ) ;
 					nw.mate2 = NULL ; 
 					nw.qual2 = NULL ; 
-					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 1024, threadCnt - 1 ) ;
+					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 2048, threadCnt - 1 ) ;
 				}
 			}
 			continue ;
