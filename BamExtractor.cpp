@@ -187,7 +187,7 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 		{
 			// paired-end
 			if ( ( info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer, info.kmerLength ) 
-				|| info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer, info.kmerLength ) )
+				|| info.refSet->HasHitInSet( arg.candidates[i].mate2, info.seqBuffer, info.kmerLength ) )
 				&& ( !IsLowComplexity( arg.candidates[i].mate1 ) && !IsLowComplexity( arg.candidates[i].mate2 ) ) )
 			{
 				pick.PushBack( i ) ;
@@ -336,7 +336,7 @@ void FinishWork( std::vector<struct _unmappedCandidate> work,
 
 	for ( i = 0 ; i < threadCnt ; ++i )
 	{
-		if ( info.initThreads[i])
+		if ( info.initThreads[i] )
 			pthread_join( threads[i], NULL ) ;
 	}
 	// Release memory 
