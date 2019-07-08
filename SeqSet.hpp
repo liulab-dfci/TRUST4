@@ -4638,6 +4638,17 @@ public:
 			// The YYC motif on V gene, mentioned in TRUST3 paper, but seems not mentioned in IMGT Junction Analysis.
 			if ( locateS == -1 )
 			{
+				if ( s + 8 >= len )
+				{
+					if ( ( s - len + 9 ) % 3 )
+						s = len - 12 + ( s - len + 9 ) % 3  ;
+					else
+						s = len - 9 ;
+				}
+			}
+
+			if ( locateS == -1 )
+			{
 				for ( i = s ; i >= boundS ; i -= 3 )
 				{
 					if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 

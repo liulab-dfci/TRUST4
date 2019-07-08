@@ -17,6 +17,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "Optional:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used)\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
+    "\t-t INT: number of threads (default: 1)\n".
     #"\t--jellyfish: use jellyfish2 to count the kmers. (default: not used)\n"
     ""
 	if ( @ARGV == 0 ) ;
@@ -50,6 +51,7 @@ my $prefix = "" ;
 my $vdjcFasta = "" ;
 my $vdjcRef = "" ;
 my $mainArgs = "" ;
+my $threadCnt = 1 ;
 
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
@@ -96,6 +98,12 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$vdjcRef = $ARGV[$i + 1] ;
 		++$i ;
 	}
+	elsif ( $ARGV[$i] eq "-t" )
+	{
+		$threadCnt = $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
 	elsif ( $ARGV[$i] eq "--jellyfish" )
 	{
 		$useJellyfish = 1 ;
@@ -139,7 +147,7 @@ if ( $prefix eq "" )
 # Extract the file
 if ( @bamFiles > 0 )
 {
-	system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+	system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
 
 	# determine paired-end or single-end
 	if ( -e $prefix."_toassemble_1.fq" )
@@ -161,11 +169,11 @@ system_call( "$WD/trust4 $mainArgs" ) ;
 # Annotation 
 if ( $vdjcRef eq "" )
 {
-	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -o $prefix > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix > ${prefix}_annot.out" ) ;
 }
 else
 {
-	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -o $prefix > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix > ${prefix}_annot.out" ) ;
 }
 
 print STDERR "[".localtime()."] TRUST4 finishes.\n" ;

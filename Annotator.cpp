@@ -17,6 +17,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-r STRING: path to the reads used in the assembly\n"
 		"Optional:\n"
 		"\t--fasta: the assembly file is in fasta format (default: false)\n"
+		"\t-t INT: number of threads (default: 1)\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -27,11 +28,10 @@ char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2,
 char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10241] = "" ;
-char buffer2[10241] = "" ;
 char weightBuffer[100241] = "" ;
 char seq[10241] = "" ;
 
-static const char *short_options = "f:a:r:p:o:" ;
+static const char *short_options = "f:a:r:p:o:t:" ;
 static struct option long_options[] = {
 			{ "fasta", no_argument, 0, 10000 },
 			{ "radius", required_argument, 0, 10001 },
@@ -49,6 +49,16 @@ struct _CDR3info
 	char *seq ;
 	double count ;
 	double TPM ;
+} ;
+
+struct _assignReadsThreadArg
+{
+	int tid ;
+	int threadCnt ;
+
+	SeqSet *seqSet ;
+	std::vector<struct _assignRead> *pAssembledReads ;
+	int assembledReadCnt ;
 } ;
 
 void PrintLog( const char *fmt, ... )
@@ -158,6 +168,26 @@ void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector<
 	}
 }
 
+void *AssignReads_Thread( void *pArg )
+{
+	struct _assignReadsThreadArg &arg = *( (struct _assignReadsThreadArg *)pArg ) ;
+	int start, end ;
+	int i ;
+	std::vector< struct _assignRead> &assembledReads = *arg.pAssembledReads ;
+	start = arg.assembledReadCnt / arg.threadCnt * arg.tid ;
+	end = arg.assembledReadCnt / arg.threadCnt * ( arg.tid + 1 ) ;
+	if ( arg.tid == arg.threadCnt - 1 )
+		end = arg.assembledReadCnt ;
+	struct _overlap assign ;
+	for ( i = start ; i < end ; ++i )
+	{
+		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
+			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.9, assign ) ;
+		assembledReads[i].overlap = assign ;	
+	}
+	pthread_exit( NULL ) ;
+}
+
 int main( int argc, char *argv[] )
 {
 	int i, j, k ;
@@ -179,6 +209,8 @@ int main( int argc, char *argv[] )
 	bool ignoreWeight = false ;
 	char outputPrefix[1024] = "trust" ;
 	FILE *fpReads = NULL ;
+	int threadCnt = 1 ;
+
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -201,6 +233,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 'o' )
 		{
 			strcpy( outputPrefix, optarg ) ;
+		}
+		else if ( c == 't' )
+		{
+			threadCnt = atoi( optarg ) ;
 		}
 		else if ( c == 10000 )
 		{
@@ -240,7 +276,13 @@ int main( int argc, char *argv[] )
 		}
 
 		fgets( seq, sizeof( seq ), fpAssembly ) ;
-		
+		int len = strlen( seq ) ;
+		if ( seq[len - 1] == '\n' )
+		{
+			seq[len - 1] = '\0' ;
+			--len ;
+		}
+
 		// Read in the four line of pos weight
 		SimpleVector<struct _posWeight> posWeight ;
 		double depthSum = 0 ;
@@ -265,22 +307,19 @@ int main( int argc, char *argv[] )
 					else
 						num = num * 10 + weightBuffer[j] - '0' ; 
 				}
+				posWeight[i].count[k] = num ;
+				depthSum += num ;
 			}
 		}
 		for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
 			;
 		buffer[i] = '\0' ;
 		
-		int len = strlen( seq ) ;
-		if ( seq[len - 1] == '\n' )
-		{
-			seq[len - 1] = '\0' ;
-			--len ;
-		}
-
 		if ( !ignoreWeight )
+		{
 			seqSet.InputNovelSeq( buffer + 1, seq, posWeight ) ;
-		else 
+		}
+		else
 			seqSet.InputNovelRead( buffer + 1, seq, 1 ) ;
 	}
 	fclose( fpAssembly ) ;
@@ -304,23 +343,69 @@ int main( int argc, char *argv[] )
 		cdr3Infos.resize( seqCnt ) ;
 		int strand, minCnt, medCnt ;
 		k = 0 ;
-		buffer2[0] = '\0' ;
 		PrintLog( "Start to realign reads for CDR3 analysis." ) ;
 		std::vector<struct _assignRead> cdr3Reads ; // Keep the information of the reads aligned to cdr3 region.
+		std::vector<struct _assignRead> assembledReads ;
+		int assembledReadCnt ;
+
 		while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
 		{
 			fscanf( fpReads, "%s", seq ) ; 
-			if ( strcmp( seq, buffer2 ) ) 
+			
+			struct _assignRead nr ;
+			nr.id = strdup( buffer + 1 ) ; // skip the > sign
+			nr.read = strdup( seq ) ;
+			nr.overlap.strand = strand ;
+			assembledReads.push_back( nr ) ;
+		}
+		assembledReadCnt = assembledReads.size() ;
+		
+		if ( threadCnt <= 1 )
+		{
+			for ( i = 0 ; i < assembledReadCnt ; ++i )
 			{
-				strcpy( buffer2, seq ) ;
-				seqSet.AssignRead( seq, strand, 0.9, assign ) ;	
-				if ( assign.seqIdx == -1 )
-					continue ;
+				if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) ) 
+					seqSet.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.9, assign ) ;	
+				assembledReads[i].overlap = assign ;	
+				if ( ( i + 1 ) % 100000 == 0 )
+				{
+					PrintLog( "Realigned %d reads.", i + 1 ) ;
+				}
+
+			}
+		}
+		else
+		{
+			pthread_t *threads = new pthread_t[ threadCnt ] ;
+			struct _assignReadsThreadArg *args = new struct _assignReadsThreadArg[threadCnt] ;
+			pthread_attr_t attr ;
+
+			pthread_attr_init( &attr ) ;
+			pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+			{
+				args[i].tid = i ;
+				args[i].threadCnt = threadCnt ;
+				args[i].seqSet = &seqSet ;
+				args[i].pAssembledReads = &assembledReads ;
+				args[i].assembledReadCnt = assembledReadCnt ;
+				pthread_create( &threads[i], &attr, AssignReads_Thread, (void *)( args + i ) ) ;
 			}
 
+			for ( i = 0 ; i < threadCnt ; ++i )
+				pthread_join( threads[i], NULL ) ;
+
+
+			delete[] threads ;
+			delete[] args ;
+		}
+		for ( i = 0 ; i < assembledReadCnt ; ++i )
+		{
+			assign = assembledReads[i].overlap ;
 			if ( assign.seqIdx == -1 )
 				continue ;
-			
+					
 			int cdr3Len =  annotations[ assign.seqIdx ].cdr[2].readEnd -
 				annotations[ assign.seqIdx ].cdr[2].readStart + 1 ;
 			
@@ -330,12 +415,12 @@ int main( int argc, char *argv[] )
 				&& assign.seqStart < annotations[ assign.seqIdx ].cdr[2].readEnd - 3 )
 			{
 				struct  _assignRead nr ;
-				nr.id = strdup( buffer + 1 ) ; // skip the > sign. 
-				nr.read = strdup( seq ) ;
+				nr.id = assembledReads[i].id ; 
+				nr.read = strdup( assembledReads[i].read ) ;
 				nr.overlap = assign ;
 				if ( assign.strand == -1 )
 				{
-					seqSet.ReverseComplement( nr.read, seq, strlen( seq ) ) ;
+					seqSet.ReverseComplement( nr.read, assembledReads[i].read, strlen( nr.read ) ) ;
 					nr.overlap.strand = 1 ;
 				}
 				cdr3Reads.push_back( nr ) ;
@@ -348,7 +433,8 @@ int main( int argc, char *argv[] )
 			{
 				std::vector<struct _CDR3info> &info = cdr3Infos[ assign.seqIdx ] ;
 				int size = info.size() ;
-
+				
+				char *seq = assembledReads[i].read ;
 				int offset = assign.readStart +
 					annotations[ assign.seqIdx ].cdr[2].readStart - assign.seqStart ;
 				if ( assign.strand == 1 )
@@ -364,13 +450,13 @@ int main( int argc, char *argv[] )
 					continue ;
 				buffer[cdr3Len] = '\0' ;
 
-				for ( i = 0 ; i < size ; ++i )
-					if ( !strcmp( info[i].seq, buffer ) )
+				for ( j = 0 ; j < size ; ++j )
+					if ( !strcmp( info[j].seq, buffer ) )
 					{
-						++info[i].count ;
+						++info[j].count ;
 						break ;
 					}
-				if ( i >= size )
+				if ( j >= size )
 				{
 					struct _CDR3info nc ;
 					nc.seq = strdup( buffer ) ;
@@ -379,11 +465,6 @@ int main( int argc, char *argv[] )
 					info.push_back( nc ) ;
 				}
 				//printf( "%s\n%s %d\n", cdr3Reads[ cdr3Reads.size() - 1 ].read, buffer, i ) ;
-			}
-			++k ;
-			if ( k % 100000 == 0 )
-			{
-				PrintLog( "Realigned %d reads.", k ) ;
 			}
 		}
 		
@@ -519,13 +600,22 @@ int main( int argc, char *argv[] )
 		}
 		// Free up memory
 		for ( i = 0 ; i < cdr3ReadCnt ; ++i )
+		{
 			free( cdr3Reads[i].read ) ;
+		}
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int size = cdr3Infos[i].size() ;
 			for ( j = 0 ; j < size; ++j )
 				free( cdr3Infos[i][j].seq ) ;
 		}
+
+		for ( i = 0 ; i < assembledReadCnt ; ++i )
+		{
+			free( assembledReads[i].id ) ;
+			free( assembledReads[i].read ) ;
+		}
+
 		fclose( fpOutput ) ;
 		fclose( fpReads ) ; 
 	}

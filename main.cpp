@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdarg.h>
+#include <pthread.h>
 
 #include <vector>
 
@@ -22,6 +23,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-b STRING: path to BAM alignment file\n"
 		"Optional:\n"
 		"\t-o STRING: prefix of the output file (default: trust)\n"
+		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
 		"\t--noTrim: do not trim the reads for assembly (default: trim)\n" ;
 
@@ -34,7 +36,7 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10240] = "" ;
 
-static const char *short_options = "f:u:1:2:b:o:c:" ;
+static const char *short_options = "f:u:1:2:b:o:c:t:" ;
 static struct option long_options[] = {
 			{ "debug-ns", required_argument, 0, 10000 },
 			{ "noTrim", no_argument, 0, 10001 },
@@ -68,6 +70,15 @@ struct _sortRead
 	}
 } ;
 
+struct _assignReadsThreadArg
+{
+	int tid ;
+	int threadCnt ;
+
+	SeqSet *seqSet ;
+	std::vector<struct _assignRead> *pAssembledReads ;
+	int assembledReadCnt ;
+} ;
 
 bool CompSortReadById( const struct _Read &a, const struct _Read &b )
 {
@@ -111,6 +122,25 @@ void PrintLog( const char *fmt, ... )
 	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
 }
 
+void *AssignReads_Thread( void *pArg )
+{
+	struct _assignReadsThreadArg &arg = *( (struct _assignReadsThreadArg *)pArg ) ;
+	int start, end ;
+	int i ;
+	std::vector< struct _assignRead> &assembledReads = *arg.pAssembledReads ;
+	start = arg.assembledReadCnt / arg.threadCnt * arg.tid ;
+	end = start + arg.assembledReadCnt / arg.threadCnt ;
+	if ( arg.tid == arg.threadCnt - 1 )
+		end = arg.assembledReadCnt ;
+	struct _overlap assign ;
+	for ( i = start ; i < end ; ++i )
+	{
+		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
+			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.95, assign ) ;
+		assembledReads[i].overlap = assign ;	
+	}
+	pthread_exit( NULL ) ;
+}
 
 int main( int argc, char *argv[] )
 {
@@ -138,6 +168,7 @@ int main( int argc, char *argv[] )
 	bool flagNoTrim = false ;
 	bool hasMate = false ;
 	int constantGeneEnd = 200 ;
+	int threadCnt = 1 ;
 
 	while ( 1 )
 	{
@@ -174,6 +205,10 @@ int main( int argc, char *argv[] )
 			kmerCount.AddCountFromFile( optarg ) ;
 			countMyself = false ;
 			PrintLog( "Read in the kmer count information from %s", optarg ) ;
+		}
+		else if ( c == 't' )
+		{
+			threadCnt = atoi( optarg ) ;
 		}
 		else if ( c == 10000 )
 		{
@@ -819,18 +854,47 @@ int main( int argc, char *argv[] )
 			continue ;
 		extendedSeq.InputRefSeq( name, refSet.GetSeqConsensus( i ) + constantGeneEnd ) ;
 	}*/
-
-	for ( i = 0 ; i < assembledReadCnt ; ++i )
+	
+	if ( threadCnt <= 1 )
 	{
-		if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-			extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.95, assign ) ;
-		assembledReads[i].overlap = assign ;	
-		if ( ( i + 1 ) % 100000 == 0 )
+		for ( i = 0 ; i < assembledReadCnt ; ++i )
 		{
-			PrintLog( "Processed %d reads for extension.", i + 1 ) ;
+			if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
+				extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.95, assign ) ;
+			assembledReads[i].overlap = assign ;	
+			if ( ( i + 1 ) % 100000 == 0 )
+			{
+				PrintLog( "Processed %d reads for extension.", i + 1 ) ;
+			}
+			//fprintf( fp, "%s %s %d\n", assembledReads[i].id, assembledReads[i].read, assign.seqIdx ) ;
+			//fwrite( &assign, sizeof( assign ), 1, fp ) ;
 		}
-		//fprintf( fp, "%s %s %d\n", assembledReads[i].id, assembledReads[i].read, assign.seqIdx ) ;
-		//fwrite( &assign, sizeof( assign ), 1, fp ) ;
+	}
+	else
+	{
+		pthread_t *threads = new pthread_t[ threadCnt ] ;
+		struct _assignReadsThreadArg *args = new struct _assignReadsThreadArg[threadCnt] ;
+		pthread_attr_t attr ;
+		
+		pthread_attr_init( &attr ) ;
+		pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+		
+		for ( i = 0 ; i < threadCnt ; ++i )
+		{
+			args[i].tid = i ;
+			args[i].threadCnt = threadCnt ;
+			args[i].seqSet = &extendedSeq ;
+			args[i].pAssembledReads = &assembledReads ;
+			args[i].assembledReadCnt = assembledReadCnt ;
+			pthread_create( &threads[i], &attr, AssignReads_Thread, (void *)( args + i ) ) ;
+		}
+
+		for ( i = 0 ; i < threadCnt ; ++i )
+			pthread_join( threads[i], NULL ) ;
+	
+
+		delete[] threads ;
+		delete[] args ;
 	}
 	extendedSeq.RecomputePosWeight( assembledReads ) ;
 	//fclose( fp ) ;
