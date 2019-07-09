@@ -156,6 +156,17 @@ private:
 		else
 			return a.readEnd < b.readEnd ;
 	}
+
+	static bool CompSortHitCoordDiff( const struct _triple &a, const struct _triple &b )
+	{
+		if ( a.c != b.c )
+			return a.c < b.c ;
+		else if ( a.b != b.b )
+			return a.b < b.b ;
+		else
+			return a.a < b.a ;
+	}
+
 	bool IsReverseComplement( char *a, char *b )
 	{
 		int i, j ;
@@ -505,7 +516,7 @@ private:
 		int i, j, k ;
 		int hitSize = hits.Size() ;
 		
-		SimpleVector<struct _pair> hitCoordDiff ;
+		SimpleVector<struct _triple> hitCoordDiff ;
 		hitCoordDiff.Reserve( hitSize ) ;
 		SimpleVector<struct _pair> concordantHitCoord ;
 		SimpleVector<struct _pair> hitCoordLIS ;
@@ -594,12 +605,13 @@ private:
 			hitCoordDiff.Clear() ;
 			for ( k = i ; k < j ; ++k )
 			{
-				struct _pair nh ;
-				nh.a = k ;
-				nh.b = hits[k].readOffset - hits[k].indexHit.offset ;
+				struct _triple nh ;
+				nh.a = hits[k].readOffset ;
+				nh.b = hits[k].indexHit.offset ;
+				nh.c = hits[k].readOffset - hits[k].indexHit.offset ;
 				hitCoordDiff.PushBack( nh ) ;
 			}
-			std::sort( hitCoordDiff.BeginAddress(), hitCoordDiff.EndAddress(), CompSortPairBInc ) ;
+			std::sort( hitCoordDiff.BeginAddress(), hitCoordDiff.EndAddress(), CompSortHitCoordDiff ) ;
 
 			// Pick the best concordant hits.
 			int s, e ;
@@ -612,7 +624,7 @@ private:
 				int diffSum = 0 ;
 				for ( e = s + 1 ; e < j - i ; ++e )
 				{
-					int diff = hitCoordDiff[e].b - hitCoordDiff[e - 1].b ;
+					int diff = hitCoordDiff[e].c - hitCoordDiff[e - 1].c ;
 					if ( diff < 0 )
 						diff = -diff ;
 					
@@ -636,12 +648,12 @@ private:
 				for ( k = s ; k < e ; ++k )
 				{
 					struct _pair nh ;
-					int hitId = hitCoordDiff[k].a ; 
-					nh.a = hits[ hitId ].readOffset ;
-					nh.b = hits[ hitId ].indexHit.offset ;
+					nh.a = hitCoordDiff[k].a ;
+					nh.b = hitCoordDiff[k].b ;
 					concordantHitCoord.PushBack( nh ) ;
 				}
-				std::sort( concordantHitCoord.BeginAddress(), concordantHitCoord.EndAddress(), CompSortPairBInc ) ;
+				if ( adjustRadius > 0 )
+					std::sort( concordantHitCoord.BeginAddress(), concordantHitCoord.EndAddress(), CompSortPairBInc ) ;
 				//for ( k = 0 ; k < e - s ; ++k )	
 				//	printf( "%d (%d-%d): %d %s %d %d\n", i, s, e, hits[i].indexHit.idx, seqs[ hits[i].indexHit.idx ].name, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
 
