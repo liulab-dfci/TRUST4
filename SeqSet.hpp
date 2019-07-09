@@ -1880,6 +1880,16 @@ public:
 		return radius = r ;
 	}
 	
+	int SetHitLenRequired( int l )
+	{
+		return hitLenRequired = l ;
+	}
+
+	double SetNovelSeqSimilarity( double s )
+	{
+		return novelSeqSimilarity = s ;
+	}
+
 	void ReverseComplement( char *rcSeq, char *seq, int len )
 	{
 		int i ;
@@ -2732,6 +2742,7 @@ public:
 							delete[] failedExtendedOverlaps ;
 							free( rcRead ) ;
 							delete[] align ;
+							delete[] oldMinExtAnchor ;
 							return -1 ;
 						}
 					}
@@ -3387,13 +3398,11 @@ public:
 	}
 	
 	// Find the seq id this read belongs to.
-	int AssignRead( char *read, int strand, double similarity, struct _overlap &assign )
+	int AssignRead( char *read, int strand, struct _overlap &assign )
 	{
 		int i ;
 
 		std::vector<struct _overlap> overlaps ;
-		double backupSimilarity = novelSeqSimilarity ;
-		novelSeqSimilarity = similarity ;
 		
 		int overlapCnt = GetOverlapsFromRead( read, strand, 0, overlaps ) ;
 		//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
@@ -3402,7 +3411,6 @@ public:
 
 		if ( overlapCnt == 0 )
 		{
-			novelSeqSimilarity = backupSimilarity ;
 			return -1 ;
 		}
 			
@@ -3446,7 +3454,6 @@ public:
 			}
 		}
 
-		novelSeqSimilarity = backupSimilarity ;
 		if ( i >= overlapCnt )
 		{
 			delete[] rc ;
@@ -3946,7 +3953,6 @@ public:
 		contigCnt = contigs.Size() ;
 		char *contigBuffer = new char[len + 1] ;
 		//if ( detailLevel > 0 )
-		hitLenRequired = 17 ;	
 		// Obtain the overlaps for each contig
 		contigOverlaps.resize( contigCnt ) ;
 		for ( k = 0 ; k < contigCnt ; ++k )
@@ -3968,7 +3974,6 @@ public:
 			//for ( i = 0 ; i < contigOverlapCnt ; ++i )
 			//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
 		}
-		hitLenRequired = 31 ;
 		delete[] contigBuffer ;
 
 

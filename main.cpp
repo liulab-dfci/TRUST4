@@ -136,7 +136,7 @@ void *AssignReads_Thread( void *pArg )
 	for ( i = start ; i < end ; ++i )
 	{
 		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.95, assign ) ;
+			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;
 		assembledReads[i].overlap = assign ;	
 	}
 	pthread_exit( NULL ) ;
@@ -235,6 +235,8 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+	refSet.SetHitLenRequired( 17 ) ;
+
 	std::vector< struct _sortRead > sortedReads ;
 	i = 0 ;
 	while ( reads.Next() )
@@ -855,12 +857,13 @@ int main( int argc, char *argv[] )
 		extendedSeq.InputRefSeq( name, refSet.GetSeqConsensus( i ) + constantGeneEnd ) ;
 	}*/
 	
+	extendedSeq.SetNovelSeqSimilarity( 0.95 ) ;
 	if ( threadCnt <= 1 )
 	{
 		for ( i = 0 ; i < assembledReadCnt ; ++i )
 		{
 			if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-				extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.95, assign ) ;
+				extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;
 			assembledReads[i].overlap = assign ;	
 			if ( ( i + 1 ) % 100000 == 0 )
 			{
@@ -896,6 +899,7 @@ int main( int argc, char *argv[] )
 		delete[] threads ;
 		delete[] args ;
 	}
+	extendedSeq.SetNovelSeqSimilarity( 0.9 ) ;
 	extendedSeq.RecomputePosWeight( assembledReads ) ;
 	//fclose( fp ) ;
 	//exit( 1 ) ;
@@ -1021,7 +1025,7 @@ int main( int argc, char *argv[] )
 		//printf( "%s\n", lowFreqReads[i].read ) ;
 		//fflush( stdout ) ;
 		//printf( ">r%d\n%s\n", i, lowFreqReads[i].read ) ;
-		extendedSeq.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, 0.95, assign ) ;
+		extendedSeq.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, assign ) ;
 		if ( assign.seqIdx != -1 )
 		{
 			if ( assign.similarity < 1.0 )
@@ -1032,7 +1036,7 @@ int main( int argc, char *argv[] )
 		{
 			if ( lowFreqReads[i].minCnt < 2 )
 			{
-				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, 0.95, assign ) ;
+				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, assign ) ;
 				if ( assign.seqIdx != -1 )
 				{
 					lowFreqSeqSet.AddAssignedRead( lowFreqReads[i].read, assign ) ;

@@ -245,7 +245,6 @@ void *AnnotateReads_Thread( void *pArg )
 	end = seqCnt / arg.threadCnt * ( arg.tid + 1 ) ;
 	if ( arg.tid == arg.threadCnt - 1 )
 		end = seqCnt ;
-
 	for ( i = start ; i < end ; ++i )
 	{
 		arg.refSet->AnnotateRead( arg.seqSet->GetSeqConsensus( i ), 2, arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
@@ -268,7 +267,7 @@ void *AssignReads_Thread( void *pArg )
 	for ( i = start ; i < end ; ++i )
 	{
 		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.9, assign ) ;
+			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;
 		assembledReads[i].overlap = assign ;	
 	}
 	pthread_exit( NULL ) ;
@@ -350,7 +349,8 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -a to specify the assembly file.\n" ) ;
 		return EXIT_FAILURE ;
 	}
-
+	
+	refSet.SetHitLenRequired( 17 ) ;
 	refSet.SetRadius( radius ) ;
 	PrintLog( "Start to annotate assemblies." ) ;
 	while ( fgets( buffer, sizeof( buffer ), fpAssembly ) != NULL )
@@ -491,7 +491,7 @@ int main( int argc, char *argv[] )
 			for ( i = 0 ; i < assembledReadCnt ; ++i )
 			{
 				if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) ) 
-					seqSet.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 0.9, assign ) ;	
+					seqSet.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;	
 				assembledReads[i].overlap = assign ;	
 				if ( ( i + 1 ) % 100000 == 0 )
 				{
