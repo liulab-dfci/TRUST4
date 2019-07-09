@@ -42,6 +42,7 @@ struct _annotate
 {
 	struct _overlap geneOverlap[4] ;
 	struct _overlap cdr[3] ;
+	std::vector<struct _overlap> secondaryGeneOverlaps ;
 } ;
 
 struct _CDR3info
@@ -49,6 +50,16 @@ struct _CDR3info
 	char *seq ;
 	double count ;
 	double TPM ;
+} ;
+
+struct _annotateReadsThreadArg
+{
+	int tid ;
+	int threadCnt ;
+
+	SeqSet *seqSet ;
+	SeqSet *refSet ;
+	struct _annotate *annotations ;
 } ;
 
 struct _assignReadsThreadArg
@@ -166,6 +177,81 @@ void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector<
 		if ( d < endD )
 			return ;
 	}
+}
+
+void AnnotationTieBreak( struct _annotate *annotations, SeqSet &seqSet, SeqSet &refSet )
+{
+	int i, j, k ;
+	int seqCnt = seqSet.Size() ;
+	int refCnt = refSet.Size() ;
+
+	double *abundance = new double[ refCnt ] ; 
+	memset( abundance, 0, sizeof( double ) * refCnt ) ;
+	// Collect the abundance
+	for ( i = 0 ; i < seqCnt ; ++i )
+	{
+		int weightSum = seqSet.GetSeqWeightSum( i ) ;
+		int len = seqSet.GetSeqConsensusLen( i ) ;
+		double avgWeight = (double)weightSum / len ;
+	
+		for ( k = 0 ; k < 4 ; ++k )
+		{
+			if ( annotations[i].geneOverlap[k].seqIdx == -1 )
+				continue ;
+			abundance[ annotations[i].geneOverlap[k].seqIdx ] += avgWeight ;
+		}		
+	}
+	
+	// Break ties
+	for ( i = 0 ; i < seqCnt ; ++i )
+	{
+		struct _overlap *geneOverlap = annotations[i].geneOverlap ;
+		for ( k = 0 ; k < 4 ; ++k )
+		{
+			if ( geneOverlap[k].seqIdx == -1 )
+				continue ;
+
+			std::vector<struct _overlap> &overlaps = annotations[i].secondaryGeneOverlaps ;
+			int size = overlaps.size() ;
+			for ( j = 0 ; j < size ; ++j )
+			{
+				if ( refSet.GetGeneType( refSet.GetSeqName( overlaps[j].seqIdx ) ) == j )
+					break ;
+			}
+			if ( j >= size )
+				continue ;
+			if ( overlaps[j].readStart == geneOverlap[k].readStart 
+				&& overlaps[j].readEnd == geneOverlap[k].readEnd 
+				&& overlaps[j].similarity == geneOverlap[k].similarity 
+				&& abundance[ overlaps[j].seqIdx ] > abundance[ geneOverlap[k].seqIdx ] ) 
+			{
+				struct _overlap tmp ;
+				tmp = geneOverlap[k] ;
+				geneOverlap[k] = overlaps[j] ;
+				overlaps[j] = tmp ;
+			}
+		}
+	}
+	delete[] abundance ;
+}
+
+void *AnnotateReads_Thread( void *pArg )
+{
+	struct _annotateReadsThreadArg &arg = *( (struct _annotateReadsThreadArg *)pArg ) ;
+	int start, end ;
+	int i ;
+	int seqCnt = arg.seqSet->Size() ;
+	start = seqCnt / arg.threadCnt * arg.tid ;
+	end = seqCnt / arg.threadCnt * ( arg.tid + 1 ) ;
+	if ( arg.tid == arg.threadCnt - 1 )
+		end = seqCnt ;
+
+	for ( i = start ; i < end ; ++i )
+	{
+		arg.refSet->AnnotateRead( arg.seqSet->GetSeqConsensus( i ), 2, arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
+			&( arg.annotations[i].secondaryGeneOverlaps ) ) ;
+	}
+	pthread_exit( NULL ) ;
 }
 
 void *AssignReads_Thread( void *pArg )
@@ -326,14 +412,54 @@ int main( int argc, char *argv[] )
 
 	int seqCnt = seqSet.Size() ;
 	struct _annotate *annotations = new struct _annotate[ seqCnt ] ;
+	if ( threadCnt <= 1 )
+	{
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			refSet.AnnotateRead( seqSet.GetSeqConsensus( i ), 2, annotations[i].geneOverlap, annotations[i].cdr, 
+					&annotations[i].secondaryGeneOverlaps ) ;
+		}
+	}
+	else
+	{
+		pthread_t *threads = new pthread_t[ threadCnt ] ;
+		struct _annotateReadsThreadArg *args = new struct _annotateReadsThreadArg[threadCnt] ;
+		pthread_attr_t attr ;
+
+		pthread_attr_init( &attr ) ;
+		pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+		for ( i = 0 ; i < threadCnt ; ++i )
+		{
+			args[i].tid = i ;
+			args[i].threadCnt = threadCnt ;
+			args[i].seqSet = &seqSet ;
+			args[i].refSet = &refSet ;
+			args[i].annotations = annotations ;
+			pthread_create( &threads[i], &attr, AnnotateReads_Thread, (void *)( args + i ) ) ;
+		}
+
+		for ( i = 0 ; i < threadCnt ; ++i )
+			pthread_join( threads[i], NULL ) ;
+
+
+		delete[] threads ;
+		delete[] args ;
+	}
+	// Use global information to break ties
+	//AnnotationTieBreak( annotations, seqSet, refSet ) ;
+
+	// Output the annotation of consensus assemblies
 	for ( i = 0 ; i < seqCnt ; ++i )
 	{
 		int weightSum = seqSet.GetSeqWeightSum( i ) ; 
 		int len = seqSet.GetSeqConsensusLen( i ) ;
 		sprintf( buffer, ">%s %d %.2lf", seqSet.GetSeqName( i ), len, (double)weightSum / 500.0 ) ;
-		refSet.AnnotateRead( seqSet.GetSeqConsensus( i ), 2, annotations[i].geneOverlap, annotations[i].cdr, buffer + strlen( buffer ) ) ;
+		refSet.AnnotationToString( seqSet.GetSeqConsensus( i ), annotations[i].geneOverlap, 
+			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
 	}
+
 	
 	// Output more CDR3 information 
 	if ( fpReads != NULL )

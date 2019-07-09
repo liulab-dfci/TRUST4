@@ -3895,7 +3895,8 @@ public:
 	
 	// Figure out the gene composition for the read. 
 	// Return successful or not.
-	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], struct _overlap cdr[3], char *buffer )
+	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
+		std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
 		int i, j, k ;
 		
@@ -3910,7 +3911,7 @@ public:
 		char BT = '\0' ; // Bcell, Tcell
 		char chain = '\0' ;
 		int len = strlen( read ) ;
-		buffer[0] = '\0' ;
+		//buffer[0] = '\0' ;
 
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
 		if ( detailLevel >= 2 )
@@ -4070,8 +4071,8 @@ public:
 		
 		if ( overlapCnt == 0 )
 		{
-			if ( detailLevel >= 2 )
-				sprintf( buffer + strlen( buffer ), " * * * CDR1(0-0):0.00=null CDR2(0-0):0.00=null CDR3(0-0):0.00=null" ) ;
+			//if ( detailLevel >= 2 )
+			//	sprintf( buffer + strlen( buffer ), " * * * CDR1(0-0):0.00=null CDR2(0-0):0.00=null CDR3(0-0):0.00=null" ) ;
 			return 0 ;
 		}
 		// Get the coverage of the genes.
@@ -4430,13 +4431,13 @@ public:
 						( readRangeEnd - readRangeStart + 1 + seqRangeEnd - seqRangeStart + 1 ) ;
 					//printf( "%d: %d %d; %d %d\n", matchCnt, readRangeStart, readRangeEnd, seqRangeStart, seqRangeEnd ) ;
 
-					char *r = new char[readRangeEnd - readRangeStart + 2] ;
+					/*char *r = new char[readRangeEnd - readRangeStart + 2] ;
 					memcpy( r, read + readRangeStart, readRangeEnd - readRangeStart + 1 ) ;
 					r[  readRangeEnd - readRangeStart + 1 ] = '\0' ;
 					if ( cdrIdx == 0 )
 						cdr1 = r ;
 					else if ( cdrIdx == 1 )
-						cdr2 = r ;
+						cdr2 = r ;*/
 				}
 			}
 		}
@@ -5055,9 +5056,9 @@ public:
 				s = locateS ;
 				e = locateE + 2 ;
 
-				cdr3 = new char[e - s + 2  + 1 ] ;
+				/*cdr3 = new char[e - s + 2  + 1 ] ;
 				memcpy( cdr3, read + s, e - s + 1 ) ;
-				cdr3[e - s + 1] = '\0' ;
+				cdr3[e - s + 1] = '\0' ;*/
 
 				cdr[2].seqIdx = 0 ;
 				cdr[2].readStart = s ;
@@ -5165,9 +5166,9 @@ public:
 								break ;
 							}
 						
-						cdr3 = new char[e - s + 2  + 1 ] ;
+						/*cdr3 = new char[e - s + 2  + 1 ] ;
 						memcpy( cdr3, read + s, e - s + 1 ) ;
-						cdr3[e - s + 1] = '\0' ;
+						cdr3[e - s + 1] = '\0' ;*/
 
 						cdr[2].seqIdx = 0 ;
 						cdr[2].readStart = s ;
@@ -5198,9 +5199,9 @@ public:
 								break ;
 							}
 
-						cdr3 = new char[e - s + 2  + 1 ] ;
+						/*cdr3 = new char[e - s + 2  + 1 ] ;
 						memcpy( cdr3, read + s, e - s + 1 ) ;
-						cdr3[e - s + 1] = '\0' ;
+						cdr3[e - s + 1] = '\0' ;*/
 
 						cdr[2].seqIdx = 0 ;
 						cdr[2].readStart = s ;
@@ -5209,73 +5210,77 @@ public:
 				}
 			}
 
-			cdr[2].similarity = cdr3Score ;
+			cdr[2].similarity = cdr3Score / 100.0 ;
 				
 		}
 		if ( vAlign != NULL )
 			delete[] vAlign ;
 
 		// Compute the name
-		for ( i = 0 ; i < 4 ; ++i )
-		{	
-			if ( i == 1 ) // skip the D gene.
-				continue ;
-			if ( geneOverlap[i].seqIdx != -1 )
-			{
-				int offset = strlen( buffer ) ;
-				int seqIdx = geneOverlap[i].seqIdx ;
-				sprintf( buffer + offset, " %s(%d):(%d-%d):(%d-%d):%.2lf",
-						seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
-						geneOverlap[i].readStart, geneOverlap[i].readEnd, 
-						geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;
-
-				// Output the secondary assignment	
-				int size = allOverlaps.size() ;
-				int reportCnt = 0 ;
-				SimpleVector<int> usedSeqIdx ;
-				usedSeqIdx.Reserve( 5 ) ;
-				for ( j = 0 ; j < size ; ++j )
+		if ( secondaryGeneOverlaps != NULL )
+		{
+			for ( i = 0 ; i < 4 ; ++i )
+			{	
+				if ( i == 1 ) // skip the D gene.
+					continue ;
+				if ( geneOverlap[i].seqIdx != -1 )
 				{
-					if ( GetGeneType( seqs[ allOverlaps[j].seqIdx ].name ) != i )
-						continue ;
-					int l ;
-					int seqIdx2 = allOverlaps[j].seqIdx ;
-					if ( seqIdx2 == seqIdx ||
-						!IsBetterGeneMatch( allOverlaps[j], geneOverlap[i], 0.95 )
-						/*|| ( allOverlaps[j].readStart < geneOverlap[i].readStart - 20 
-							|| allOverlaps[j].readStart > geneOverlap[i].readStart +  20 ) 
-						|| ( allOverlaps[j].readEnd < geneOverlap[i].readEnd - 20 
-							|| allOverlaps[j].readEnd > geneOverlap[i].readEnd +  20 )  */
-					   )
-						continue ;
-					
-					if ( IsSameGeneAllele( seqs[ seqIdx ].name, seqs[ seqIdx2 ].name ) )
-						continue ;
-					for ( l = 0 ; l < usedSeqIdx.Size() ; ++l )
+					//int offset = strlen( buffer ) ;
+					int seqIdx = geneOverlap[i].seqIdx ;
+					/*sprintf( buffer + offset, " %s(%d):(%d-%d):(%d-%d):%.2lf",
+					  seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
+					  geneOverlap[i].readStart, geneOverlap[i].readEnd, 
+					  geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;*/
+
+					// Output the secondary assignment	
+					int size = allOverlaps.size() ;
+					int reportCnt = 0 ;
+					SimpleVector<int> usedSeqIdx ;
+					usedSeqIdx.Reserve( 5 ) ;
+					for ( j = 0 ; j < size ; ++j )
 					{
-						if ( IsSameGeneAllele( seqs[ usedSeqIdx[l] ].name, seqs[ seqIdx2 ].name ) )
+						if ( GetGeneType( seqs[ allOverlaps[j].seqIdx ].name ) != i )
+							continue ;
+						int l ;
+						int seqIdx2 = allOverlaps[j].seqIdx ;
+						if ( seqIdx2 == seqIdx ||
+								!IsBetterGeneMatch( allOverlaps[j], geneOverlap[i], 0.95 )
+								/*|| ( allOverlaps[j].readStart < geneOverlap[i].readStart - 20 
+								  || allOverlaps[j].readStart > geneOverlap[i].readStart +  20 ) 
+								  || ( allOverlaps[j].readEnd < geneOverlap[i].readEnd - 20 
+								  || allOverlaps[j].readEnd > geneOverlap[i].readEnd +  20 )  */
+						   )
+							continue ;
+
+						if ( IsSameGeneAllele( seqs[ seqIdx ].name, seqs[ seqIdx2 ].name ) )
+							continue ;
+						for ( l = 0 ; l < usedSeqIdx.Size() ; ++l )
+						{
+							if ( IsSameGeneAllele( seqs[ usedSeqIdx[l] ].name, seqs[ seqIdx2 ].name ) )
+								break ;
+						}
+						if ( l < usedSeqIdx.Size() )
+							continue ;
+
+						++reportCnt ;
+						/*sprintf( buffer + strlen( buffer ), ",%s(%d):(%d-%d):(%d-%d):%.2lf",
+						  seqs[ seqIdx2 ].name, seqs[ seqIdx2 ].consensusLen,
+						  allOverlaps[j].readStart, allOverlaps[j].readEnd, 
+						  allOverlaps[j].seqStart, allOverlaps[j].seqEnd, allOverlaps[j].similarity * 100 ) ; */
+						secondaryGeneOverlaps->push_back( allOverlaps[j] ) ;
+						usedSeqIdx.PushBack( allOverlaps[j].seqIdx ) ;
+						if ( reportCnt >= 2 )
 							break ;
 					}
-					if ( l < usedSeqIdx.Size() )
-						continue ;
-
-					++reportCnt ;
-					sprintf( buffer + strlen( buffer ), ",%s(%d):(%d-%d):(%d-%d):%.2lf",
-						seqs[ seqIdx2 ].name, seqs[ seqIdx2 ].consensusLen,
-						allOverlaps[j].readStart, allOverlaps[j].readEnd, 
-						allOverlaps[j].seqStart, allOverlaps[j].seqEnd, allOverlaps[j].similarity * 100 ) ;
-					usedSeqIdx.PushBack( allOverlaps[j].seqIdx ) ;
-					if ( reportCnt >= 2 )
-						break ;
 				}
-			}
-			else
-			{
-				sprintf( buffer + strlen( buffer ), " *" ) ;
+				/*else
+				  {
+				  sprintf( buffer + strlen( buffer ), " *" ) ;
+				  }*/
 			}
 		}
 		
-		if ( cdr1 == NULL)
+		/*if ( cdr1 == NULL)
 			sprintf( buffer + strlen( buffer), " CDR1(0-0):0.00=null" ) ;
 		else
 			sprintf( buffer + strlen( buffer), " CDR1(%d-%d):%.2lf=%s", cdr[0].readStart, cdr[0].readEnd, 
@@ -5290,7 +5295,7 @@ public:
 		if ( cdr3 == NULL)
 			sprintf( buffer + strlen( buffer), " CDR3(0-0):0.00=null" ) ;
 		else
-			sprintf( buffer + strlen( buffer), " CDR3(%d-%d):%.2lf=%s", cdr[2].readStart, cdr[2].readEnd, cdr3Score, cdr3 ) ;
+			sprintf( buffer + strlen( buffer), " CDR3(%d-%d):%.2lf=%s", cdr[2].readStart, cdr[2].readEnd, cdr3Score, cdr3 ) ;*/
 		
 		if ( cdr1 != NULL )
 			delete[] cdr1 ;
@@ -5299,6 +5304,67 @@ public:
 		if ( cdr3 != NULL )
 			delete[] cdr3 ;
 		return 1 ;
+	}
+	
+	// Convert the annotation information to string.
+	void AnnotationToString( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3],
+	                std::vector<struct _overlap> *secondaryGeneOverlaps, char *buffer ) 
+	{
+		int i, j ;
+		buffer[0] = '\0' ;
+		char *r = strdup( read ) ; // another buffer
+
+		// Output the V, J, C information
+		for ( i = 0 ; i < 4 ; ++i )
+		{
+			if ( i == 1 )
+				continue ;
+			if ( geneOverlap[i].seqIdx != -1 )
+			{
+				int seqIdx = geneOverlap[i].seqIdx ;
+				sprintf( buffer + strlen( buffer ), " %s(%d):(%d-%d):(%d-%d):%.2lf",
+						seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
+						geneOverlap[i].readStart, geneOverlap[i].readEnd, 
+						geneOverlap[i].seqStart, geneOverlap[i].seqEnd, geneOverlap[i].similarity * 100 ) ;
+
+				if ( secondaryGeneOverlaps != NULL )
+				{
+					std::vector<struct _overlap> &overlaps = *secondaryGeneOverlaps ;
+					int size = overlaps.size() ;
+					for ( j = 0 ; j < size ; ++j )
+					{
+						seqIdx = overlaps[j].seqIdx ;
+						if ( GetGeneType( seqs[ seqIdx ].name ) != i )
+							continue ;
+						sprintf( buffer + strlen( buffer ), ",%s(%d):(%d-%d):(%d-%d):%.2lf",
+							seqs[ seqIdx ].name, seqs[ seqIdx ].consensusLen,
+							overlaps[j].readStart, overlaps[j].readEnd, 
+							overlaps[j].seqStart, overlaps[j].seqEnd, overlaps[j].similarity * 100 ) ;
+					}
+				}
+			}
+			else
+			{
+				sprintf( buffer + strlen( buffer ), " *" ) ;
+			}
+		}
+
+		// Output CDR1,2,3 information.
+		for ( i = 0 ; i < 3 ; ++i )
+		{
+			if ( cdr[i].seqIdx != -1 )
+			{
+				int len = cdr[i].readEnd - cdr[i].readStart + 1 ;
+				memcpy( r, read + cdr[i].readStart, len ) ;
+			        r[len] = '\0' ;
+				
+				sprintf( buffer + strlen( buffer), " CDR%d(%d-%d):%.2lf=%s", i + 1, cdr[i].readStart, cdr[i].readEnd, 
+						cdr[i].similarity * 100, r ) ;
+			}
+			else
+				sprintf( buffer + strlen( buffer), " CDR%d(0-0):0.00=null", i + 1 ) ;
+		}
+		free( r ) ;
 	}
 	
 	// Use the refSet to annotate current set.
@@ -5315,7 +5381,7 @@ public:
 				continue ;
 		
 			free( seqs[i].name ) ;
-			refSet.AnnotateRead( seqs[i].consensus, 2, geneOverlap, cdr, buffer ) ;
+			refSet.AnnotateRead( seqs[i].consensus, 2, geneOverlap, cdr, NULL ) ;
 			seqs[i].name = strdup( buffer ) ;
 		}
 
@@ -6131,7 +6197,7 @@ public:
 			}
 			struct _overlap geneOverlap[4] ;
 			struct _overlap cdr[3] ;
-			refSet.AnnotateRead( seqs[i].consensus, 0, geneOverlap, cdr, buffer ) ;
+			refSet.AnnotateRead( seqs[i].consensus, 0, geneOverlap, cdr, NULL ) ;
 			for ( j = 0 ; j < 4 ; ++j )
 			{
 				k = j ;

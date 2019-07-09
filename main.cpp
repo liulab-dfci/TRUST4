@@ -559,7 +559,7 @@ int main( int argc, char *argv[] )
 			//printf( "new stuff\n" ) ;
 			struct _overlap geneOverlap[4] ;
 			//buffer[0] = '\0' ;
-			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, buffer ) ;
+			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, NULL ) ;
 			
 			// If the order of V,D,J,C is wrong from this read, then we ignore this.
 			//   probably from read through in cyclic fragment.
@@ -1042,7 +1042,7 @@ int main( int argc, char *argv[] )
 			{
 				struct _overlap geneOverlap[4] ;
 				//buffer[0] = '\0' ;
-				refSet.AnnotateRead( lowFreqReads[i].read, 0, geneOverlap, NULL, buffer ) ;
+				refSet.AnnotateRead( lowFreqReads[i].read, 0, geneOverlap, NULL, NULL ) ;
 
 				int componentCnt = 0 ;
 				int lastJ = -1 ;
