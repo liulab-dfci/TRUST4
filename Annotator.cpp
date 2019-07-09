@@ -447,7 +447,7 @@ int main( int argc, char *argv[] )
 		delete[] args ;
 	}
 	// Use global information to break ties
-	//AnnotationTieBreak( annotations, seqSet, refSet ) ;
+	AnnotationTieBreak( annotations, seqSet, refSet ) ;
 
 	// Output the annotation of consensus assemblies
 	for ( i = 0 ; i < seqCnt ; ++i )
