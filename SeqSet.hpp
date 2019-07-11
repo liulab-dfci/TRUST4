@@ -844,7 +844,6 @@ private:
 		}
 		for ( i = 0 ; align[i] != -1 ; ++i )
 			;
-		--i ;
 		int tmpMatchCnt = 0  ;
 		for ( i = i - 1, k = 1 ; i >= 0 ; --i, ++k )
 		{
@@ -924,21 +923,14 @@ private:
 			extendedOverlap = overlap ;
 			ret = 0 ;
 		}*/
+		//printf( "%d: %d %d\n", ret, extendedOverlap.readStart, extendedOverlap.readEnd ) ;
 		return ret ;
 	}
 
-	// Obtain the overlaps, each overlap further contains the hits induce the overlap. 
-	// readType: 0(default): sqeuencing read. 1:seqs, no need filter.
-	// Return: the number of overlaps.
-	int GetOverlapsFromRead( char *read, int strand, int readType, std::vector<struct _overlap> &overlaps, 
-		SimpleVector<bool> *puse = NULL )
+	int GetHitsFromRead( char *read, char *rcRead, int strand, SimpleVector<struct _hit> &hits, SimpleVector<bool> *puse )
 	{
-		int i, j, k ;
+		int i, j ;
 		int len = strlen( read ) ;
-		if ( len < kmerLength )
-			return -1 ;
-
-		SimpleVector<struct _hit> hits ;		    	
 
 		KmerCode kmerCode( kmerLength ) ;
 		KmerCode prevKmerCode( kmerLength ) ;
@@ -946,9 +938,9 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
-		
+
 		int skipCnt = 0 ;
-		
+
 		if ( strand != -1 )
 		{
 			for ( i = 0 ; i < kmerLength - 1 ; ++i )
@@ -989,7 +981,6 @@ private:
 			}
 		}
 		// Locate the hits from the opposite-strand case.
-		char *rcRead =  new char[len + 1] ;
 		ReverseComplement( rcRead, read, len ) ;		
 
 		if ( strand != 1 )
@@ -1039,6 +1030,23 @@ private:
 				prevKmerCode = kmerCode ;
 			}
 		}
+		return hits.Size() ;
+	}
+
+	// Obtain the overlaps, each overlap further contains the hits induce the overlap. 
+	// readType: 0(default): sqeuencing read. 1:seqs, no need filter.
+	// Return: the number of overlaps.
+	int GetOverlapsFromRead( char *read, int strand, int readType, std::vector<struct _overlap> &overlaps, 
+		SimpleVector<bool> *puse = NULL )
+	{
+		int i, j, k ;
+		int len = strlen( read ) ;
+		if ( len < kmerLength )
+			return -1 ;
+
+		SimpleVector<struct _hit> hits ;		    	
+		char *rcRead =  new char[len + 1] ;
+		GetHitsFromRead( read, rcRead, strand, hits, puse ) ;
 		delete[] rcRead ;
 		
 		//printf( "hitsize=%d; %d\n", hits.Size(), kmerLength ) ;
@@ -2135,51 +2143,58 @@ public:
 	}
 	
 	// Test whether the read share a kmer hit on the seqs.
-	bool HasHitInSet( char *read, char *rcRead, int minHitRequired )
+	bool HasHitInSet( char *read, char *rcRead )
 	{
 		int i, k ;
 		int len = strlen( read ) ;
 		if ( len < kmerLength )
 			return false ;
 
-		KmerCode kmerCode( kmerLength ) ;
-		
-		for ( k = 0 ; k < 2 ; ++k )
+		SimpleVector<struct _hit> hits ;	
+		GetHitsFromRead( read, rcRead, 0, hits, NULL  ) ;
+
+		int hitCnt = hits.Size() ;
+		if ( hitCnt == 0 )
+			return false ;
+
+		// Bucket sort.
+		int seqCnt = seqs.size() ;
+		SimpleVector<struct _hit> *buckets[2] ;
+		buckets[0] = new SimpleVector<struct _hit>[seqCnt] ;
+		buckets[1] = new SimpleVector<struct _hit>[seqCnt] ;
+
+		for ( i = 0 ; i < hitCnt ; ++i )
 		{
-			int prevHit = -1 ;
-			int hitLen = 0 ;
-			char *r ;
-			if ( k == 0 )	
-				r = read ;
-			else
+			int tag = hits[i].strand == 1 ? 1 : 0 ;
+			buckets[tag][ hits[i].indexHit.idx ].PushBack( hits[i] ) ;
+		}
+		
+		// Find the best bucket.
+		int max = -1 ;
+		int maxTag = -1 ;
+		int maxSeqIdx = -1 ;
+		for ( k = 0 ; k <= 1 ; ++k )
+		{
+			for ( i = 0 ; i < seqCnt ; ++i )
 			{
-				kmerCode.Restart() ;
-				ReverseComplement( rcRead, read, len ) ;		
-				r = rcRead ;	
-			}
-
-			for ( i = 0 ; i < kmerLength - 1 ; ++i )
-				kmerCode.Append( r[i] ) ;
-			for ( ; i < len ; ++i )
-			{
-				kmerCode.Append( r[i] ) ;
-				SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
-				int size = indexHit.Size() ;
-				if ( size == 0 )
-					continue ;
-
-				if ( prevHit == -1 || prevHit + kmerLength - 1 < i )
-					hitLen += kmerLength ;
-				else
-					hitLen += i - prevHit ;
-
-				if ( hitLen >= minHitRequired )
-					return true ;
-				prevHit = i ;
+				int size = buckets[k][i].Size() ;
+				if ( size > 0 && size > max )
+				{
+					maxTag = k ;
+					maxSeqIdx = i ;
+					max = size ;
+				}
 			}
 		}
-
-		return false ;
+		
+		std::vector<struct _overlap> overlaps ;
+		GetOverlapsFromHits( buckets[maxTag][maxSeqIdx], hitLenRequired, 1, overlaps ) ;
+		delete[] buckets[0] ;
+		delete[] buckets[1] ;
+		//printf( "%d %d\n", hitCnt, overlaps.size() ) ;	
+		if ( overlaps.size() == 0 )
+			return false ;
+		return true ;
 	}
 
 	// Compute the length of hit from the read, take the overlaps of kmer into account 
