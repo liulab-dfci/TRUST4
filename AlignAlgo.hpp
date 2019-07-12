@@ -69,6 +69,31 @@ public:
 			}
 		}
 
+		int i, j ;
+		if ( lent == lenp )
+		{
+			// Check whether no-indel alignment could work.
+			// For them to match but with indel, we need at least one indel in t and one delin in p
+			int score = 0 ;
+			for ( i = 0 ; i < lent ; ++i )
+			{
+				if ( IsBaseEqual( tWeights[i], p[i] ) )
+				{
+					align[i] = EDIT_MATCH ;
+					score += SCORE_MATCH ;
+				}
+				else
+				{
+					align[i] = EDIT_MISMATCH ;
+					score += SCORE_MISMATCH ;
+				}
+			}
+			align[i] = -1 ;
+
+			if ( score >= lent * SCORE_MATCH + 2 * SCORE_INDEL )
+				return score ;
+		}
+
 
 		int leftBand = 5 ;
 		int rightBand = 5 ;
@@ -77,7 +102,6 @@ public:
 		else if ( lent < lenp ) // more rows than column.
 			leftBand += lenp - lent ;
 		
-		int i, j ;
 		int negInf = ( lent + 1 ) * ( lenp + 1 ) * SCORE_INDEL ;
 		int bmax = ( lent + 1 ) ;
 

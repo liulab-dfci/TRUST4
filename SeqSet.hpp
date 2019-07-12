@@ -3940,7 +3940,7 @@ public:
 			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
 
 		//sprintf( buffer, "%d", len ) ;
-		for ( i = 0 ; i < len ; ++i )
+		for ( i = 0 ; i < len ; )
 		{
 			int NCnt = 0 ;
 			for ( j = i + 1 ; j < len ; ++j )
@@ -4401,7 +4401,19 @@ public:
 		// Infer CDR1,2,3.
 		char *cdr1 = NULL ;
 		char *cdr2 = NULL ;
-		char *vAlign = NULL ;	
+		char *vAlign = NULL ;
+		
+		if ( detailLevel >= 2 )
+		{
+			// Change gap nucleotide from 'N' to 'M'
+			for ( i = 0 ; i < contigCnt - 1 ; ++i )
+			{
+				for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
+					read[j] = 'M' ;
+			}
+
+		}
+
 		if ( detailLevel >= 2 && geneOverlap[0].seqIdx != -1 
 			&& ( geneOverlap[2].seqIdx == -1 || geneOverlap[0].readStart < geneOverlap[2].readStart ) )
 		{
@@ -5236,6 +5248,17 @@ public:
 		if ( vAlign != NULL )
 			delete[] vAlign ;
 
+		if ( detailLevel >= 2 )
+		{
+			// Change gap nucleotide back from 'M' to 'N'
+			for ( i = 0 ; i < contigCnt - 1 ; ++i )
+			{
+				//printf( "%d %d %d %d\n", contigs[i].a, contigs[i].b, contigs[i + 1].a, contigs[i + 1].b ) ;
+				for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
+					read[j] = 'N' ;
+			}
+
+		}
 		// Compute the name
 		if ( secondaryGeneOverlaps != NULL )
 		{
@@ -6130,6 +6153,7 @@ public:
 				if ( reads[i].overlap.seqIdx == -1 || reads[i + 1].overlap.seqIdx == -1 
 					|| reads[i].overlap.strand == reads[i + 1].overlap.strand 
 					|| ( reads[i].overlap.similarity < 1 && reads[i + 1].overlap.similarity < 1 ) 
+					//|| reads[i].overlap.similarity < 0.95 || reads[i + 1].overlap.similarity < 0.95
 					|| reads[i].overlap.seqIdx == reads[i + 1].overlap.seqIdx )			
 				{
 					++i ;
@@ -6194,6 +6218,7 @@ public:
 				++i ;
 		
 		}
+
 		// Sort the edge by the weight.
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
