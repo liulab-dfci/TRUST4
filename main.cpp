@@ -636,7 +636,7 @@ int main( int argc, char *argv[] )
 				//	&& geneOverlap[0].readEnd < geneOverlap[2].readStart )
 				//	similarityThreshold = 1.0 ;
 
-				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, similarityThreshold ) ;
+				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, sortedReads[i].minCnt, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
@@ -764,8 +764,12 @@ int main( int argc, char *argv[] )
 			//	similarityThreshold = 0.9 ;
 			similarityThreshold = 0.95 ;
 		}
+		
+		int strand = 0 ;
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, strand, 
+			1, similarityThreshold ) ;
+		sortedReads[ rescueReadIdx[i] ].strand = strand ;
 
-		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, 0, similarityThreshold ) ;
 		if ( addRet >= 0 )
 		{
 			++assembledReadCnt ;
@@ -1034,6 +1038,7 @@ int main( int argc, char *argv[] )
 		//else if ( extendedSeq.AddRead( lowFreqReads[i].read, name, 1.0 ) == -1 )
 		else
 		{
+			int strand ;
 			if ( lowFreqReads[i].minCnt < 2 )
 			{
 				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, assign ) ;
@@ -1042,7 +1047,7 @@ int main( int argc, char *argv[] )
 					lowFreqSeqSet.AddAssignedRead( lowFreqReads[i].read, assign ) ;
 				}
 			}
-			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, 0, 0.97 ) < 0 )
+			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, strand, 1, 0.97 ) < 0 )
 			{
 				struct _overlap geneOverlap[4] ;
 				//buffer[0] = '\0' ;

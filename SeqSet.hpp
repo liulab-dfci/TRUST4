@@ -2294,7 +2294,7 @@ public:
 	// If it is a candidate, but is quite different from the one we stored, we create a new poa for it.
 	// Return: the index id in the set. 
 	//	   -1: not add. -2: only overlapped with novel seq and could not be extended.
-	int AddRead( char *read, char *geneName, int strand, double similarityThreshold )
+	int AddRead( char *read, char *geneName, int &strand, int minKmerCount, double similarityThreshold )
 	{
 		//printf( "%s\n", read ) ;
 		int i, j, k ;
@@ -2379,7 +2379,9 @@ public:
 		int ret = -1 ;
 		bool addNew = true ;
 		int failedExtendedOverlapsCnt = 0 ;
-
+		struct _overlap goodExtendedOverlap ;
+		
+		goodExtendedOverlap.seqIdx = -1 ;
 		if ( i < overlapCnt )
 		{
 			// Incorporate to existing sequence.
@@ -2466,7 +2468,14 @@ public:
 				if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 				{
 					if ( extendedOverlaps[k].similarity < similarityThreshold )
+					{
+						if ( minKmerCount <= 1 && extendedOverlaps[k].readStart == 0 
+							&& extendedOverlaps[k].readEnd == len - 1 )
+						{
+							goodExtendedOverlap = extendedOverlaps[k] ;
+						}
 						continue ;
+					}
 					//if ( !strcmp( read, "CCGGCAGCCCCCAGGGAAGGGACTTGAATGGATTGGCTATATCTATTACACTGGGAGCACCATCTACAATCCCTC") )
 					//{
 					//	fprintf( stderr, "%d %d can be extended.\n", i, overlaps[i].seqIdx ) ;
@@ -2664,6 +2673,12 @@ public:
 					}
 				}
 				k = cnt ;
+			}
+
+			if ( k == 0 && goodExtendedOverlap.seqIdx != -1 )
+			{
+				extendedOverlaps[0] = goodExtendedOverlap ;
+				k = 1 ;
 			}
 			
 			if ( k > 1 )
@@ -3185,7 +3200,7 @@ public:
 			}
 			if ( i >= overlapCnt )
 				addNew = false ;
-			
+
 			/*if ( !addNew )
 			{
 				for ( i = 0 ; i < overlapCnt ; ++i )
@@ -3196,20 +3211,21 @@ public:
 						break ;
 					}
 			}*/
-		}
-		if ( anchorSeqIdx == -1 )
-		{
-			for ( i = 0 ; i < overlapCnt ; ++i )
+			/*if ( anchorSeqIdx == -1 )
 			{
-				if ( overlaps[i].matchCnt >= 2 * hitLenRequired 
-					&& ( overlaps[i].readStart < 3 
-						|| overlaps[i].readEnd >= len - 3 ) )
+				for ( i = 0 ; i < overlapCnt ; ++i )
 				{
-					anchorSeqIdx = i ;
-					break ;
+					if ( overlaps[i].matchCnt >= 2 * hitLenRequired 
+							&& ( overlaps[i].readStart < 3 
+								|| overlaps[i].readEnd >= len - 3 ) )
+					{
+						anchorSeqIdx = i ;
+						break ;
+					}
 				}
-			}
+			}*/
 		}
+
 		if ( addNew )
 		{
 			// Add the sequence to SeqSet
@@ -3260,6 +3276,10 @@ public:
 			SetPrevAddInfo( -2, -1, -1, -1, -1, 0 ) ; 
 			ret = -2 ;
 		}
+
+		if ( ret >= 0 && strand == 0 )
+			strand = overlaps[0].strand ;
+
 		return ret ;
 	}
 	
@@ -5096,29 +5116,51 @@ public:
 				cdr[2].readStart = s ;
 				cdr[2].readEnd = e ;
 
+				int leftCnt = 0 ;
+				int rightCnt = 0 ;
+
 				// Use the anchor motif to score the cdr
 				if ( locateS - 6 > 0 )
 					if ( DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+					{
 						cdr3Score += 100.0 / 6 ;
+						++leftCnt ;
+					}
 				if ( locateS - 3 > 0 )
 					if ( DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y' )
+					{
 						cdr3Score += 100.0 / 6 ;
+						++leftCnt ;
+					}
 
 				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' )
+				{
 					cdr3Score += 100.0 / 6 ;
+					++leftCnt ;
+				}
 
 				if ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+				{
 					cdr3Score += 100.0 / 6 ;
+					++rightCnt ;
+				}
 
 				if ( locateE + 5 < len )
 					if ( DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' )
+					{
 						cdr3Score += 100.0 / 6 ;
+						++rightCnt ;
+					}
 				if ( locateE + 11 < len )
 					if ( DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' )
+					{
 						cdr3Score += 100.0 / 6 ;
+						++rightCnt ;
+					}
 
-				if ( cdr3Score < 99 && ( geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 ) )
+				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
+						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
 					cdr3Score = 0 ;
 				else if ( e + 6 >= len && !( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 				                          	DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
@@ -5130,14 +5172,28 @@ public:
 					cdr3Score = 0 ;
 				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 && e <= geneOverlap[0].readEnd )
 					cdr3Score = 0 ;
-				else if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && s >= 50 )
-					cdr3Score = 0 ;
-				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 && e + 50 < len )
-					cdr3Score = 0 ;
+				else if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 )
+				{
+					// Check the contigs containing s.
+					for ( i = 0 ; i < contigCnt ; ++i )
+						if ( s <= contigs[i].b )
+							break ;
+					if ( i >= contigCnt || s - 50 >= contigs[i].a )
+						cdr3Score = 0 ;
+				}
+				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 )
+				{
+					for ( i = contigCnt - 1 ; i >= 0 ; --i )	
+						if ( e >= contigs[i].a )
+							break ;
+					if ( i < 0 || e + 50 <= contigs[i].b )
+						cdr3Score = 0 ;
+				}
 				
 				// Now consider whether the gaps could create some false positive score CDR3.
 				int nCnt = 0 ;
 				for ( i = s ; i <= e ; ++i )
+				{
 					if ( read[i] == 'N' )
 					{
 						++nCnt ;
@@ -5147,6 +5203,12 @@ public:
 							break ;
 						}
 					}
+					else if ( read[i] == 'M' )
+					{
+						cdr3Score = 0 ;
+						break ;
+					}
+				}
 				
 				if ( cdr3Score < 100 )
 				{
