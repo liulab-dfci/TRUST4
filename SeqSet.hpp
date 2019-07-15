@@ -2469,7 +2469,8 @@ public:
 				{
 					if ( extendedOverlaps[k].similarity < similarityThreshold )
 					{
-						if ( minKmerCount <= 1 && extendedOverlaps[k].readStart == 0 
+						if ( ( minKmerCount <= 1 || extendedOverlaps[k].similarity + 0.01 >= similarityThreshold )   
+							&& extendedOverlaps[k].readStart == 0 
 							&& extendedOverlaps[k].readEnd == len - 1 )
 						{
 							goodExtendedOverlap = extendedOverlaps[k] ;
