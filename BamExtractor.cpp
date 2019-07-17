@@ -107,13 +107,14 @@ struct _threadArg
 
 bool ValidAlternativeChrom( char *chrom )
 {
-	if ( strstr( chrom, "_random" ) || strstr( chrom, "_alt" ) )
+	//if ( strstr( chrom, "_random" ) || strstr( chrom, "_alt" ) )
+	if ( strstr( chrom, "_" ) || strstr( chrom, "." ) )
 	{
-		if ( chrom[0] == 'c' && chrom[3] >= '0' && chrom[3] <= '9' )
-			return true ;
-	}
-	else if ( ( chrom[0] == 'G' && chrom[1] == 'I' ) || ( chrom[0] == 'G' && chrom[1] == 'L' ) )
+		//if ( chrom[0] == 'c' && chrom[3] >= '0' && chrom[3] <= '9' )
 		return true ;
+	}
+	//else if ( ( chrom[0] == 'G' && chrom[1] == 'I' ) || ( chrom[0] == 'G' && chrom[1] == 'L' ) )
+	//	return true ;
 	return false ;
 }
 
@@ -412,7 +413,6 @@ int main( int argc, char *argv[] )
 	bool filterUnalignedFragment = false ;
 	int kmerLength = 9  ;
 	SeqSet refSet( kmerLength ) ;
-	refSet.SetHitLenRequired( 21 ) ;
 	int threadCnt = 1 ;
 
 	std::map<std::string, struct _candidate> candidates ; 
@@ -493,6 +493,12 @@ int main( int argc, char *argv[] )
 	alignments.GetGeneralInfo( true ) ;
 	alignments.Rewind() ;
 	
+	int hitLenRequired = 21 ;
+	if ( alignments.readLen / 5 > hitLenRequired )
+		hitLenRequired = alignments.readLen / 5 ;
+	//refSet.SetRadius( 1 ) ;	
+	refSet.SetHitLenRequired( hitLenRequired ) ;
+
 	int tag = 0 ;
 	
 	FILE *fp1 = NULL ;
@@ -703,13 +709,14 @@ int main( int argc, char *argv[] )
 	// Go through the BAM file again to output the candidates 
 	PrintLog( "Finish obtaining the candidate read ids." ) ;
 
-
+	int candidateCnt = candidates.size() ;
+	int outputCnt = 0 ;
 	while ( alignments.Next() )
 	{
 		if ( !alignments.IsPrimary() )
 			continue ;
-		if ( !alignments.IsTemplateAligned() ) // the sorted bam file should put all unaligned template at last.
-			break ;
+		if ( !alignments.IsTemplateAligned() ) // the sorted bam file should put all unaligned template at last (NO!).
+			continue ;
 
 		std::string name( alignments.GetReadId() ) ;
 		int len = name.length() ;
@@ -744,6 +751,10 @@ int main( int argc, char *argv[] )
 			free( it->second.mate2 ) ;
 			free( it->second.qual1 ) ;
 			free( it->second.qual2 ) ;
+
+			++outputCnt ;
+			if ( outputCnt == candidateCnt )
+				break ;
 		}
 			
 	}
