@@ -711,6 +711,7 @@ int main( int argc, char *argv[] )
 
 	int candidateCnt = candidates.size() ;
 	int outputCnt = 0 ;
+	//std::map< std::string, int> nameCnt ;
 	while ( alignments.Next() )
 	{
 		if ( !alignments.IsPrimary() )
@@ -743,6 +744,17 @@ int main( int argc, char *argv[] )
 			it->second.qual2 = strdup( bufferQual ) ;	
 		}
 		
+		/*if ( nameCnt.find( name ) == nameCnt.end() )
+		{
+			nameCnt[ name ] = 1 ;
+		}
+		else
+		{
+			++nameCnt[ name ] ;
+			if ( nameCnt[name] >= 3 )
+				printf( "Error!! %s\n", name.c_str() ) ;
+		}*/
+
 		if ( it->second.mate1 != NULL && it->second.mate2 != NULL )
 		{
 			OutputSeq( fp1, name.c_str(), it->second.mate1, it->second.qual1 ) ;
@@ -752,6 +764,9 @@ int main( int argc, char *argv[] )
 			free( it->second.qual1 ) ;
 			free( it->second.qual2 ) ;
 
+			it->second.mate1 = NULL ;
+			it->second.mate2 = NULL ;
+			
 			++outputCnt ;
 			if ( outputCnt == candidateCnt )
 				break ;
@@ -759,7 +774,8 @@ int main( int argc, char *argv[] )
 			
 	}
 	fclose( fp1 ) ;
-	fclose( fp2 ) ;
+	if ( fp2 != NULL )
+		fclose( fp2 ) ;
 
 	fclose( fpRef ) ;
 	PrintLog( "Finish extracting reads." ) ;
