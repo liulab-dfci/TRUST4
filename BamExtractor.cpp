@@ -416,6 +416,7 @@ int main( int argc, char *argv[] )
 	int threadCnt = 1 ;
 
 	std::map<std::string, struct _candidate> candidates ; 
+	std::map<std::string, int> usedName ; // For single-end case.
 
 	while ( 1 )
 	{
@@ -494,6 +495,8 @@ int main( int argc, char *argv[] )
 	alignments.Rewind() ;
 	
 	int hitLenRequired = 21 ;
+	if ( alignments.fragStdev == 0 )
+		hitLenRequired = 17 ; // For single end, be more aggressive.
 	if ( alignments.readLen / 5 > hitLenRequired )
 		hitLenRequired = alignments.readLen / 5 ;
 	//refSet.SetRadius( 1 ) ;	
@@ -627,6 +630,8 @@ int main( int argc, char *argv[] )
 			else 
 			{
 				// single-end
+				alignments.GetReadSeq( buffer ) ;
+				alignments.GetQual( bufferQual ) ;
 				if ( threadCnt == 1 )
 				{
 					if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
@@ -662,7 +667,7 @@ int main( int argc, char *argv[] )
 		int start = (int)alignments.segments[0].a ;
 		int end = (int)alignments.segments[ alignments.segCnt - 1 ].b ;
 		//if ( !strcmp( "ERR188021.4488674", alignments.GetReadId() ) )
-		//	printf( "hi %d %d %d: %d %d\n", chrId, start, end, tag, genes[tag].chrId ) ;
+			//printf( "hi %d %d %d: %d %d\n", chrId, start, end, tag, genes[tag].chrId ) ;
 		while ( tag < geneCnt && ( chrId > genes[tag].chrId ||
 					( chrId == genes[tag].chrId && start > genes[tag].end ) ) )
 			++tag ;
@@ -687,6 +692,11 @@ int main( int argc, char *argv[] )
 		}
 		else
 		{
+			std::string name( alignments.GetReadId() ) ;
+			if ( usedName.find( name ) != usedName.end() )
+				continue ;
+			usedName[ name ] = 1 ;
+			
 			alignments.GetQual( bufferQual ) ;
 			//alignments.GetReadSeq( buffer ) ;
 			OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
@@ -702,6 +712,7 @@ int main( int argc, char *argv[] )
 	if ( alignments.fragStdev == 0 ) // Single-end can terminate here.
 	{
 		fclose( fp1 ) ;
+		fclose( fpRef ) ;
 		alignments.Close() ;
 		return 0 ;
 	}

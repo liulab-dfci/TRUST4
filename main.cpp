@@ -569,6 +569,13 @@ int main( int argc, char *argv[] )
 			//   is relative to the reversed-complementary read.
 			bool filter = false ;
 			int strand = 0 ;
+			/*for ( j = 0 ; j < 4 ; ++j )
+			{
+				if ( geneOverlap[j].seqIdx == -1 )
+					continue ;
+				printf( "%d: %d %d %d %d %lf\n", j, geneOverlap[j].seqIdx, geneOverlap[j].readStart, geneOverlap[j].readEnd, 
+					geneOverlap[j].strand, geneOverlap[j].similarity ) ;
+			}*/
 			for ( j = 0 ; j < 4 ; ++j )
 			{
 				int l ;
@@ -578,7 +585,7 @@ int main( int argc, char *argv[] )
 				{
 					if ( geneOverlap[l].seqIdx == -1 )
 						continue ;
-
+					
 					if ( geneOverlap[j].readEnd - 10 > geneOverlap[l].readStart )
 					{
 						filter = true ;	
@@ -588,7 +595,8 @@ int main( int argc, char *argv[] )
 				if ( filter )
 					break ;
 			}
-			if ( geneOverlap[3].seqIdx != -1 ) // From constant gene.
+
+			if ( geneOverlap[3].seqIdx != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx == -1 ) // From constant gene.
 			{
 				//if ( geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 < sortedReads[i].len )
 				//{
@@ -611,14 +619,19 @@ int main( int argc, char *argv[] )
 				char name[5] ;
 				name[0] = '\0' ;
 				strand = 0 ;
+				int ambiguousStrand = 0 ;
 				for ( j = 0 ; j < 4 ; ++j )
 					if ( geneOverlap[j].seqIdx != -1 )
 					{
 						char *s = refSet.GetSeqName( geneOverlap[j].seqIdx ) ;
 						name[0] = s[0] ; name[1] = s[1] ; name[2] = s[2] ; name[3] = s[3] ;
 						name[4] = '\0' ;
+						if ( strand != 0 && strand != geneOverlap[j].strand )
+							ambiguousStrand = 1 ;
 						strand = geneOverlap[j].strand ;
 					}
+				if ( ambiguousStrand )
+					strand = 0 ;
 
 				double similarityThreshold = 0.9 ;
 				if ( sortedReads[i].minCnt >= 20 )

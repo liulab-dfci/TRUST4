@@ -2192,8 +2192,14 @@ public:
 		delete[] buckets[0] ;
 		delete[] buckets[1] ;
 		//printf( "%d %d\n", hitCnt, overlaps.size() ) ;	
+		for ( i = 0 ; i < overlaps.size() ; ++i )
+			delete overlaps[i].hitCoords ;
+
 		if ( overlaps.size() == 0 )
 			return false ;
+		/*printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
+		for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
+			printf( "%d %d\n", overlaps[0].hitCoords->Get(i).a, overlaps[0].hitCoords->Get(i).b ) ;*/
 		return true ;
 	}
 
