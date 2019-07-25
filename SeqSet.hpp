@@ -361,9 +361,18 @@ private:
 		}
 		int len = o.readEnd - o.readStart + 1 ;
 		int lowCnt = 0 ; 
+		int lowTotalCnt = 0 ;
 		for ( i = 0 ; i < 4 ; ++i )
+		{
 			if ( cnt[i] <= 2 )
+			{
 				++lowCnt ;
+				lowTotalCnt += cnt[i] ;
+			}
+		}
+		if ( lowTotalCnt * 7 >= o.readEnd - o.readStart + 1 )
+			return false ;
+
 		if ( lowCnt >= 2 )
 			return true ;
 		return false ;
@@ -5109,6 +5118,188 @@ public:
 			{
 				locateS = locateE = -1 ;
 			}
+			
+			// Partial CDR3s
+			if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
+				&& locateE + 11 < len && locateE > 15 && locateE <= 60 ) 
+			{
+				if ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
+					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' )
+				{
+					locateS = locateE % 3 ;			
+					s = locateS ;
+					e = locateE + 2 ;
+					
+					if ( e - s + 1 >= 18 )
+					{
+						bool flag = false ;
+						for ( i = s ; i <= s + 9 && e - i + 1 >= 18 ; i += 3 )
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'C' )
+							{
+								locateS = i ;
+								flag = true ;
+								break ;
+							}
+						if ( !flag )
+							locateS = -1 ;
+					}
+					else
+						locateS = -1 ;
+				}
+			}
+			else if ( locateS != -1 && locateE == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 
+				&& locateS - 6 > 0 && locateS + 18 < len && locateS + 2 + 60 > len )
+			{
+				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
+					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
+					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+				{
+					locateE = len - 3 - ( len - 3 - locateS ) % 3 ;
+				
+					s = locateS ;
+					e = locateE + 2 ;
+						
+					if ( e - s + 1 >= 18 )
+					{
+						bool flag = false ;
+						for ( i = e ; i >= e - 9 && i - s + 1 >= 18 ; i -= 3 )
+							if ( DnaToAa( read[i - 2], read[i - 1], read[i] ) == 'W' 
+								|| DnaToAa( read[i - 2], read[i - 1], read[i] ) == 'F' )
+							{
+								locateE = i - 2 ;
+								flag = true ;
+								break ;
+							}
+						if ( !flag )
+							locateE = -1 ;
+					}
+					else
+						locateE = -1 ;
+				}
+			}
+
+
+			// Try to see whether extremely short anchor works using the sequence around CDR anchor.
+			// For V gene.
+			if ( locateS != -1 && locateS <= 18 && geneOverlap[0].seqIdx == -1 )
+			{
+				// So far, just ignore indel.
+				int bestMatchCnt = 0 ;
+				int bestHitLen = 0 ;
+				SimpleVector<int> bestTags ;
+				int seqCnt = seqs.size() ; 
+				for ( i = 0 ; i < seqCnt ; ++i )
+				{
+					if ( GetGeneType( seqs[i].name ) != 0 || seqs[i].info[2].a == -1 )
+						continue ;
+		
+					int matchCnt = 0 ;
+					int hitLen = 0 ;
+					for ( k = locateS - 1, j = seqs[i].info[2].a - 1 ; k >= 0 && j >=0 ; --k, --j )
+					{
+						if ( seqs[i].consensus[j] == read[k] )
+							++matchCnt ;
+					}
+					// The other end, just extend to a mismatch point.
+					for ( k = locateS, j = seqs[i].info[2].a ; k < len && j < seqs[i].consensusLen ; ++k, ++j )
+					{
+						if ( seqs[i].consensus[j] != read[k] )
+							break ;
+						++matchCnt ;
+					}
+					hitLen = k ;
+					if ( matchCnt > bestMatchCnt )
+					{
+						bestMatchCnt = matchCnt ;
+						bestHitLen = hitLen ; 
+						bestTags.Clear() ;
+						bestTags.PushBack( i ) ;
+					}
+					else if ( matchCnt == bestMatchCnt )
+						bestTags.PushBack( i ) ;
+				}
+				//printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
+				if ( bestMatchCnt / (double)bestHitLen >= 0.9 )
+				{
+					int size = bestTags.Size() ;
+					for ( i = 0 ; i < size ; ++i )
+					{
+						struct _overlap no ;
+						no.seqIdx = bestTags[i] ;
+						no.readStart = 0 ;
+						no.readEnd = bestHitLen - 1 ;
+						no.seqStart = seqs[ bestTags[i] ].info[2].a - locateS ;
+						no.seqEnd = no.seqStart + bestHitLen - 1 ;
+						no.matchCnt = 2 * bestMatchCnt ;
+						no.similarity = bestMatchCnt / (double)bestHitLen ;
+						if ( i == 0 )
+							geneOverlap[0] = no ;
+						allOverlaps.push_back( no ) ;
+					}
+				}
+			}
+			
+			// For J gene
+			int distToEnd = len - locateE - 1 ;
+			if ( locateE != -1 && distToEnd <= 18 && geneOverlap[2].seqIdx == -1 )
+			{
+				// So far, just ignore indel.
+				int bestMatchCnt = 0 ;
+				SimpleVector<int> bestTags ;
+				int seqCnt = seqs.size() ;
+				int bestHitLen ;
+				for ( i = 0 ; i < seqCnt ; ++i )
+				{
+					if ( GetGeneType( seqs[i].name ) != 2 || seqs[i].info[2].a == -1 )
+						continue ;
+
+					int matchCnt = 0 ;
+					int hitLen ;
+					for ( k = locateE + 1, j = seqs[i].info[2].a + 1 ; k < len && j < seqs[i].consensusLen ; ++k, ++j )
+					{
+						if ( seqs[i].consensus[j] == read[k] )
+							++matchCnt ;
+					}
+					for ( k = locateE, j = seqs[i].info[2].a ; k >= 0 && j >= 0 ; --k, --j )
+					{
+						if ( seqs[i].consensus[j] != read[k] )
+							break ;
+						++matchCnt ;
+					}
+					hitLen = len - k - 1 ;
+
+					if ( matchCnt > bestMatchCnt )
+					{
+						bestMatchCnt = matchCnt ;
+						bestHitLen = hitLen ;
+						bestTags.Clear() ;
+						bestTags.PushBack( i ) ;
+					}
+					else if ( matchCnt == bestMatchCnt )
+						bestTags.PushBack( i ) ;
+				}
+
+				if ( bestMatchCnt / (double)bestHitLen >= 0.9 )
+				{
+					int size = bestTags.Size() ;
+					for ( i = 0 ; i < size ; ++i )
+					{
+						struct _overlap no ;
+						no.seqIdx = bestTags[i] ;
+						no.readStart = len - bestHitLen ;
+						no.readEnd = len - 1 ;
+						no.seqEnd = seqs[ bestTags[i] ].info[2].a + distToEnd ;
+						no.seqStart = no.seqEnd - bestHitLen + 1 ;
+						no.matchCnt = 2 * bestMatchCnt ;
+						no.similarity = bestMatchCnt / (double)bestHitLen ;
+						if ( i == 0 )
+							geneOverlap[2] = no ;
+						allOverlaps.push_back( no ) ;
+					}
+				}
+			}
 
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
 			{
@@ -5216,7 +5407,6 @@ public:
 						break ;
 					}
 				}
-				
 				if ( cdr3Score < 100 )
 				{
 					for ( i = 1 ; i < contigCnt ; ++i )
