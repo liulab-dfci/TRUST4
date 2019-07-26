@@ -3872,6 +3872,20 @@ public:
 
 		return ret ;
 	}
+
+	bool IsSameChainType( char *name, char *name2 )
+	{
+		int i ;
+		for ( i = 0 ; name[i] && name2[i] && i < 3 ; ++i )
+		{
+			if ( name[i] != name2[i] )
+				return false ;
+		}
+		if ( i >= 3 )
+			return true ;
+		else
+			return false ;
+	}
 	
 	// The reference gene may have different length, which makes matchCnt criterion biased
 	//   to longer gene, so we want to remove such effect
@@ -5220,10 +5234,24 @@ public:
 					else if ( matchCnt == bestMatchCnt )
 						bestTags.PushBack( i ) ;
 				}
+				
+				int anchorSeqIdx = -1 ;
+				int anchorType = -1 ;
+				if ( geneOverlap[2].seqIdx != -1 )
+				{
+					anchorSeqIdx = geneOverlap[2].seqIdx ;
+					anchorType = 2 ;
+				}
+				else if ( geneOverlap[3].seqIdx != -1 )
+				{
+					anchorSeqIdx = geneOverlap[3].seqIdx ;	
+					anchorType = 3 ;
+				}
 				//printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
 				if ( bestMatchCnt / (double)bestHitLen >= 0.9 )
 				{
 					int size = bestTags.Size() ;
+					bool start = false ;
 					for ( i = 0 ; i < size ; ++i )
 					{
 						struct _overlap no ;
@@ -5234,8 +5262,17 @@ public:
 						no.seqEnd = no.seqStart + bestHitLen - 1 ;
 						no.matchCnt = 2 * bestMatchCnt ;
 						no.similarity = bestMatchCnt / (double)bestHitLen ;
-						if ( i == 0 )
+						if ( anchorSeqIdx != -1 )
+						{
+							if ( no.readEnd > geneOverlap[ anchorType ].readStart 
+								|| !IsSameChainType( seqs[ no.seqIdx ].name, seqs[ anchorSeqIdx ].name ) )
+								continue ;
+						}
+						if ( !start )
+						{
 							geneOverlap[0] = no ;
+							start = true ;
+						}
 						allOverlaps.push_back( no ) ;
 					}
 				}
@@ -5280,10 +5317,23 @@ public:
 					else if ( matchCnt == bestMatchCnt )
 						bestTags.PushBack( i ) ;
 				}
-
+				
+				int anchorSeqIdx = -1 ;
+				int anchorType = -1 ;
+				if ( geneOverlap[0].seqIdx != -1 )
+				{
+					anchorSeqIdx = geneOverlap[0].seqIdx ;
+					anchorType = 0 ;
+				}
+				else if ( geneOverlap[3].seqIdx != -1 )
+				{
+					anchorSeqIdx = geneOverlap[3].seqIdx ;	
+					anchorType = 3 ;
+				}
 				if ( bestMatchCnt / (double)bestHitLen >= 0.9 )
 				{
 					int size = bestTags.Size() ;
+					bool start = false ;
 					for ( i = 0 ; i < size ; ++i )
 					{
 						struct _overlap no ;
@@ -5294,8 +5344,17 @@ public:
 						no.seqStart = no.seqEnd - bestHitLen + 1 ;
 						no.matchCnt = 2 * bestMatchCnt ;
 						no.similarity = bestMatchCnt / (double)bestHitLen ;
-						if ( i == 0 )
+						if ( anchorSeqIdx != -1 )
+						{
+							if ( ( anchorType == 0 && no.readStart < geneOverlap[ anchorType ].readEnd ) 
+								|| !IsSameChainType( seqs[ no.seqIdx ].name, seqs[ anchorSeqIdx ].name ) )
+								continue ;
+						}
+						if ( !start )
+						{
 							geneOverlap[2] = no ;
+							start = true ;
+						}
 						allOverlaps.push_back( no ) ;
 					}
 				}
