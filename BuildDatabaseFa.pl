@@ -13,6 +13,7 @@ my %interestedGeneName ;
 open FP1, $ARGV[0] ;
 my $chrom = "" ;
 my $seq = "" ;
+my $hasChrPrefix = 0 ;
 while ( <FP1> )
 {
 	if ( /^>/ )
@@ -20,6 +21,10 @@ while ( <FP1> )
 		$genome{ $chrom } = $seq if ( $chrom ne "" ) ;
 		$seq = "" ;
 		$chrom = substr( ( split )[0], 1 ) ;
+		if ( $chrom =~ /^c/ )
+		{
+			$hasChrPrefix = 1 ;
+		}
 	}
 	else
 	{
@@ -117,6 +122,15 @@ while ( <FP1> )
 		}
 		$strand = $cols[6] ;
 		undef @range ;
+	}
+	
+	if ( $hasChrPrefix == 1 && !( $cols[0] =~ /^c/) )
+	{
+		$cols[0] = "chr".$cols[0] ;
+	}
+	elsif ( $hasChrPrefix == 0 && $cols[0] =~ /^c/ )
+	{
+		$cols[0] = substr( $cols[0], 3 ) ;
 	}
 	push @range, $cols[0], $cols[3], $cols[4] ;			
 }
