@@ -208,11 +208,12 @@ public:
 			for ( j = len - 1 ; j >= i + kmerLength - 1 ; --j )
 			{
 				if ( qual[j] - 32 <= 15 )	
+				{
 					++badCnt ;
-				if ( badCnt >= 0.1 * ( len - j ) )
-					trimStart = j ;
+					if ( badCnt >= 0.1 * ( len - j ) )
+						trimStart = j ;
+				}
 			}
-
 			if ( trimStart > 0 )
 			{
 				k = trimStart - kmerLength + 1 ;

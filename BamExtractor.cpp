@@ -617,14 +617,19 @@ int main( int argc, char *argv[] )
 			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
 			{
-				// reads from bad chromosomes.
-				std::string name( alignments.GetReadId() ) ;
-				TrimName( name ) ;	
-
-				if ( candidates.find( name ) == candidates.end() )
+				// reads from alternative chromosomes.
+				alignments.GetReadSeq( buffer ) ;
+				alignments.GetQual( bufferQual ) ;
+				if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
 				{
-					candidates[name].mate1 = NULL ;
-					candidates[name].mate2 = NULL ;
+					std::string name( alignments.GetReadId() ) ;
+					TrimName( name ) ;	
+
+					if ( candidates.find( name ) == candidates.end() )
+					{
+						candidates[name].mate1 = NULL ;
+						candidates[name].mate2 = NULL ;
+					}
 				}
 			}
 			else 
@@ -632,12 +637,24 @@ int main( int argc, char *argv[] )
 				// single-end
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
-				if ( threadCnt == 1 )
+				if ( threadCnt == 1 ||  alignments.IsAligned() ) 
 				{
+					// If a read is from alternative chromosome, it could be multiple aligned,
+					// so we need to check and mark the read id usage.
+					std::string name ;
+					if ( alignments.IsAligned() )
+					{
+						name = std::string( alignments.GetReadId() ) ;
+						if ( usedName.find( name ) != usedName.end() )
+							continue ;
+						
+					}
 					if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
 					{
 						//alignments.GetReadSeq( buffer ) ;
 						// No need to trim read id for single-end data.
+						if ( alignments.IsAligned() )
+							usedName[ name ] = 1 ;
 						OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 					}
 				}

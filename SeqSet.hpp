@@ -5248,7 +5248,7 @@ public:
 					anchorType = 3 ;
 				}
 				//printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
-				if ( bestMatchCnt / (double)bestHitLen >= 0.9 )
+				if ( bestMatchCnt / (double)bestHitLen >= 0.9 && bestHitLen > 9 )
 				{
 					int size = bestTags.Size() ;
 					bool start = false ;
@@ -5330,7 +5330,7 @@ public:
 					anchorSeqIdx = geneOverlap[3].seqIdx ;	
 					anchorType = 3 ;
 				}
-				if ( bestMatchCnt / (double)bestHitLen >= 0.9 )
+				if ( bestMatchCnt / (double)bestHitLen >= 0.9 && bestHitLen > 9 )
 				{
 					int size = bestTags.Size() ;
 					bool start = false ;

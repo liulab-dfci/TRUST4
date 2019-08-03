@@ -586,7 +586,7 @@ int main( int argc, char *argv[] )
 					if ( geneOverlap[l].seqIdx == -1 )
 						continue ;
 					
-					if ( geneOverlap[j].readEnd - 10 > geneOverlap[l].readStart )
+					if ( geneOverlap[j].readEnd - 10 > geneOverlap[l].readStart ) 
 					{
 						filter = true ;	
 						break ;
@@ -608,7 +608,6 @@ int main( int argc, char *argv[] )
 				//}
 				
 			}
-
 			/*for ( j = 0 ; j < 4 ; ++j )
 				printf( "%d ", geneOverlap[j].seqIdx ) ;
 			printf( "\n" ) ;*/
@@ -644,6 +643,9 @@ int main( int argc, char *argv[] )
 					//	similarityThreshold = 0.9 ;
 					similarityThreshold = 0.95 ;
 				}
+				
+				if ( name[0] == 'T' && similarityThreshold < 0.95 ) // TCR
+					similarityThreshold = 0.95 ;
 
 				//if ( similarityThreshold > 0.9 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
 				//	&& geneOverlap[0].readEnd < geneOverlap[2].readStart )
