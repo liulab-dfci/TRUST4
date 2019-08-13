@@ -401,6 +401,8 @@ private:
 	{
 		if ( a == 'N' || b == 'N' || c == 'N' )
 			return '-' ;
+		if ( a == 'M' || b == 'M' || c == 'M' )
+			return '-' ;
 
 		if ( a == 'A' )
 		{
@@ -1921,7 +1923,7 @@ public:
 	}
 
 	// Input some baseline sequence to match against.
-	void InputRefFa( char *filename ) 
+	void InputRefFa( char *filename, bool isIMGT = false ) 
 	{
 		int i, j, k ;
 		ReadFiles fa ;
@@ -1961,7 +1963,7 @@ public:
 			sw.consensus[k] = '\0' ;
 
 			// Use IMGT documented coordinate to infer CDR1,2,3 coordinate.
-			if ( GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
+			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
 			{	
 				// Infer the coordinate for CDR1
 				for ( i = 0, k = 0 ; i < 3 * ( 27 - 1 ) ; ++i )
@@ -1993,7 +1995,7 @@ public:
 				else
 					sw.info[2].a = sw.info[2].b = -1 ;
 			}
-			else if ( GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
+			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
 			{
 				bool found = false ;
 				for ( i = 0 ; i + 11 < seqLen ; ++i )
@@ -4581,6 +4583,29 @@ public:
 							geneOverlap[0].seqEnd < seqs[ geneOverlap[0].seqIdx ].consensusLen - 31 )
 							s = e - 18 ;
 					}
+					
+					int far = false ;
+					for ( i = s ; i <= e ; ++i )
+						if ( read[i] == 'M' )
+							far = true ;
+					if ( far )
+					{
+						s = e - 18 ;
+						if ( s < 0 )
+							s = e % 3 ;
+						for ( i = e ; i >= s ; i -= 3 )
+							if ( read[i] == 'M' )
+							{
+								s = i + 3 ;
+								break ;
+							}
+						if ( s >= e )
+						{
+							s = 0 ;
+							e = len ;
+							boundS = 1 ;
+						}
+					}
 				}
 				else
 				{
@@ -4672,7 +4697,24 @@ public:
 			
 			if ( geneOverlap[2].seqIdx != -1 && boundE > geneOverlap[2].readEnd )
 				boundE = geneOverlap[2].readEnd ;
-				
+			if ( geneOverlap[0].seqIdx == -1 && s > boundS )
+			{	
+				for ( i = s ; i >= boundS ; --i )
+					if ( read[i] == 'M' )
+					{
+						boundS = i + 1 ;
+						break ;
+					}
+			}
+			if ( geneOverlap[2].seqIdx == -1 && e < boundE - 1 )
+			{
+				for ( i = e ; i < boundE ; ++i )
+					if ( read[i] == 'M' )
+					{
+						boundE = i ;
+						break ;
+					}
+			}
 
 			int locateS = -1 ;
 			int locateE = -1 ;
@@ -4727,9 +4769,9 @@ public:
 							extendS = i + dest - j + 5 ; 
 						}
 					}
+
 				}
 			}
-			
 			// The YYC motif on V gene, mentioned in TRUST3 paper, but seems not mentioned in IMGT Junction Analysis.
 			if ( locateS == -1 )
 			{
@@ -4950,7 +4992,6 @@ public:
 						delete[] align ;
 					}
 				}
-
 				if ( locateS != -1 )
 					adjustE = e - ( e - locateS ) % 3 ;
 				if ( locateE == -1 )
@@ -5063,10 +5104,12 @@ public:
 						}
 					}
 
-					if ( locateE == -1 && geneOverlap[2].seqIdx != -1 )
+					if ( locateE == -1 ) //&& geneOverlap[2].seqIdx != -1 )
 					{
 						for ( i = adjustE ; i < boundE ; i += 3 )
 						{
+							if ( i + 5 < boundE )
+								continue ;
 							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' )
 							{
 								//printf( "%c%c%c=>%c\n", read[i], read[i + 1], read[i + 2],
@@ -5078,10 +5121,12 @@ public:
 							}
 						}
 					}
-					if ( locateE == -1 && geneOverlap[2].seqIdx != -1 )
+					if ( locateE == -1 ) //&& geneOverlap[2].seqIdx != -1 )
 					{
-						for ( i = e ; i < boundE ; i += 3 )
+						for ( i = adjustE ; i < boundE ; i += 3 )
 						{
+							if ( i + 5 < boundE )
+								continue ;
 							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )
 							{
 								locateE = i ;
@@ -5132,7 +5177,6 @@ public:
 			{
 				locateS = locateE = -1 ;
 			}
-			
 			// Partial CDR3s
 			if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
 				&& locateE + 11 < len && locateE > 15 && locateE <= 60 ) 
@@ -5202,6 +5246,7 @@ public:
 				// So far, just ignore indel.
 				int bestMatchCnt = 0 ;
 				int bestHitLen = 0 ;
+				int readStart = 0 ;
 				SimpleVector<int> bestTags ;
 				int seqCnt = seqs.size() ; 
 				for ( i = 0 ; i < seqCnt ; ++i )
@@ -5211,19 +5256,26 @@ public:
 		
 					int matchCnt = 0 ;
 					int hitLen = 0 ;
+					int readStart = 0 ;
 					for ( k = locateS - 1, j = seqs[i].info[2].a - 1 ; k >= 0 && j >=0 ; --k, --j )
 					{
+						if ( read[k] == 'M' )
+							break ;
 						if ( seqs[i].consensus[j] == read[k] )
 							++matchCnt ;
+						++hitLen ;
 					}
+					readStart = k + 1 ;
+
 					// The other end, just extend to a mismatch point.
 					for ( k = locateS, j = seqs[i].info[2].a ; k < len && j < seqs[i].consensusLen ; ++k, ++j )
 					{
 						if ( seqs[i].consensus[j] != read[k] )
 							break ;
 						++matchCnt ;
+						++hitLen ;
 					}
-					hitLen = k ;
+					
 					if ( matchCnt > bestMatchCnt )
 					{
 						bestMatchCnt = matchCnt ;
@@ -5256,8 +5308,8 @@ public:
 					{
 						struct _overlap no ;
 						no.seqIdx = bestTags[i] ;
-						no.readStart = 0 ;
-						no.readEnd = bestHitLen - 1 ;
+						no.readStart = readStart ;
+						no.readEnd = readStart + bestHitLen - 1 ;
 						no.seqStart = seqs[ bestTags[i] ].info[2].a - locateS ;
 						no.seqEnd = no.seqStart + bestHitLen - 1 ;
 						no.matchCnt = 2 * bestMatchCnt ;
@@ -5279,83 +5331,100 @@ public:
 			}
 			
 			// For J gene
-			int distToEnd = len - locateE - 1 ;
-			if ( locateE != -1 && distToEnd <= 18 && geneOverlap[2].seqIdx == -1 )
+			if ( locateE != - 1 )
 			{
-				// So far, just ignore indel.
-				int bestMatchCnt = 0 ;
-				SimpleVector<int> bestTags ;
-				int seqCnt = seqs.size() ;
-				int bestHitLen ;
-				for ( i = 0 ; i < seqCnt ; ++i )
+				int distToEnd = len - locateE - 1 ;
+				for ( i = locateE ; i < len ; ++i )
 				{
-					if ( GetGeneType( seqs[i].name ) != 2 || seqs[i].info[2].a == -1 )
-						continue ;
-
-					int matchCnt = 0 ;
-					int hitLen ;
-					for ( k = locateE + 1, j = seqs[i].info[2].a + 1 ; k < len && j < seqs[i].consensusLen ; ++k, ++j )
+					if ( read[i] == 'M' )
 					{
-						if ( seqs[i].consensus[j] == read[k] )
+						distToEnd = i - locateE - 1 ;
+						break ;
+					}
+				}
+				if ( distToEnd <= 18 && geneOverlap[2].seqIdx == -1 )
+				{
+					// So far, just ignore indel.
+					int bestMatchCnt = 0 ;
+					SimpleVector<int> bestTags ;
+					int seqCnt = seqs.size() ;
+					int bestHitLen ;
+					int readEnd = 0 ;
+					for ( i = 0 ; i < seqCnt ; ++i )
+					{
+						if ( GetGeneType( seqs[i].name ) != 2 || seqs[i].info[2].a == -1 )
+							continue ;
+
+						int matchCnt = 0 ;
+						int hitLen = 0 ;
+						for ( k = locateE + 1, j = seqs[i].info[2].a + 1 ; k < len && j < seqs[i].consensusLen ; ++k, ++j )
+						{
+							if ( read[k] == 'M' )
+								break ;
+							if ( seqs[i].consensus[j] == read[k] )
+								++matchCnt ;
+							++hitLen ;
+						}
+						readEnd = k - 1 ;
+						for ( k = locateE, j = seqs[i].info[2].a ; k >= 0 && j >= 0 ; --k, --j )
+						{
+							if ( seqs[i].consensus[j] != read[k] )
+								break ;
 							++matchCnt ;
+							++hitLen ;
+						}
+						
+						//printf( "%s %d %lf\n", seqs[i].name, matchCnt, (double)matchCnt / hitLen ) ;
+						if ( matchCnt > bestMatchCnt )
+						{
+							bestMatchCnt = matchCnt ;
+							bestHitLen = hitLen ;
+							bestTags.Clear() ;
+							bestTags.PushBack( i ) ;
+						}
+						else if ( matchCnt == bestMatchCnt )
+							bestTags.PushBack( i ) ;
 					}
-					for ( k = locateE, j = seqs[i].info[2].a ; k >= 0 && j >= 0 ; --k, --j )
-					{
-						if ( seqs[i].consensus[j] != read[k] )
-							break ;
-						++matchCnt ;
-					}
-					hitLen = len - k - 1 ;
 
-					if ( matchCnt > bestMatchCnt )
+					int anchorSeqIdx = -1 ;
+					int anchorType = -1 ;
+					if ( geneOverlap[0].seqIdx != -1 )
 					{
-						bestMatchCnt = matchCnt ;
-						bestHitLen = hitLen ;
-						bestTags.Clear() ;
-						bestTags.PushBack( i ) ;
+						anchorSeqIdx = geneOverlap[0].seqIdx ;
+						anchorType = 0 ;
 					}
-					else if ( matchCnt == bestMatchCnt )
-						bestTags.PushBack( i ) ;
-				}
-				
-				int anchorSeqIdx = -1 ;
-				int anchorType = -1 ;
-				if ( geneOverlap[0].seqIdx != -1 )
-				{
-					anchorSeqIdx = geneOverlap[0].seqIdx ;
-					anchorType = 0 ;
-				}
-				else if ( geneOverlap[3].seqIdx != -1 )
-				{
-					anchorSeqIdx = geneOverlap[3].seqIdx ;	
-					anchorType = 3 ;
-				}
-				if ( bestMatchCnt / (double)bestHitLen >= 0.9 && bestHitLen > 9 )
-				{
-					int size = bestTags.Size() ;
-					bool start = false ;
-					for ( i = 0 ; i < size ; ++i )
+					else if ( geneOverlap[3].seqIdx != -1 )
 					{
-						struct _overlap no ;
-						no.seqIdx = bestTags[i] ;
-						no.readStart = len - bestHitLen ;
-						no.readEnd = len - 1 ;
-						no.seqEnd = seqs[ bestTags[i] ].info[2].a + distToEnd ;
-						no.seqStart = no.seqEnd - bestHitLen + 1 ;
-						no.matchCnt = 2 * bestMatchCnt ;
-						no.similarity = bestMatchCnt / (double)bestHitLen ;
-						if ( anchorSeqIdx != -1 )
+						anchorSeqIdx = geneOverlap[3].seqIdx ;	
+						anchorType = 3 ;
+					}
+					if ( bestMatchCnt / (double)bestHitLen >= 0.9 && bestHitLen > 9 )
+					{
+						int size = bestTags.Size() ;
+						bool start = false ;
+						for ( i = 0 ; i < size ; ++i )
 						{
-							if ( ( anchorType == 0 && no.readStart < geneOverlap[ anchorType ].readEnd ) 
-								|| !IsSameChainType( seqs[ no.seqIdx ].name, seqs[ anchorSeqIdx ].name ) )
-								continue ;
+							struct _overlap no ;
+							no.seqIdx = bestTags[i] ;
+							no.readStart = readEnd - bestHitLen + 1 ;
+							no.readEnd = readEnd ;
+							no.seqEnd = seqs[ bestTags[i] ].info[2].a + distToEnd ;
+							no.seqStart = no.seqEnd - bestHitLen + 1 ;
+							no.matchCnt = 2 * bestMatchCnt ;
+							no.similarity = bestMatchCnt / (double)bestHitLen ;
+							if ( anchorSeqIdx != -1 )
+							{
+								if ( ( anchorType == 0 && no.readStart < geneOverlap[ anchorType ].readEnd ) 
+										|| !IsSameChainType( seqs[ no.seqIdx ].name, seqs[ anchorSeqIdx ].name ) )
+									continue ;
+							}
+							if ( !start )
+							{
+								geneOverlap[2] = no ;
+								start = true ;
+							}
+							allOverlaps.push_back( no ) ;
 						}
-						if ( !start )
-						{
-							geneOverlap[2] = no ;
-							start = true ;
-						}
-						allOverlaps.push_back( no ) ;
 					}
 				}
 			}
@@ -5364,7 +5433,7 @@ public:
 			{
 				s = locateS ;
 				e = locateE + 2 ;
-
+				
 				/*cdr3 = new char[e - s + 2  + 1 ] ;
 				memcpy( cdr3, read + s, e - s + 1 ) ;
 				cdr3[e - s + 1] = '\0' ;*/
@@ -5377,27 +5446,58 @@ public:
 				int rightCnt = 0 ;
 
 				// Use the anchor motif to score the cdr
-				if ( locateS - 6 > 0 )
-					if ( DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
-					{
-						cdr3Score += 100.0 / 6 ;
-						++leftCnt ;
-					}
-				if ( locateS - 3 > 0 )
-					if ( DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y' )
-					{
-						cdr3Score += 100.0 / 6 ;
-						++leftCnt ;
-					}
-
-				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' )
+				if ( geneOverlap[0].seqIdx != -1 && seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 )
 				{
-					cdr3Score += 100.0 / 6 ;
-					++leftCnt ;
+					// Because the YYC motif is not always true on V gene, 
+					// use the sequence from reference to test
+					char *ref = seqs[ geneOverlap[0].seqIdx ].consensus ;
+					int offset = seqs[ geneOverlap[0].seqIdx ].info[2].a ;
+					if ( locateS - 6 > 0 )
+						if ( DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) 
+							== DnaToAa( ref[offset - 6], ref[ offset - 5], ref[ offset - 4 ] )  )
+						{
+							cdr3Score += 100.0 / 6 ;
+							++leftCnt ;
+						}
+					if ( locateS - 3 > 0 )
+						if ( DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) 
+							== DnaToAa( ref[offset - 3], ref[ offset - 2], ref[ offset - 1 ] )  )
+						{
+							cdr3Score += 100.0 / 6 ;
+							++leftCnt ;
+						}
+					if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2] ) 
+							== DnaToAa( ref[offset], ref[ offset + 1], ref[ offset + 2 ] )  )
+					{
+						cdr3Score += 100.0 / 6 ;
+						++leftCnt ;
+					}
+						
+				}
+				else
+				{
+					if ( locateS - 6 > 0 )
+						if ( DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+						{
+							cdr3Score += 100.0 / 6 ;
+							++leftCnt ;
+						}
+					if ( locateS - 3 > 0 )
+						if ( DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y' )
+						{
+							cdr3Score += 100.0 / 6 ;
+							++leftCnt ;
+						}
+
+					if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' )
+					{
+						cdr3Score += 100.0 / 6 ;
+						++leftCnt ;
+					}
 				}
 
 				if ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
-					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+						DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
 				{
 					cdr3Score += 100.0 / 6 ;
 					++rightCnt ;
@@ -5415,10 +5515,22 @@ public:
 						cdr3Score += 100.0 / 6 ;
 						++rightCnt ;
 					}
-
 				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
 						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
 					cdr3Score = 0 ;
+				else if ( s < 0 )  
+				{
+					// The CDR3 anchor based on alignment of V,J genes could create some boundary cases when indel. 
+					s = e % 3 ;
+					cdr[2].readStart = s ;
+					cdr3Score = 0 ;
+				}
+				else if ( e >= len )
+				{
+					e = len - 1 - ( len - s ) % 3 ; 
+					cdr[2].readEnd = e ;
+					cdr3Score = 0 ;
+				}
 				else if ( e + 6 >= len && !( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 				                          	DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
 					cdr3Score = 0 ;
@@ -5446,7 +5558,6 @@ public:
 					if ( i < 0 || e + 50 <= contigs[i].b )
 						cdr3Score = 0 ;
 				}
-				
 				// Now consider whether the gaps could create some false positive score CDR3.
 				int nCnt = 0 ;
 				for ( i = s ; i <= e ; ++i )
@@ -5470,22 +5581,57 @@ public:
 				{
 					for ( i = 1 ; i < contigCnt ; ++i )
 					{
-						if ( s >= contigs[i].a && s < contigs[i].a + 18 
+						/*if ( s >= contigs[i].a && s < contigs[i].a + 18 
 							&& geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
 							&& DnaToAa( read[s], read[s + 1], read[s + 2] ) != 'C' )
 						{
 							cdr3Score = 0 ;
 							break ;
-						}	
+						}
+						else if ( s >= contigs[i].a && s >= contigs[i].a + 18 && s <= contigs[i].b 
+							&& geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
+							&& leftCnt < 3 )
+						{
+							cdr3Score = 0 ;
+							break ;
+						}*/
+
+						if ( s >= contigs[i].a && s <= contigs[i].b )
+						{
+							if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
+								&& leftCnt < 3 )
+							{
+								cdr3Score = 0 ;
+								break ;
+							}
+							break ;
+						}
 					}
-					for ( i = contigCnt - 1 ; i > 0 ; --i )
+					for ( i = contigCnt - 2 ; i > 0 ; --i )
 					{
-						if ( e <= contigs[i].b && e > contigs[i].b - 18 
+						/*if ( e <= contigs[i].b && e > contigs[i].b - 18 
 								&& geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart >= contigs[i + 1].a 
 								&& DnaToAa( read[e - 2], read[e - 1], read[e] ) != 'W' &&
 								  DnaToAa( read[e - 2], read[e - 1], read[e] ) != 'F' )
 						{
-							cdr3Score =0  ;
+							cdr3Score = 0 ;
+							break ;
+						}
+						else if ( e <= contigs[i].b && e > contigs[i].b - 18 && e >= contigs[i].a  
+								&& geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart >= contigs[i + 1].a
+								&& rightCnt < 3 ) 
+						{
+							cdr3Score = 0 ;
+							break ;
+						}*/
+						if ( e >= contigs[i].a && e <= contigs[i].b )
+						{
+							if ( geneOverlap[2].seqIdx != -1 && geneOverlap[2].readEnd >= contigs[i + 1].a 
+								&& rightCnt < 3 )
+							{
+								cdr3Score = 0 ;
+								break ;
+							}
 							break ;
 						}
 					}
@@ -6827,7 +6973,93 @@ public:
 				}
 			}
 		}
-		
+
+		// For gapped extension, they might have short overlap.
+		SimpleVector<struct _pair> shortOverlapSeqIdx ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int minOverlap = 10 ;
+			if ( matePrevNextType[i].a == 2 )
+			{
+				int offset = -1 ;
+				int bestMatchCnt = -1 ;
+				int prevSeqIdx = prevAdj[i][ matePrevNext[i].a ].seqIdx ;
+				int overlapSize = AlignAlgo::IsMateOverlap( seqs[prevSeqIdx].consensus, seqs[ prevSeqIdx ].consensusLen, 
+							seqs[i].consensus, seqs[i].consensusLen, 
+							minOverlap, offset, bestMatchCnt, true ) ;
+				if ( overlapSize >= 0 )
+				{
+					matePrevNextType[i].a = 1 ;
+					extensionType[i].a = 2 ;
+
+					// Add that information to the branch graph.
+					struct _overlap o ;
+					o.readStart = 0 ;
+					o.readEnd = overlapSize - 1 ; 
+					o.seqIdx = prevSeqIdx ;
+					o.seqStart = offset ;
+					o.seqEnd = seqs[ prevSeqIdx ].consensusLen - 1 ;
+					o.matchCnt = 2 * bestMatchCnt ;
+					o.similarity = (double)bestMatchCnt / overlapSize ;  
+					branchAdj[i].push_back( o ) ;
+					
+					struct _pair np ;
+					np.a = i ;
+					np.b = -1 ;
+					shortOverlapSeqIdx.PushBack( np ) ;
+				}
+
+			}
+			if ( matePrevNextType[i].b == 2 )	
+			{
+				int offset = -1 ;
+				int bestMatchCnt = -1 ;
+				int nextSeqIdx = nextAdj[i][ matePrevNext[ i ].b ].seqIdx ;
+				int overlapSize = AlignAlgo::IsMateOverlap( seqs[i].consensus, seqs[i].consensusLen, 
+						seqs[ nextSeqIdx ].consensus, seqs[nextSeqIdx ].consensusLen,               
+						minOverlap, offset, bestMatchCnt, true );
+				if ( overlapSize >= 0 ) 
+				{
+					matePrevNextType[i].b = 1 ;
+					extensionType[i].b = 2 ;
+					
+					// Add that information to the branch graph.
+					struct _overlap o ;
+					o.readStart = offset ;
+					o.readEnd = seqs[i].consensusLen - 1 ;
+					o.seqIdx = nextSeqIdx ;
+					o.seqStart = 0 ;
+					o.seqEnd = overlapSize - 1  ;
+					o.matchCnt = 2 * bestMatchCnt ;
+					o.similarity = (double)bestMatchCnt /  overlapSize ;
+					branchAdj[i].push_back( o ) ;
+					
+					struct _pair np ;
+					np.a = i ;
+					np.b = 1 ;
+					shortOverlapSeqIdx.PushBack( np ) ;
+				}
+			}
+		}
+		// Recompute extensionType for those small overlap seqs
+		k = shortOverlapSeqIdx.Size() ;
+		for ( i = 0 ; i < k ; ++i )
+		{
+			int seqIdx = shortOverlapSeqIdx[i].a ;
+			struct _overlap extend ;
+			if ( shortOverlapSeqIdx[i].b == -1 )
+			{
+				int prevTag = matePrevNext[ seqIdx ].a ;
+				extensionType[ seqIdx ].a = GetExtendSeqCoord( seqIdx, prevAdj[ seqIdx ][ prevTag ], -1, 
+					branchAdj, false, extend ) ;
+			}
+			else
+			{
+				int nextTag = matePrevNext[ seqIdx ].b ; 
+				extensionType[ seqIdx ].b = GetExtendSeqCoord( seqIdx, nextAdj[ seqIdx ][ nextTag ], 1, 
+					branchAdj, false, extend ) ;
+			}
+		}
 		
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -7008,9 +7240,13 @@ public:
 					GetExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, branchAdj, aggressive, rightExtend ) ;
 				}
 				if ( matePrevNextType[ chain[j] ].a == 2 )
+				{
 					GetGapExtendSeqCoord( chain[j], prevAdj[ chain[j] ][ prevTag ], -1 ,leftExtend ) ;
+				}
 				if ( matePrevNextType[ chain[j] ].b == 2 )
+				{
 					GetGapExtendSeqCoord( chain[j], nextAdj[ chain[j] ][ nextTag ], 1, rightExtend ) ;
+				}
 				
 				if ( j == 0 )
 				{

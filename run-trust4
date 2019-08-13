@@ -169,7 +169,7 @@ system_call( "$WD/trust4 $mainArgs" ) ;
 # Annotation 
 if ( $vdjcRef eq "" )
 {
-	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix > ${prefix}_annot.out" ) ;
+	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix --notIMGT > ${prefix}_annot.out" ) ;
 }
 else
 {

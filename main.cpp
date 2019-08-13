@@ -165,6 +165,7 @@ int main( int argc, char *argv[] )
 	ReadFiles mateReads ;
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
+	int firstReadLen = 0 ;
 	bool flagNoTrim = false ;
 	bool hasMate = false ;
 	int constantGeneEnd = 200 ;
@@ -265,6 +266,11 @@ int main( int argc, char *argv[] )
 		else if ( !countMyself && i % 1000000 == 0 )
 			PrintLog( "Read in %d reads.", i ) ;
 		
+		if ( firstReadLen == -1 )
+		{
+			firstReadLen = strlen( reads.seq ) ;
+		}
+
 		struct _sortRead mateR ;
 		mateR.read = NULL ;
 		if ( mateReads.Next() )
@@ -543,6 +549,14 @@ int main( int argc, char *argv[] )
 			assembledReadIdx.push_back( i ) ;
 		readCnt = 0 ;
 	}*/
+	
+	if ( firstReadLen / 2 < 31 )
+	{
+		int l = firstReadLen / 2 ;
+		if ( l < 21 )
+			l = 21 ;
+		seqSet.SetHitLenRequired( l ) ;
+	}
 
 	for ( i = 0 ; i < readCnt ; ++i )
 	{

@@ -18,7 +18,9 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"Optional:\n"
 		"\t--fasta: the assembly file is in fasta format (default: false)\n"
 		"\t-t INT: number of threads (default: 1)\n"
-		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n" ;
+		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
+		//"\t--partial: including partial CDR3s in the report (default: false)\n"
+		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: false(in IMGT format))\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -35,6 +37,8 @@ static const char *short_options = "f:a:r:p:o:t:" ;
 static struct option long_options[] = {
 			{ "fasta", no_argument, 0, 10000 },
 			{ "radius", required_argument, 0, 10001 },
+			{ "partial",no_argument, 0, 10002 },
+			{ "notIMGT", no_argument, 0, 10003 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -295,6 +299,8 @@ int main( int argc, char *argv[] )
 	char outputPrefix[1024] = "trust" ;
 	FILE *fpReads = NULL ;
 	int threadCnt = 1 ;
+	bool includePartial = true ;
+	bool isIMGT = true ;
 
 	while ( 1 )
 	{
@@ -305,7 +311,8 @@ int main( int argc, char *argv[] )
 		
 		if ( c == 'f' )
 		{
-			refSet.InputRefFa( optarg ) ;
+			//refSet.InputRefFa( optarg ) ;
+			strcpy( buffer, optarg ) ;
 		}
 		else if ( c == 'a' )
 		{
@@ -331,12 +338,22 @@ int main( int argc, char *argv[] )
 		{
 			radius = atoi( optarg ) ;
 		}
+		else if ( c == 10002 )
+		{
+			includePartial = true ;	
+		}
+		else if ( c == 10003 )
+		{
+			isIMGT = false ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
 			return EXIT_FAILURE ;
 		}
 	}
+
+	refSet.InputRefFa( buffer, isIMGT ) ;
 
 	if ( refSet.Size() == 0 )
 	{
@@ -688,6 +705,9 @@ int main( int argc, char *argv[] )
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( annotations[i].cdr[2].seqIdx == -1 )
+				continue ;
+
+			if ( !includePartial && annotations[i].cdr[2].similarity == 0 )
 				continue ;
 
 			std::vector<struct _CDR3info> &info = cdr3Infos[i] ;
