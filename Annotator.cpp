@@ -20,7 +20,8 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
 		//"\t--partial: including partial CDR3s in the report (default: false)\n"
-		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: false(in IMGT format))\n";
+		"\t--noImputation: do not imputate CDR3 sequence for TCR (default: not set (impute))"
+		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -39,6 +40,7 @@ static struct option long_options[] = {
 			{ "radius", required_argument, 0, 10001 },
 			{ "partial",no_argument, 0, 10002 },
 			{ "notIMGT", no_argument, 0, 10003 },
+			{ "noImputation", no_argument, 0, 10004 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -277,6 +279,7 @@ void *AssignReads_Thread( void *pArg )
 	pthread_exit( NULL ) ;
 }
 
+
 int main( int argc, char *argv[] )
 {
 	int i, j, k ;
@@ -301,6 +304,7 @@ int main( int argc, char *argv[] )
 	int threadCnt = 1 ;
 	bool includePartial = true ;
 	bool isIMGT = true ;
+	bool impute = true ;
 
 	while ( 1 )
 	{
@@ -345,6 +349,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10003 )
 		{
 			isIMGT = false ;
+		}
+		else if ( c == 10004 )
+		{
+			impute = false ;
 		}
 		else
 		{
@@ -699,6 +707,7 @@ int main( int argc, char *argv[] )
 
 			i = j ;
 		}
+
 		// Output different CDR3s from each main assembly.
 		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;
 		FILE *fpOutput = fopen( buffer, "w" ) ;

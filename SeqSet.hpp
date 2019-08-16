@@ -3966,6 +3966,17 @@ public:
 		else
 			return false ;
 	}
+
+	int GetContigIntervals( char *read, SimpleVector<struct _pair> &contigs )
+	{
+	}
+
+
+	int ImputeCDR3`( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3] )
+	{
+		if ( cdr[2].similarity == 0 )
+			return 1 ;
+	}
 	
 	// Figure out the gene composition for the read. 
 	// Return successful or not.
@@ -5601,7 +5612,34 @@ public:
 							if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
 								&& leftCnt < 3 )
 							{
-								cdr3Score = 0 ;
+								// Check whether it matches the sequence of the V gene.
+								int matchCnt = 0 ;
+								int hitLen = 0 ;
+								int seqIdx = geneOverlap[0].seqIdx ;
+								if ( seqs[ seqIdx ].info[2].a != -1 )
+								{
+									for ( j = s, k =  seqs[ seqIdx ].info[2].a ; 
+										j >= 0 && k >= 0 ; --j, --k ) 
+									{
+										if ( read[j] == 'M' )
+											break ;
+
+										if ( read[j] == seqs[ seqIdx ].consensus[k] )
+											++matchCnt ;
+										++hitLen ;
+									}
+									for ( j = s + 1, k =  seqs[ seqIdx ].info[2].a + 1 ; 
+										read[j] && seqs[ seqIdx ].consensus[k] ; ++j, ++k )
+									{
+										if ( read[j] != seqs[seqIdx].consensus[k] )
+											break ;
+										++matchCnt ;
+										++hitLen ;
+									}
+								}
+								// hitLen by default is 0.
+								if ( hitLen <= 9 || (double)matchCnt / hitLen < 0.9 )
+									cdr3Score = 0 ;
 								break ;
 							}
 							break ;
@@ -5629,7 +5667,33 @@ public:
 							if ( geneOverlap[2].seqIdx != -1 && geneOverlap[2].readEnd >= contigs[i + 1].a 
 								&& rightCnt < 3 )
 							{
-								cdr3Score = 0 ;
+								int matchCnt = 0 ;
+								int hitLen = 0 ;
+								int seqIdx = geneOverlap[2].seqIdx ;
+								if ( seqs[ seqIdx ].info[2].a != -1 )
+								{
+									for ( j = s, k = seqs[ seqIdx ].info[2].a ; j >= 0 && k >= 0 ; --j, --k ) 
+									{
+										if ( read[j] != seqs[seqIdx].consensus[k] )
+											break ;
+										++matchCnt ;
+										++hitLen ;
+									}
+									
+									for ( j = s + 1, k = seqs[ seqIdx ].info[2].a + 1 ; 
+										read[j] && seqs[ seqIdx ].consensus[k] ; ++j, ++k )
+									{
+										if ( read[j] == 'M' )
+											break ;
+
+										if ( read[j] == seqs[ seqIdx ].consensus[k] )
+											++matchCnt ;
+										++hitLen ;
+
+									}
+								}
+								if ( hitLen <= 9 || (double)matchCnt / hitLen < 0.9 )
+									cdr3Score = 0 ;
 								break ;
 							}
 							break ;

@@ -18,8 +18,12 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used)\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t-t INT: number of threads (default: 1)\n".
+    "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
+    "\t\t0: start from beginning (candidate read extraction)\n".
+    "\t\t1: start from assembly\n".
+    "\t\t2: start from annotation\n". 
     #"\t--jellyfish: use jellyfish2 to count the kmers. (default: not used)\n"
-    ""
+    "" 
 	if ( @ARGV == 0 ) ;
 
 sub system_call
@@ -52,7 +56,7 @@ my $vdjcFasta = "" ;
 my $vdjcRef = "" ;
 my $mainArgs = "" ;
 my $threadCnt = 1 ;
-
+my $stage = 0 ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 
@@ -108,6 +112,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$useJellyfish = 1 ;
 	}
+	elsif ( $ARGV[$i] eq "--stage" )
+	{
+		$stage = $ARGV[$i + 1] ;
+		++$i ;
+	}
 }
 
 if ( @bamFiles == 0 && @firstMateFiles == 0 && @singleFiles == 0 )
@@ -145,35 +154,44 @@ if ( $prefix eq "" )
 }
 
 # Extract the file
-if ( @bamFiles > 0 )
+if ( $stage <= 0 )
 {
-	system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+	if ( @bamFiles > 0 )
+	{
+		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
 
-	# determine paired-end or single-end
-	if ( -e $prefix."_toassemble_1.fq" )
-	{
-		push @firstMateFiles, $prefix."_toassemble_1.fq" ;
-		push @secondMateFiles, $prefix."_toassemble_2.fq" ;
-		$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
-	}
-	else
-	{
-		push @singleFiles, "${prefix}_toassemble.fq" ;
-		$mainArgs .= " -u ${prefix}_toassemble.fq" ;
+		# determine paired-end or single-end
+		if ( -e $prefix."_toassemble_1.fq" )
+		{
+			push @firstMateFiles, $prefix."_toassemble_1.fq" ;
+			push @secondMateFiles, $prefix."_toassemble_2.fq" ;
+			$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
+		}
+		else
+		{
+			push @singleFiles, "${prefix}_toassemble.fq" ;
+			$mainArgs .= " -u ${prefix}_toassemble.fq" ;
+		}
 	}
 }
 
 # Run the assembly 
-system_call( "$WD/trust4 $mainArgs" ) ;
+if ( $stage <= 1 )
+{
+	system_call( "$WD/trust4 $mainArgs" ) ;
+}
 
 # Annotation 
-if ( $vdjcRef eq "" )
+if ( $stage <= 2 )
 {
-	system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix --notIMGT > ${prefix}_annot.out" ) ;
-}
-else
-{
-	system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix > ${prefix}_annot.out" ) ;
+	if ( $vdjcRef eq "" )
+	{
+		system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix --notIMGT > ${prefix}_annot.out" ) ;
+	}
+	else
+	{
+		system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix > ${prefix}_annot.out" ) ;
+	}
 }
 
 print STDERR "[".localtime()."] TRUST4 finishes.\n" ;
