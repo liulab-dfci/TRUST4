@@ -987,6 +987,50 @@ public:
 		
 		return overlapSize ;
 	}
+	
+
+	// Find the partial suffix of a that match with prefix of b of length at least minLen.
+	// Return: the suffix of a. otherwise -1.
+	static int LocatePartialSufPrefExactMatch( char *a, int lenA, char *b, int lenB, int minLen, int &matchLen )
+	{
+		int i, j, k ;
+		for ( k = 0 ; k + minLen - 1 < lenA ; ++k )
+		{
+			for ( i = k, j = 0 ; i < lenA && j < lenB ; ++i, ++j )
+			{
+				if ( a[i] != b[j] )
+					break ;
+			}
+			if ( j + 1 >= minLen )
+			{
+				matchLen = j + 1 ;
+				return k ;
+			}
+		}
+		matchLen = 0 ;
+		return -1 ;
+	}
+
+	// Find the partial prefix of "a" that match with suffix of b of length at least minLen.
+	// Return: the partial suffix of "a", otherwise -1.
+	static int LocatePartialSufSufExactMatch( char *a, int lenA, char *b, int lenB, int minLen, int &matchLen )
+	{
+		int i, j, k ;
+		// k indicating the end of the match.
+		for ( k = lenA - 1 ; k >= minLen ; --k )
+		{
+			for ( i = k, j = lenB - 1 ; i >= 0, j >= 0 ; --i, --j )
+				if ( a[i] != b[j] )
+					break ;
+			if ( k - i >= minLen )
+			{
+				matchLen = k - i ;
+				return i + 1 ; 
+			}
+		}
+		matchLen = 0 ;
+		return -1 ;
+	}
 } ;
 
 #endif

@@ -20,7 +20,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
 		//"\t--partial: including partial CDR3s in the report (default: false)\n"
-		"\t--noImputation: do not imputate CDR3 sequence for TCR (default: not set (impute))"
+		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -40,7 +40,7 @@ static struct option long_options[] = {
 			{ "radius", required_argument, 0, 10001 },
 			{ "partial",no_argument, 0, 10002 },
 			{ "notIMGT", no_argument, 0, 10003 },
-			{ "noImputation", no_argument, 0, 10004 },
+			{ "noImpute", no_argument, 0, 10004 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -247,6 +247,7 @@ void *AnnotateReads_Thread( void *pArg )
 	int start, end ;
 	int i ;
 	int seqCnt = arg.seqSet->Size() ;
+	char *buffer = new char[10001] ;
 	start = seqCnt / arg.threadCnt * arg.tid ;
 	end = seqCnt / arg.threadCnt * ( arg.tid + 1 ) ;
 	if ( arg.tid == arg.threadCnt - 1 )
@@ -255,7 +256,12 @@ void *AnnotateReads_Thread( void *pArg )
 	{
 		arg.refSet->AnnotateRead( arg.seqSet->GetSeqConsensus( i ), 2, arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
 			&( arg.annotations[i].secondaryGeneOverlaps ) ) ;
+		if ( arg.refSet->ImputeCDR3( arg.seqSet->GetSeqConsensus( i ), buffer, 
+			arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
+			&( arg.annotations[i].secondaryGeneOverlaps ) ) != -1 )
+			arg.seqSet->SetSeqConsensus( i, buffer ) ;
 	}
+	delete[] buffer ;
 	pthread_exit( NULL ) ;
 }
 
@@ -443,6 +449,12 @@ int main( int argc, char *argv[] )
 		{
 			refSet.AnnotateRead( seqSet.GetSeqConsensus( i ), 2, annotations[i].geneOverlap, annotations[i].cdr, 
 					&annotations[i].secondaryGeneOverlaps ) ;
+			
+			if ( refSet.ImputeCDR3( seqSet.GetSeqConsensus( i ), buffer, annotations[i].geneOverlap, annotations[i].cdr, 
+					&annotations[i].secondaryGeneOverlaps ) != -1 )
+			{
+				seqSet.SetSeqConsensus( i, buffer ) ;
+			}
 		}
 	}
 	else
@@ -495,6 +507,8 @@ int main( int argc, char *argv[] )
 		int strand, minCnt, medCnt ;
 		k = 0 ;
 		PrintLog( "Start to realign reads for CDR3 analysis." ) ;
+		seqSet.Clean( false ) ;
+
 		std::vector<struct _assignRead> cdr3Reads ; // Keep the information of the reads aligned to cdr3 region.
 		std::vector<struct _assignRead> assembledReads ;
 		int assembledReadCnt ;

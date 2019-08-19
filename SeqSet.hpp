@@ -3969,13 +3969,423 @@ public:
 
 	int GetContigIntervals( char *read, SimpleVector<struct _pair> &contigs )
 	{
+		int i, j ;
+		//sprintf( buffer, "%d", len ) ;
+		for ( i = 0 ; read[i] ; )
+		{
+			int NCnt = 0 ;
+			for ( j = i + 1 ; read[j] ; ++j )
+			{
+				//printf( "%c %d %d %d\n", read[j], i, j, NCnt ) ;
+				if ( j >= i + gapN && read[j - gapN] == 'N' )
+					--NCnt ;
+				if ( read[j] == 'N' ) 
+					++NCnt ;
+				if ( NCnt >= gapN )
+					break ;
+
+			}
+
+			struct _pair nc ; 
+			nc.a = i ;
+			if ( read[j] )
+				nc.b = j - gapN ; 
+			else
+				nc.b = j - 1 ;
+			contigs.PushBack( nc ) ;
+
+			if ( !read[j] )
+				break ;
+			i = j + 1 ;
+		}
+		return contigs.Size() ;
+	}
+	
+	void ShiftAnnotations( int at, int shift, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
+	                        std::vector<struct _overlap> *secondaryGeneOverlaps )
+	{
+		int i ;
+		for ( i = 0 ; i < 4 ; ++i )	
+		{
+			if ( geneOverlap[i].seqIdx == -1 )
+				continue ;
+
+			if ( geneOverlap[i].readStart >= at )
+				geneOverlap[i].readStart += shift ;
+			if ( geneOverlap[i].readEnd >= at )
+				geneOverlap[i].readEnd += shift ;
+		}
+
+		/*for ( i = 0 ; i < 3 ; ++i )
+		{
+			//cdr[2].readStart = cdr3NewStart ;
+			//cdr[2].readEnd = cdr3NewEnd ;
+			if ( cdr[i].readStart >= at )
+				cdr[i].readStart += shift ;
+			if ( cdr[i].readEnd >= at )
+				cdr[i].readEnd += shift ;
+		}
+		cdr[2].similarity = 0.01 ;*/
+
+		if ( secondaryGeneOverlaps != NULL )
+		{
+			std::vector<struct _overlap> &overlaps = *secondaryGeneOverlaps ;
+			int size = overlaps.size() ;
+			for ( i = 0 ; i < size ; ++i )
+			{
+				if ( overlaps[i].readStart >= at )
+					overlaps[i].readStart += shift ;
+				if ( overlaps[i].readEnd >= at )
+					overlaps[i].readEnd += shift ;
+			}
+		}
+	}
+	
+	// Impute the CDR3 by extension to the anchor case.
+	int ImputeAnchorCDR3( char *read, char *nr, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
+			std::vector<struct _overlap> *secondaryGeneOverlaps )
+	{
+		int i, j, k ;
+		// Locate the insert position
+		int insertAt = -1 ;
+		int insertLen = -1 ;
+		int seqIdx = -1 ;
+		int seqStart = -1 ;
+		int newStart = cdr[2].readStart ;
+		int newEnd = cdr[2].readEnd ;
+		
+		// Exact one of the anchor should be in the annotation
+		bool vInAnchor = false ;
+		bool jInAnchor = false ;
+		if (  seqs[ geneOverlap[0].seqIdx ].info[2].a >= geneOverlap[0].seqStart
+			&& seqs[ geneOverlap[0].seqIdx ].info[2].a + 2 <= geneOverlap[0].seqEnd ) 
+				vInAnchor = true ;
+		//if ( cdr[2].readStart >= geneOverlap[0].readStart && cdr[2].readStart <= geneOverlap[0].readEnd )
+		//	vInAnchor = true ;
+
+		if (  seqs[ geneOverlap[2].seqIdx ].info[2].a >= geneOverlap[2].seqStart
+			&& seqs[ geneOverlap[2].seqIdx ].info[2].a + 2 <= geneOverlap[2].seqEnd ) 
+				jInAnchor = true ;
+		//if ( cdr[2].readEnd >= geneOverlap[0].readStart && cdr[2].readEnd <= geneOverlap[2].readEnd )
+		//	jInAnchor = true ;
+
+		SimpleVector<struct _pair> contigs ;
+		int contigCnt = GetContigIntervals( read, contigs ) ;
+		// Change gap nucleotide from 'N' to 'M'
+		for ( i = 0 ; i < contigCnt - 1 ; ++i )
+		{
+			for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
+				read[j] = 'M' ;
+		}
+
+		if ( !vInAnchor ) 
+		{
+			seqIdx = geneOverlap[0].seqIdx ;
+			int seqOffset = -1 ; // Locate the assembled CDR3 inside the V gene, where the imputation starts 
+			int readOffset = -1 ;
+			// seqOffset is the coordinate on the v gene that match with readOffset
+			// Locate offset.
+			if ( geneOverlap[0].seqEnd < seqs[ seqIdx ].info[2].a )
+			{
+				// V]...[CDR3]
+				int matchLen ;
+				int offset = AlignAlgo::LocatePartialSufPrefExactMatch( 
+					seqs[ seqIdx ].consensus + seqs[ seqIdx ].info[2].a, seqs[ seqIdx ].consensusLen - seqs[ seqIdx ].info[2].a,
+					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 9, matchLen ) ;
+				if ( offset != -1 )
+				{
+					seqOffset = offset ;
+					readOffset = cdr[2].readStart ;
+				}
+				/*for ( k = seqs[ seqIdx ].info[2].a ; k + 9 < seqs[ seqIdx ].consensusLen ; ++k )
+				{
+					for ( i = k, j = cdr[2].readStart ; i < seqs[ seqIdx ].consensusLen, j <= cdr[2].readEnd ; ++i, ++j )
+					{
+						if ( seqs[ seqIdx ].consensus[i] != read[j] )
+							break ;
+					}
+					if ( i - k >= 9 ) // We got a hit
+					{
+						seqOffset = k ;
+						readOffset = cdr[2].readStart ;
+						break ;
+					}
+				}*/
+
+			}
+			else
+			{
+				// [CDR3 [V..]  ]
+				// This should happen in boundary case, otherwise the extension in annotateread should 
+				// 	fix it.
+				seqOffset = geneOverlap[0].seqStart ;
+				readOffset = geneOverlap[0].readStart ;
+			}
+
+			if ( seqOffset != -1 )
+			{
+				// There are could be some overhang nucleotide outside of the annotated CDR3 region.
+				bool valid = true ;
+				for ( i = seqOffset - 1, j = readOffset - 1 ; i >= seqs[ seqIdx ].info[2].a && j >= 0 ; --i, --j )
+				{
+					if ( read[j] == 'M' )
+						break ;
+					if ( seqs[ seqIdx ].consensus[i] != read[j] )
+						valid = false ;
+				}
+				if ( valid )
+				{
+					// Valid for impute.
+					insertAt = j + 1 ;
+					insertLen = i + 1 - seqs[ seqIdx ].info[2].a ;
+					seqStart = seqs[ seqIdx ].info[2].a ;
+					newStart = insertAt ;
+					newEnd += insertLen ;
+				}
+			}
+		}
+		else 
+		{
+			// For the j side.
+			seqIdx = geneOverlap[2].seqIdx ;
+			int seqOffset = -1 ; 
+			int readOffset = -1 ;
+
+			if ( geneOverlap[2].seqStart > seqs[ seqIdx ].info[2].a )
+			{
+				// [CDR3]...[J
+				int matchLen ;
+				int offset = AlignAlgo::LocatePartialSufSufExactMatch( seqs[ seqIdx ].consensus, seqs[ seqIdx ].info[2].a + 3,
+					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 9, matchLen ) ;
+				if ( offset != -1 )
+				{
+					seqOffset = offset + matchLen - 1 ;
+					readOffset = cdr[2].readEnd ;
+				}
+				/*for ( k = seqs[ seqIdx ].info[2].a + 2 ; k >= 8 ; --k )
+				{
+					for ( i = k, j = cdr[2].readEnd ; i >= 0, j >= 0 ; --i, --j )
+					{
+						if ( seqs[ seqIdx ].consensus[i] != read[j] )
+							break ;
+					}
+					if ( k - i >= 9 ) // We got a hit
+					{
+						seqOffset = k ;
+						readOffset = cdr[2].readEnd ;
+						break ;
+					}
+				}*/
+			}
+			else
+			{
+				readOffset = geneOverlap[2].readEnd ;
+				seqOffset = geneOverlap[2].seqEnd ; 
+			}
+
+			if ( seqOffset != -1 )
+			{
+				// There are could be some overhang nucleotide outside of the annotated CDR3 region.
+				bool valid = true ;
+				for ( i = seqOffset + 1, j = readOffset + 1 ; i <= seqs[ seqIdx ].info[2].a + 2 && read[j] ; ++i, ++j )
+				{
+					if ( read[j] == 'M' )
+						break ;
+					if ( seqs[ seqIdx ].consensus[i] != read[j] )
+						valid = false ;
+				}
+				if ( valid )
+				{
+					// Valid for impute.
+					insertAt = j - 1 ;
+					seqStart = i - 1 ;
+					insertLen = seqs[ seqIdx ].info[2].a + 2 - ( i - 1 ) ;
+					newEnd = insertAt + insertLen ;
+				}
+			}
+		}
+
+		for ( i = 0 ; i < contigCnt - 1 ; ++i )
+		{
+			for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
+				read[j] = 'N' ;
+		}
+
+		if ( insertLen > 0 )
+		{
+			// Shift the sequence.
+			int len = strlen( read ) ; 
+			strcpy( nr, read ) ;
+			for ( i = len + insertLen ; i >= insertAt + insertLen ; --i )
+				nr[i] = nr[i - insertLen] ;
+			// Put in the imputed seqauence
+			for ( i = seqStart, j = insertAt ; j < insertAt + insertLen ; ++i, ++j )
+				nr[j] = seqs[ seqIdx ].consensus[i] ;
+
+			cdr[2].readStart = newStart ;
+			cdr[2].readEnd = newEnd ;
+			cdr[2].similarity = 0.01 ;
+			// Shift what we found.
+			ShiftAnnotations( insertAt, insertLen, geneOverlap, secondaryGeneOverlaps ) ;
+		}
+		else if ( insertLen == 0 )
+		{
+			cdr[2].readStart = newStart ;
+			cdr[2].readEnd = newEnd ;
+			cdr[2].similarity = 0.5 ;
+		}
+
+		if ( insertLen < -1 )
+			insertAt = -1 ;
+		return insertAt ;
+
 	}
 
-
-	int ImputeCDR3`( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3] )
+	int ImputeInternalCDR3( char *read, char *nr, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
+			std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
-		if ( cdr[2].similarity == 0 )
-			return 1 ;
+		int i, j, k ;
+		if ( geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 )
+			return -1 ;
+		int vSeqIdx = geneOverlap[0].seqIdx ;
+		int jSeqIdx = geneOverlap[2].seqIdx ;
+		if ( seqs[ vSeqIdx ].info[2].a == -1 || seqs[ jSeqIdx ].info[2].a == -1 )
+			return -1 ;
+
+		SimpleVector<struct _pair> contigs ;
+		int contigCnt = GetContigIntervals( read, contigs ) ;
+		
+		// Make sure there is exactly one gap.
+		int gapCnt = 0 ;
+		int gapStart, gapEnd ;
+		for ( i = 0 ; i < contigCnt - 1 ; ++i )
+		{
+			if ( contigs[i].b >= cdr[2].readStart && contigs[i].b <= cdr[2].readEnd 
+				&& contigs[i + 1].a >= cdr[2].readStart && contigs[i + 1].a <= cdr[2].readEnd )
+			{
+				gapStart = contigs[i].b + 1 ;
+				gapEnd = contigs[i + 1].a - 1 ;
+				++gapCnt ;
+			}
+		}
+		if ( gapCnt != 1 )
+			return -1 ;
+		
+		// Decide which gene this gap interrupts
+		int vOffset = -1, jOffset = -1 ;
+		int vMatchLen, jMatchLen ;
+		vOffset = AlignAlgo::LocatePartialSufPrefExactMatch( 
+			seqs[ vSeqIdx ].consensus + seqs[ vSeqIdx ].info[2].a, seqs[ vSeqIdx ].consensusLen - seqs[ vSeqIdx ].info[2].a,
+			read + gapEnd + 1, cdr[2].readEnd - gapEnd, 9, vMatchLen ) ;
+		jOffset = AlignAlgo::LocatePartialSufSufExactMatch( seqs[ jSeqIdx ].consensus, seqs[ jSeqIdx ].info[2].a + 3, 
+			read + cdr[2].readStart, gapStart - cdr[2].readStart, 9, jMatchLen ) ;
+
+		if ( ( vOffset != -1 && jOffset != -1 ) 
+			|| ( vOffset == -1 && jOffset == -1 ) )
+			return -1 ;
+
+		struct _pair anchor[2] ; // the coordinate info on the anchor point of the gap :a: seq, b:read 
+		int seqIdx = -1 ;
+		if ( vOffset != -1 ) // Gap interrupt the V gene
+		{
+			bool valid = true ;
+			struct _seqWrapper &seq = seqs[ vSeqIdx ] ;
+			for ( i = seq.info[2].a, j = cdr[2].readStart ; i < seq.consensusLen, j < gapStart ; ++i, ++j )
+				if ( seq.consensus[i] != read[j] )
+					valid = false ;
+			if ( valid == false )
+				return -1 ;
+			anchor[0].a = i - 1 ;
+			anchor[0].b = j - 1 ;
+			anchor[1].a = vOffset ;
+			anchor[1].b = gapEnd + 1 ;
+			seqIdx = vSeqIdx ;
+		}
+		else // jOffset == -1 
+		{
+			bool valid = true ;
+			struct _seqWrapper &seq = seqs[ jSeqIdx ] ;
+			for ( i = seq.info[2].a + 2, j = cdr[2].readEnd ; i >= 0, j > gapEnd ; --i, --j )
+				if ( seq.consensus[i] != read[j] )
+					valid = false ;
+			if ( valid == false )
+				return -1 ;
+			anchor[0].a = jOffset + jMatchLen - 1 ;
+			anchor[0].b = gapStart - 1 ;
+			anchor[1].a = i + 1 ;
+			anchor[1].b = j + 1 ;
+			seqIdx = jSeqIdx ;
+		}
+		
+		// Rearrange the sequence
+		// Record where anchor[1] got shifted to
+		int shiftAt ;
+		int shift ;
+		for ( j = 0 ; j < anchor[0].b ; ++j )
+			nr[j] = read[j] ;
+		if ( anchor[1].a >= anchor[0].a )
+		{
+			// Put in the imputed sequence
+			for ( i = anchor[0].a + 1 ; i < anchor[1].a ; ++i, ++j )
+				nr[j] = seqs[ seqIdx ].consensus[j] ;
+		}		
+		shiftAt = anchor[1].b ;
+		shift = j - anchor[1].b ;
+		for ( j = anchor[1].b ; read[j] ; ++j )
+			nr[j + shift] = read[j] ;
+		nr[j + shift] = '\0' ; 
+		cdr[2].readEnd += shift ;
+		cdr[2].similarity = 0.01 ;
+		ShiftAnnotations( shiftAt, shift, geneOverlap, secondaryGeneOverlaps ) ;
+
+		return shiftAt ;
+	}
+
+	int ImputeCDR3( char *read, char *nr, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
+			std::vector<struct _overlap> *secondaryGeneOverlaps )
+	{
+		if ( cdr[2].seqIdx == -1 || cdr[2].similarity != 0  
+				|| geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 
+				|| seqs[ geneOverlap[0].seqIdx ].info[2].a == -1 || seqs[ geneOverlap[2].seqIdx ].info[2].a == -1 ) 
+			return -1 ;
+		if ( seqs[ geneOverlap[0].seqIdx ].name[0] != 'T' )
+			return -1 ;
+
+		// Exact one of the anchor should be in the annotation
+		bool vInAnchor = false ;
+		bool jInAnchor = false ;
+		if (  seqs[ geneOverlap[0].seqIdx ].info[2].a >= geneOverlap[0].seqStart
+				&& seqs[ geneOverlap[0].seqIdx ].info[2].a + 2 <= geneOverlap[0].seqEnd ) 
+			vInAnchor = true ;
+		//if ( cdr[2].readStart >= geneOverlap[0].readStart && cdr[2].readStart <= geneOverlap[0].readEnd )
+		//	vInAnchor = true ;
+
+		if (  seqs[ geneOverlap[2].seqIdx ].info[2].a >= geneOverlap[2].seqStart
+				&& seqs[ geneOverlap[2].seqIdx ].info[2].a + 2 <= geneOverlap[2].seqEnd ) 
+			jInAnchor = true ;
+		//if ( cdr[2].readEnd >= geneOverlap[0].readStart && cdr[2].readEnd <= geneOverlap[2].readEnd )
+		//	jInAnchor = true ;
+
+		if ( vInAnchor && jInAnchor )	
+		{
+			int j ;
+			for ( j = cdr[2].readStart ; j <= cdr[2].readEnd ; ++j )
+				if ( read[j] == 'N' && read[j + 1] == 'N' )
+					break ;
+			if ( j <= cdr[2].readEnd )
+				// There is a gap in side the CDR3 region.
+				return ImputeInternalCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+			else
+				return -1 ;
+		}
+		else if ( vInAnchor || jInAnchor )
+		{
+			int j ;
+			for ( j = cdr[2].readStart ; j <= cdr[2].readEnd ; ++j )
+				if ( read[j] == 'N' )
+					return -1 ;
+			return ImputeAnchorCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+		}
 	}
 	
 	// Figure out the gene composition for the read. 
@@ -4002,33 +4412,7 @@ public:
 		if ( detailLevel >= 2 )
 			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
 
-		//sprintf( buffer, "%d", len ) ;
-		for ( i = 0 ; i < len ; )
-		{
-			int NCnt = 0 ;
-			for ( j = i + 1 ; j < len ; ++j )
-			{
-				//printf( "%c %d %d %d\n", read[j], i, j, NCnt ) ;
-				if ( j >= i + gapN && read[j - gapN] == 'N' )
-					--NCnt ;
-				if ( read[j] == 'N' ) 
-					++NCnt ;
-				if ( NCnt >= gapN )
-					break ;
-
-			}
-
-			struct _pair nc ; 
-			nc.a = i ;
-			if ( j < len )
-				nc.b = j - gapN ; 
-			else
-				nc.b = len - 1 ;
-			contigs.PushBack( nc ) ;
-			i = j + 1 ;
-		}
-		
-		contigCnt = contigs.Size() ;
+		contigCnt = GetContigIntervals( read, contigs ) ;
 		char *contigBuffer = new char[len + 1] ;
 		//if ( detailLevel > 0 )
 		// Obtain the overlaps for each contig
@@ -4474,7 +4858,6 @@ public:
 				for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
 					read[j] = 'M' ;
 			}
-
 		}
 
 		if ( detailLevel >= 2 && geneOverlap[0].seqIdx != -1 
@@ -5507,8 +5890,8 @@ public:
 					}
 				}
 
-				if ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
-						DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+				if ( locateE + 2 < len && ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+						DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
 				{
 					cdr3Score += 100.0 / 6 ;
 					++rightCnt ;
@@ -5571,6 +5954,33 @@ public:
 				}
 				// Now consider whether the gaps could create some false positive score CDR3.
 				int nCnt = 0 ;
+				// Gap on the boundary, then we need to adjust the CDR3 region.
+				//   this could happen when doing alignment, it does not check the overhang nucleotide.
+				if ( read[s] == 'M' )
+				{
+					while ( read[s] == 'M' && s <= e )
+						s += 3 ;
+					cdr[2].readStart = s ;
+					cdr3Score = 0 ;
+					if ( s >= e )
+					{
+						cdr[2].seqIdx = -1 ;
+						cdr[2].readStart = cdr[2].readEnd = -1 ;
+					}
+				}
+				if ( read[e] == 'M' )
+				{
+					while ( read[e] == 'M' && e >= s )
+						e -= 3 ;
+					cdr[2].readEnd = e ;
+					cdr3Score = 0 ;
+					if ( e <= s )
+					{
+						 cdr[2].seqIdx = -1 ;
+						 cdr[2].readStart = cdr[2].readEnd = -1 ;
+					}
+				}
+				// Gap in the middle.
 				for ( i = s ; i <= e ; ++i )
 				{
 					if ( read[i] == 'N' )
@@ -5588,6 +5998,7 @@ public:
 						break ;
 					}
 				}
+
 				if ( cdr3Score < 100 )
 				{
 					for ( i = 1 ; i < contigCnt ; ++i )
@@ -7699,6 +8110,18 @@ public:
 	char *GetSeqConsensus( int seqIdx )
 	{
 		return seqs[ seqIdx ].consensus ;
+	}
+
+	char *SetSeqConsensus( int seqIdx, char *nc )
+	{
+		int len = strlen( nc ) ;
+		struct _seqWrapper &seq = seqs[ seqIdx ] ;
+		free( seq.consensus ) ;
+		seq.consensus = strdup( nc ) ;
+		seq.consensusLen = len ;	
+		seq.posWeight.ExpandTo( len ) ;
+		seq.posWeight.SetZero( 0, len ) ;
+		UpdatePosWeightFromRead( seq.posWeight, 0, nc ) ;
 	}
 
 	int GetSeqConsensusLen( int seqIdx )
