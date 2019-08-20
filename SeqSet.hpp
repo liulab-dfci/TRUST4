@@ -4000,6 +4000,16 @@ public:
 		}
 		return contigs.Size() ;
 	}
+
+	int GetContigIdx( int pos, SimpleVector<struct _pair> &contigs )
+	{
+		int size = contigs.Size() ;
+		int i ;
+		for ( i = 0 ; i < size ; ++i )
+			if ( contigs[i].a <= pos && pos <= contigs[i].b )
+				return i ;
+		return 0 ;
+	}
 	
 	void ShiftAnnotations( int at, int shift, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
 	                        std::vector<struct _overlap> *secondaryGeneOverlaps )
@@ -4047,7 +4057,7 @@ public:
 	{
 		int i, j, k ;
 		// Locate the insert position
-		int insertAt = -1 ;
+		int insertAt = -1 ; // Every position >= insertAt will be shifted
 		int insertLen = -1 ;
 		int seqIdx = -1 ;
 		int seqStart = -1 ;
@@ -4068,7 +4078,6 @@ public:
 				jInAnchor = true ;
 		//if ( cdr[2].readEnd >= geneOverlap[0].readStart && cdr[2].readEnd <= geneOverlap[2].readEnd )
 		//	jInAnchor = true ;
-
 		SimpleVector<struct _pair> contigs ;
 		int contigCnt = GetContigIntervals( read, contigs ) ;
 		// Change gap nucleotide from 'N' to 'M'
@@ -4091,10 +4100,10 @@ public:
 				int matchLen ;
 				int offset = AlignAlgo::LocatePartialSufPrefExactMatch( 
 					seqs[ seqIdx ].consensus + seqs[ seqIdx ].info[2].a, seqs[ seqIdx ].consensusLen - seqs[ seqIdx ].info[2].a,
-					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 9, matchLen ) ;
+					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 5, matchLen ) ;
 				if ( offset != -1 )
 				{
-					seqOffset = offset ;
+					seqOffset = offset + seqs[ seqIdx ].info[2].a ;
 					readOffset = cdr[2].readStart ;
 				}
 				/*for ( k = seqs[ seqIdx ].info[2].a ; k + 9 < seqs[ seqIdx ].consensusLen ; ++k )
@@ -4121,7 +4130,6 @@ public:
 				seqOffset = geneOverlap[0].seqStart ;
 				readOffset = geneOverlap[0].readStart ;
 			}
-
 			if ( seqOffset != -1 )
 			{
 				// There are could be some overhang nucleotide outside of the annotated CDR3 region.
@@ -4137,7 +4145,7 @@ public:
 				{
 					// Valid for impute.
 					insertAt = j + 1 ;
-					insertLen = i + 1 - seqs[ seqIdx ].info[2].a ;
+					insertLen = i - seqs[ seqIdx ].info[2].a + 1 ;
 					seqStart = seqs[ seqIdx ].info[2].a ;
 					newStart = insertAt ;
 					newEnd += insertLen ;
@@ -4156,7 +4164,7 @@ public:
 				// [CDR3]...[J
 				int matchLen ;
 				int offset = AlignAlgo::LocatePartialSufSufExactMatch( seqs[ seqIdx ].consensus, seqs[ seqIdx ].info[2].a + 3,
-					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 9, matchLen ) ;
+					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 5, matchLen ) ;
 				if ( offset != -1 )
 				{
 					seqOffset = offset + matchLen - 1 ;
@@ -4197,10 +4205,10 @@ public:
 				if ( valid )
 				{
 					// Valid for impute.
-					insertAt = j - 1 ;
-					seqStart = i - 1 ;
-					insertLen = seqs[ seqIdx ].info[2].a + 2 - ( i - 1 ) ;
-					newEnd = insertAt + insertLen ;
+					insertAt = j ;
+					seqStart = i ;
+					insertLen = seqs[ seqIdx ].info[2].a + 2 - seqStart + 1 ;
+					newEnd = insertAt + insertLen - 1 ;
 				}
 			}
 		}
@@ -4218,6 +4226,7 @@ public:
 			strcpy( nr, read ) ;
 			for ( i = len + insertLen ; i >= insertAt + insertLen ; --i )
 				nr[i] = nr[i - insertLen] ;
+			
 			// Put in the imputed seqauence
 			for ( i = seqStart, j = insertAt ; j < insertAt + insertLen ; ++i, ++j )
 				nr[j] = seqs[ seqIdx ].consensus[i] ;
@@ -4276,9 +4285,9 @@ public:
 		int vMatchLen, jMatchLen ;
 		vOffset = AlignAlgo::LocatePartialSufPrefExactMatch( 
 			seqs[ vSeqIdx ].consensus + seqs[ vSeqIdx ].info[2].a, seqs[ vSeqIdx ].consensusLen - seqs[ vSeqIdx ].info[2].a,
-			read + gapEnd + 1, cdr[2].readEnd - gapEnd, 9, vMatchLen ) ;
+			read + gapEnd + 1, cdr[2].readEnd - gapEnd, 5, vMatchLen ) ;
 		jOffset = AlignAlgo::LocatePartialSufSufExactMatch( seqs[ jSeqIdx ].consensus, seqs[ jSeqIdx ].info[2].a + 3, 
-			read + cdr[2].readStart, gapStart - cdr[2].readStart, 9, jMatchLen ) ;
+			read + cdr[2].readStart, gapStart - cdr[2].readStart, 5, jMatchLen ) ;
 
 		if ( ( vOffset != -1 && jOffset != -1 ) 
 			|| ( vOffset == -1 && jOffset == -1 ) )
@@ -4297,7 +4306,7 @@ public:
 				return -1 ;
 			anchor[0].a = i - 1 ;
 			anchor[0].b = j - 1 ;
-			anchor[1].a = vOffset ;
+			anchor[1].a = vOffset + seqs[ vSeqIdx ].info[2].a ;
 			anchor[1].b = gapEnd + 1 ;
 			seqIdx = vSeqIdx ;
 		}
@@ -4929,6 +4938,8 @@ public:
 			int s, e ;
 			int boundS = 0, boundE = len - 2 ; //[boundS, boundE)
 			int range = 37 ;
+			bool strongLocateS = false ; // whether the locate method is based on IMGT alignment
+			bool strongLocateE = false ;
 			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 )
 			{
 				// The case that we have anchor.
@@ -5144,7 +5155,14 @@ public:
 						if ( j >= dest )
 							break ;
 					}
-					
+					if ( vAlign[k] == -1 )
+					{
+						--k ;
+						if ( vAlign[k] != EDIT_DELETE )
+							--i ;
+						if ( vAlign[k] != EDIT_INSERT )
+							--j ;
+					}
 					bool ambiguous = false ;
 					for ( int l = k ; l >= 0 && l >= k - 6 ; --l )
 						if ( vAlign[l] == EDIT_INSERT || vAlign[l] == EDIT_DELETE )
@@ -5155,7 +5173,10 @@ public:
 					if ( k > 0 && !ambiguous )
 					{
 						if ( j == dest )
+						{
 							locateS = i ;
+							strongLocateS = true ;
+						}
 						//else if ( j < dest && j + 6 < dest )
 						//	locateS = i + ( dest - j ) ;
 						else if ( j < dest )
@@ -5363,7 +5384,14 @@ public:
 						bool ambiguous = false ;
 						int l = k ;
 						if ( k == -1 )
+						{
 							++l ;
+							if ( align[0] != EDIT_DELETE )
+								++i ;
+							if ( align[0] != EDIT_INSERT )
+								++j ;
+						}
+
 						for ( ; align[l] != -1 && l <= k + 6 ; ++l )
 						{
 							if ( align[l] == EDIT_INSERT || align[l] == EDIT_DELETE )
@@ -5375,8 +5403,11 @@ public:
 						if ( !ambiguous )
 						{
 							if ( j == dest )
+							{
 								locateE = i ;
-							else if ( j == dest + 1 )
+								strongLocateE = true ;
+							}
+							else if ( j == dest + 1 && read[ i - (j - dest)] != 'M' )
 							{
 								locateE = i - ( j - dest ) ;
 							}
@@ -5571,14 +5602,36 @@ public:
 			{
 				locateS = locateE = -1 ;
 			}
-			// Partial CDR3s
-			if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
-				&& locateE + 11 < len && locateE > 15 && locateE <= 60 ) 
+			
+			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
+				&& seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
+				&& seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 )
 			{
-				if ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+				for ( i = locateS ; i <= locateE + 2 ; ++i )
+				{
+					if ( read[i] == 'M' )
+					{
+						if ( strongLocateE 
+							&& geneOverlap[0].seqEnd < seqs[ geneOverlap[0].seqIdx ].info[2].a )
+							locateS = -1 ;
+						if ( strongLocateS 
+							&& geneOverlap[2].seqStart > seqs[ geneOverlap[2].seqIdx ].info[2].a )
+							locateE = -1 ;
+					}
+				}
+			}
+
+			// Partial CDR3s
+			int sContigIdx = GetContigIdx( locateS, contigs ) ;
+			int eContigIdx = GetContigIdx( locateE, contigs ) ;
+			if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
+				//&& locateE + 11 < contigs[ eContigIdx ].b + 1 
+				&& locateE > 15 + contigs[ eContigIdx ].a && locateE <= 60 + contigs[ eContigIdx ].a ) 
+			{
+				if ( strongLocateE || ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
 					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
-					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' )
+					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' ) )
 				{
 					locateS = locateE % 3 ;			
 					s = locateS ;
@@ -5602,11 +5655,12 @@ public:
 				}
 			}
 			else if ( locateS != -1 && locateE == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 
-				&& locateS - 6 > 0 && locateS + 18 < len && locateS + 2 + 60 > len )
+				//&& locateS - 6 > contigs[ sContigIdx ].a
+				&& locateS + 18 < contigs[ sContigIdx ].b + 1 && locateS + 2 + 60 > contigs[ sContigIdx ].b + 1 )
 			{
-				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
+				if ( strongLocateS || ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
 					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
-					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' ) )
 				{
 					locateE = len - 3 - ( len - 3 - locateS ) % 3 ;
 				
@@ -5823,6 +5877,8 @@ public:
 				}
 			}
 
+			sContigIdx = GetContigIdx( locateS, contigs ) ; 
+			eContigIdx = GetContigIdx( locateE, contigs ) ;
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
 			{
 				s = locateS ;
@@ -6114,15 +6170,17 @@ public:
 				}
 			}
 			// Partial CDR3s
-			else if ( locateS == -1 && locateE != -1 && geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 
-				&& locateE + 11 < len && locateE > 15 && locateE <= 60 ) 
+			else if ( locateS == -1 && locateE != -1 && geneOverlap[2].seqIdx != -1 
+				&& ( geneOverlap[0].seqIdx == -1 
+					|| GetContigIdx( geneOverlap[0].readStart, contigs ) != GetContigIdx( geneOverlap[2].readStart, contigs  ) )
+				&& locateE > 15 + contigs[ eContigIdx ].a && locateE <= 60 + contigs[ eContigIdx ].a ) 
 			{
-				if ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+				if ( strongLocateE || ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
 					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
-					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' )
+					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' ) )
 				{
-					locateS = locateE % 3 ;			
+					locateS = contigs[ eContigIdx ].a + ( locateE - contigs[ eContigIdx ].a ) % 3 ;			
 					cdr3Score = 0 ;
 
 					s = locateS ;
@@ -6147,14 +6205,16 @@ public:
 					}
 				}
 			}
-			else if ( locateS != -1 && locateE == -1 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1 
-				&& locateS - 6 > 0 && locateS + 18 < len && locateS + 2 + 60 > len )
+			else if ( locateS != -1 && locateE == -1 && geneOverlap[0].seqIdx != -1 //&& geneOverlap[2].seqIdx == -1
+				&& ( geneOverlap[2].seqIdx == -1 || 
+					GetContigIdx( geneOverlap[0].readStart, contigs ) != GetContigIdx( geneOverlap[2].readStart, contigs ) )  
+				&& locateS + 18 < contigs[ sContigIdx ].b + 1 && locateS + 2 + 60 > contigs[ sContigIdx ].b + 1 )
 			{
-				if ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
+				if ( strongLocateS || ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
 					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
-					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' )
+					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' ) )
 				{
-					locateE = len - 3 - ( len - 3 - locateS ) % 3 ;
+					locateE = contigs[ sContigIdx ].b - 2 - ( contigs[ sContigIdx ].b - 2 - locateS ) % 3 ;
 					cdr3Score = 0 ;
 				
 					s = locateS ;

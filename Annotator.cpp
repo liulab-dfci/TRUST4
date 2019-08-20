@@ -62,6 +62,7 @@ struct _annotateReadsThreadArg
 {
 	int tid ;
 	int threadCnt ;
+	bool impute ;
 
 	SeqSet *seqSet ;
 	SeqSet *refSet ;
@@ -256,7 +257,7 @@ void *AnnotateReads_Thread( void *pArg )
 	{
 		arg.refSet->AnnotateRead( arg.seqSet->GetSeqConsensus( i ), 2, arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
 			&( arg.annotations[i].secondaryGeneOverlaps ) ) ;
-		if ( arg.refSet->ImputeCDR3( arg.seqSet->GetSeqConsensus( i ), buffer, 
+		if ( arg.impute && arg.refSet->ImputeCDR3( arg.seqSet->GetSeqConsensus( i ), buffer, 
 			arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
 			&( arg.annotations[i].secondaryGeneOverlaps ) ) != -1 )
 			arg.seqSet->SetSeqConsensus( i, buffer ) ;
@@ -450,7 +451,7 @@ int main( int argc, char *argv[] )
 			refSet.AnnotateRead( seqSet.GetSeqConsensus( i ), 2, annotations[i].geneOverlap, annotations[i].cdr, 
 					&annotations[i].secondaryGeneOverlaps ) ;
 			
-			if ( refSet.ImputeCDR3( seqSet.GetSeqConsensus( i ), buffer, annotations[i].geneOverlap, annotations[i].cdr, 
+			if ( impute && refSet.ImputeCDR3( seqSet.GetSeqConsensus( i ), buffer, annotations[i].geneOverlap, annotations[i].cdr, 
 					&annotations[i].secondaryGeneOverlaps ) != -1 )
 			{
 				seqSet.SetSeqConsensus( i, buffer ) ;
@@ -473,6 +474,7 @@ int main( int argc, char *argv[] )
 			args[i].seqSet = &seqSet ;
 			args[i].refSet = &refSet ;
 			args[i].annotations = annotations ;
+			args[i].impute = impute ;
 			pthread_create( &threads[i], &attr, AnnotateReads_Thread, (void *)( args + i ) ) ;
 		}
 
