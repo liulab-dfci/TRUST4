@@ -994,6 +994,9 @@ public:
 	static int LocatePartialSufPrefExactMatch( char *a, int lenA, char *b, int lenB, int minLen, int &matchLen )
 	{
 		int i, j, k ;
+		int max = 0 ;
+		int maxTag = 0 ;
+		int secMax = 0 ;
 		for ( k = 0 ; k + minLen - 1 < lenA ; ++k )
 		{
 			for ( i = k, j = 0 ; i < lenA && j < lenB ; ++i, ++j )
@@ -1001,33 +1004,67 @@ public:
 				if ( a[i] != b[j] )
 					break ;
 			}
-			if ( j + 1 >= minLen )
+			/*if ( j + 1 >= minLen )
 			{
 				matchLen = j + 1 ;
 				return k ;
+			}*/
+
+			if ( j + 1 > max )
+			{
+				secMax = max ;
+				max = j + 1 ;
+				maxTag = k ;
 			}
+			else if ( j + 1 >= secMax ) // This secMax==max when there are two max value.
+				secMax = j + 1 ;
+		}
+
+		if ( max >= minLen && max > secMax + 1 )
+		{
+			matchLen = max ;
+			return maxTag ;
 		}
 		matchLen = 0 ;
 		return -1 ;
 	}
 
-	// Find the partial prefix of "a" that match with suffix of b of length at least minLen.
+	// Find the partial suffix of "a" that match with suffix of b of length at least minLen.
 	// Return: the partial suffix of "a", otherwise -1.
 	static int LocatePartialSufSufExactMatch( char *a, int lenA, char *b, int lenB, int minLen, int &matchLen )
 	{
 		int i, j, k ;
 		// k indicating the end of the match.
+		int max = 0 ;
+		int maxTag = 0 ;
+		int secMax = 0 ;
 		for ( k = lenA - 1 ; k >= minLen ; --k )
 		{
 			for ( i = k, j = lenB - 1 ; i >= 0, j >= 0 ; --i, --j )
 				if ( a[i] != b[j] )
 					break ;
-			if ( k - i >= minLen )
+			/*if ( k - i >= minLen )
 			{
 				matchLen = k - i ;
 				return i + 1 ; 
+			}*/
+			if ( k - i > max )
+			{
+				secMax = max ;
+				max = k - i ;
+				maxTag = i + 1 ;
 			}
+			else if ( k - i >= secMax ) // This secMax==max when there are two max value.
+				secMax = j + 1 ;
+
 		}
+		
+		if ( max >= minLen && max > secMax + 1 )
+		{
+			matchLen = max ;
+			return maxTag ;
+		}
+
 		matchLen = 0 ;
 		return -1 ;
 	}
