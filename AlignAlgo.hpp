@@ -1040,7 +1040,7 @@ public:
 		int secMax = 0 ;
 		for ( k = lenA - 1 ; k >= minLen ; --k )
 		{
-			for ( i = k, j = lenB - 1 ; i >= 0, j >= 0 ; --i, --j )
+			for ( i = k, j = lenB - 1 ; i >= 0 && j >= 0 ; --i, --j )
 				if ( a[i] != b[j] )
 					break ;
 			/*if ( k - i >= minLen )

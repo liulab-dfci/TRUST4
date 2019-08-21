@@ -4395,6 +4395,7 @@ public:
 					return -1 ;
 			return ImputeAnchorCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
 		}
+		return -1 ;
 	}
 	
 	// Figure out the gene composition for the read. 
@@ -5603,13 +5604,15 @@ public:
 				locateS = locateE = -1 ;
 			}
 			
+			// If there a gap in the middle of CDR3, pick one side.
 			if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
 				&& seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
-				&& seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 )
+				&& seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 
+				&& locateS != -1 && locateE != -1 )
 			{
 				for ( i = locateS ; i <= locateE + 2 ; ++i )
 				{
-					if ( read[i] == 'M' )
+					if ( read[i] == 'M' || read[i] == '\0' )
 					{
 						if ( strongLocateE 
 							&& geneOverlap[0].seqEnd < seqs[ geneOverlap[0].seqIdx ].info[2].a )
@@ -5618,6 +5621,8 @@ public:
 							&& geneOverlap[2].seqStart > seqs[ geneOverlap[2].seqIdx ].info[2].a )
 							locateE = -1 ;
 					}
+					if ( !read[i] )
+						break ;
 				}
 			}
 
@@ -5778,7 +5783,7 @@ public:
 					anchorType = 3 ;
 				}
 				//printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
-				if ( bestMatchCnt / (double)bestHitLen >= 0.9 && bestHitLen > 9 )
+				if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.9 )
 				{
 					int size = bestTags.Size() ;
 					bool start = false ;
@@ -5833,7 +5838,7 @@ public:
 					int bestMatchCnt = 0 ;
 					SimpleVector<struct _pair> bestTags ;
 					int seqCnt = seqs.size() ;
-					int bestHitLen ;
+					int bestHitLen = 0 ;
 					int readEnd = 0 ;
 					for ( i = 0 ; i < seqCnt ; ++i )
 					{
@@ -5844,7 +5849,7 @@ public:
 						int geneOffset = seq.info[2].a ; // The coordinate of the gene match with locateE 
 						int matchCnt = 0 ;
 						int hitLen = 0 ;
-						if ( 1 ) /*locateE + 2 >= len || 
+						if ( locateE < len ) /*locateE + 2 >= len || 
 							( DnaToAa( read[ locateE ], read[ locateE + 1], read[ locateE + 2 ] ) != 'F' 
 							  && DnaToAa( read[ locateE ], read[ locateE + 1], read[ locateE + 2 ] ) != 'W' ) )*/ 
 						{
@@ -5923,7 +5928,7 @@ public:
 						anchorSeqIdx = geneOverlap[3].seqIdx ;	
 						anchorType = 3 ;
 					}
-					if ( bestMatchCnt / (double)bestHitLen >= 0.9 && bestHitLen > 9 )
+					if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.9 )
 					{
 						int size = bestTags.Size() ;
 						bool start = false ;
@@ -8273,7 +8278,7 @@ public:
 		return seqs[ seqIdx ].consensus ;
 	}
 
-	char *SetSeqConsensus( int seqIdx, char *nc )
+	void SetSeqConsensus( int seqIdx, char *nc )
 	{
 		int len = strlen( nc ) ;
 		struct _seqWrapper &seq = seqs[ seqIdx ] ;
