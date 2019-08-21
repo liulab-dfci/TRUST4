@@ -4172,7 +4172,7 @@ public:
 				}
 				/*for ( k = seqs[ seqIdx ].info[2].a + 2 ; k >= 8 ; --k )
 				{
-					for ( i = k, j = cdr[2].readEnd ; i >= 0, j >= 0 ; --i, --j )
+					for ( i = k, j = cdr[2].readEnd ; i >= 0 && j >= 0 ; --i, --j )
 					{
 						if ( seqs[ seqIdx ].consensus[i] != read[j] )
 							break ;
@@ -4242,6 +4242,7 @@ public:
 			cdr[2].readStart = newStart ;
 			cdr[2].readEnd = newEnd ;
 			cdr[2].similarity = 0.5 ;
+			return -1 ;	
 		}
 
 		if ( insertLen < -1 )
@@ -4310,11 +4311,11 @@ public:
 			anchor[1].b = gapEnd + 1 ;
 			seqIdx = vSeqIdx ;
 		}
-		else // jOffset == -1 
+		else // jOffset != -1 
 		{
 			bool valid = true ;
 			struct _seqWrapper &seq = seqs[ jSeqIdx ] ;
-			for ( i = seq.info[2].a + 2, j = cdr[2].readEnd ; i >= 0, j > gapEnd ; --i, --j )
+			for ( i = seq.info[2].a + 2, j = cdr[2].readEnd ; i >= 0 && j > gapEnd ; --i, --j )
 				if ( seq.consensus[i] != read[j] )
 					valid = false ;
 			if ( valid == false )
@@ -4374,7 +4375,6 @@ public:
 			jInAnchor = true ;
 		//if ( cdr[2].readEnd >= geneOverlap[0].readStart && cdr[2].readEnd <= geneOverlap[2].readEnd )
 		//	jInAnchor = true ;
-
 		if ( vInAnchor && jInAnchor )	
 		{
 			int j ;
@@ -5591,7 +5591,6 @@ public:
 					}
 				}
 			}
-
 			if ( locateE + 2 - locateS + 1 < 18 )
 			{
 				if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 )
