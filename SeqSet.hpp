@@ -5710,11 +5710,10 @@ public:
 					struct _seqWrapper &seq = seqs[i] ;
 					int matchCnt = 0 ;
 					int hitLen = 0 ;
-					int readStart = 0 ;
 
 					int geneOffset = seqs[i].info[2].a ; // The position of the gene match with locateS
 					// Locate the offset if the match site is not a motif  
-					if ( DnaToAa( read[ locateS ], read[ locateS + 1], read[ locateS + 2 ] ) != 'C' )
+					if ( 1 )//DnaToAa( read[ locateS ], read[ locateS + 1], read[ locateS + 2 ] ) != 'C' )
 					{
 						int matchLen = 0 ;
 						geneOffset = AlignAlgo::LocatePartialSufPrefExactMatch( 
@@ -5735,7 +5734,7 @@ public:
 							++matchCnt ;
 						++hitLen ;
 					}
-					readStart = k + 1 ;
+					int tmp = k + 1 ;
 
 					// The other end, just extend to a mismatch point.
 					for ( k = locateS, j = geneOffset ; k < len && j < seq.consensusLen ; ++k, ++j )
@@ -5754,6 +5753,7 @@ public:
 						struct _pair np ;
 						np.a = i ;
 						np.b = geneOffset ;
+						readStart = tmp ;
 						bestTags.PushBack( np ) ;
 					}
 					else if ( matchCnt == bestMatchCnt )
@@ -5798,9 +5798,20 @@ public:
 								|| !IsSameChainType( seqs[ no.seqIdx ].name, seqs[ anchorSeqIdx ].name ) )
 								continue ;
 						}
+
 						if ( !start )
 						{
 							geneOverlap[0] = no ;
+							if ( seqs[ bestTags[i].a ].info[2].a != bestTags[i].b ) 
+							{
+								// adjust locateS, if we can match the point
+								int diff = bestTags[i].b - seqs[ bestTags[i].a ].info[2].a ; 
+								if ( locateS - diff >= no.readStart && locateS + diff <= no.readEnd )
+								{
+									locateS -= diff ;
+									removeLocateS = false ;
+								}
+							}
 							if ( removeLocateS &&  // The CDR3 is likely to be partial
 								seqs[ bestTags[i].a ].info[2].a != bestTags[i].b )
 								forcePartial = true ;
@@ -5833,15 +5844,15 @@ public:
 						int geneOffset = seq.info[2].a ; // The coordinate of the gene match with locateE 
 						int matchCnt = 0 ;
 						int hitLen = 0 ;
-						if ( locateE + 2 >= len || 
+						if ( 1 ) /*locateE + 2 >= len || 
 							( DnaToAa( read[ locateE ], read[ locateE + 1], read[ locateE + 2 ] ) != 'F' 
-							  && DnaToAa( read[ locateE ], read[ locateE + 1], read[ locateE + 2 ] ) != 'W' ) )
+							  && DnaToAa( read[ locateE ], read[ locateE + 1], read[ locateE + 2 ] ) != 'W' ) )*/ 
 						{
 							int matchLen = 0 ;
 							geneOffset = AlignAlgo::LocatePartialSufSufExactMatch( 
 								seq.consensus, seq.info[2].a + 1,
 								read, locateE + 1,
-								10, matchLen ) ;
+								8, matchLen ) ;
 							if ( geneOffset == -1 )
 								geneOffset = seq.info[2].a ;
 							else
@@ -5872,7 +5883,7 @@ public:
 								++matchCnt ;
 							++hitLen ;
 						}
-						readEnd = k - 1 ;
+						int tmp = k - 1 ;
 						for ( k = locateE, j = geneOffset ; k >= 0 && j >= 0 ; --k, --j )
 						{
 							if ( seq.consensus[j] != read[k] )
@@ -5881,13 +5892,13 @@ public:
 							++hitLen ;
 						}
 						
-						//printf( "%s %d %lf\n", seqs[i].name, matchCnt, (double)matchCnt / hitLen ) ;
 						struct _pair np ;
 						if ( matchCnt > bestMatchCnt )
 						{
 							bestMatchCnt = matchCnt ;
 							bestHitLen = hitLen ;
 							bestTags.Clear() ;
+							readEnd = tmp ;
 							np.a = i ;
 							np.b = geneOffset ;
 							bestTags.PushBack( np ) ;
@@ -5936,6 +5947,18 @@ public:
 							if ( !start )
 							{
 								geneOverlap[2] = no ;
+
+								if ( seqs[ bestTags[i].a ].info[2].a != bestTags[i].b ) 
+								{
+									// adjust locateS, if we can match the point
+									int diff = bestTags[i].b - seqs[ bestTags[i].a ].info[2].a ; 
+									if ( locateE - diff >= no.readStart && locateE + diff <= no.readEnd )
+									{
+										locateE -= diff ;
+										removeLocateE = false ;
+									}
+								}
+
 								if ( removeLocateE &&  // The CDR3 is likely to be partial
 										seqs[ bestTags[i].a ].info[2].a != bestTags[i].b )
 									forcePartial = true ;
