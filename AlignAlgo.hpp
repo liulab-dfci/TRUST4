@@ -1055,10 +1055,9 @@ public:
 				maxTag = i + 1 ;
 			}
 			else if ( k - i >= secMax ) // This secMax==max when there are two max value.
-				secMax = j + 1 ;
+				secMax = k - i ;
 
 		}
-		
 		if ( max >= minLen && max > secMax + 1 )
 		{
 			matchLen = max ;
