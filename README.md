@@ -33,9 +33,9 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 			-b STRING: path to bam file
     			-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
 		Optional:
-    			(recommended) --ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used).
+    			--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used). (recommended) 
     			-o STRING: prefix of output files. (default: inferred from file prefix)
- 		   	-t INT: number of threads (default: 1)\n".
+ 			-t INT: number of threads (default: 1)\n".
     			--stage INT: start TRUST4 on specified stage (default: 0):\n".
     				0: start from beginning (candidate read extraction)\n".
     				1: start from assembly\n".
@@ -47,13 +47,30 @@ The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b),
 
 TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.out is in fasta format for the annotation of the consensus assembly. And trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies.
 
-Each header of trust_annot.out is split into fields. 
+Each header of trust_annot.out is split into fields:
 
+	consensus_id consensus_length average_coverage annotations
+
+"annotaions" also has several field, corresponding to annotation of V,J,C, CDR1, CDR2 and CDR3 respectively. For the annotation of the genes, it follows the pattern 
+
+	gene_name(reference_gene_length):(consensus_start-consensus_end):(reference_start-reference_length):similarity
+	
+Each type of genes has at most three gene candidate ranked by their similarity. For the annotation of CDRs, it follows the pattern:
+
+	CDRx(consensus_start-consensus_end):score=sequence
+	
+For CDR1,2, score is similarity. for CDR3, score 0.00 means partial CDR3, score 1.00 means CDR3 with imputed nucleotides and other numbers means the motif signal strength with 100.00 as strongest.
+
+The coordinate is 0-based.
+
+The output trust_cdr3.out is a tsv file. The fields are:
+
+	consensus_id	index_within_consensus	V_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count
 
 
 ### Practical notes
 
-*Build custom V,J,C gene database (files for -f and --ref)* 
+* Build custom V,J,C gene database (files for -f and --ref)
 
 To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
 	
@@ -67,7 +84,9 @@ Normally, the file specified by "--ref" is downloaded from IMGT website and then
 
 to generate the input for "--ref". The bcrtcr.fa is the file generated in previous step (for -f). Cgene.list is provided in the repository. The species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
-*Concise report* The default report of TRUST4 is trust_cdr3.out,  
+* Concise report
+
+The default report of TRUST4 is trust_cdr3.out, which 
 
 
 ### Example
