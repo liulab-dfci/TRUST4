@@ -14,7 +14,7 @@ Includes portions copyright from:
 
 ### What is TRUST4?
 
-Tcr Receptor Utilities for Solid Tissue (TRUST) is a computational tool to analyze TCR and BCR sequences using unselected RNA sequencing data, profiled from solid tissues, including tumors. TRUST4 performs de novo assembly on V, J, C genes including the hypervariable complementarity-determining region 3 (CDR3) and reports contigs containing BCR/TCR sequences. TRUST4 then realigns the contigs to IMGT reference gene sequences to report the corresponding information. TRUST4 supports both single-end and paired-end sequencing data with any read length. 
+Tcr Receptor Utilities for Solid Tissue (TRUST) is a computational tool to analyze TCR and BCR sequences using unselected RNA sequencing data, profiled from solid tissues, including tumors. TRUST4 performs de novo assembly on V, J, C genes including the hypervariable complementarity-determining region 3 (CDR3) and reports consensus of BCR/TCR sequences. TRUST4 then realigns the contigs to IMGT reference gene sequences to report the corresponding information. TRUST4 supports both single-end and paired-end sequencing data with any read length. 
 
 ### Install
 
@@ -43,7 +43,13 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 
 ### Input/Output
 
-The primary input to TURST4 
+The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
+
+TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.out is in fasta format for the annotation of the consensus assembly. And trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies.
+
+Each header of trust_annot.out is split into fields. 
+
+
 
 ### Practical notes
 
