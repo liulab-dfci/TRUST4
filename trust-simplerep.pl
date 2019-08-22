@@ -111,7 +111,7 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 	{
 		if ( length( $info[3] ) % 3 != 0 )
 		{
-			$aa = "Out_of_frame" ;
+			$aa = "out_of_frame" ;
 		}
 		else
 		{
