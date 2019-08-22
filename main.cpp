@@ -165,7 +165,7 @@ int main( int argc, char *argv[] )
 	ReadFiles mateReads ;
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
-	int firstReadLen = 0 ;
+	int firstReadLen = -1 ;
 	bool flagNoTrim = false ;
 	bool hasMate = false ;
 	int constantGeneEnd = 200 ;

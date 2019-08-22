@@ -154,24 +154,24 @@ if ( $prefix eq "" )
 }
 
 # Extract the file
-if ( $stage <= 0 )
+if ( @bamFiles > 0 )
 {
-	if ( @bamFiles > 0 )
+	if ( $stage <= 0 )
 	{
 		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+	}
 
-		# determine paired-end or single-end
-		if ( -e $prefix."_toassemble_1.fq" )
-		{
-			push @firstMateFiles, $prefix."_toassemble_1.fq" ;
-			push @secondMateFiles, $prefix."_toassemble_2.fq" ;
-			$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
-		}
-		else
-		{
-			push @singleFiles, "${prefix}_toassemble.fq" ;
-			$mainArgs .= " -u ${prefix}_toassemble.fq" ;
-		}
+# determine paired-end or single-end
+	if ( -e $prefix."_toassemble_1.fq" )
+	{
+		push @firstMateFiles, $prefix."_toassemble_1.fq" ;
+		push @secondMateFiles, $prefix."_toassemble_2.fq" ;
+		$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
+	}
+	else
+	{
+		push @singleFiles, "${prefix}_toassemble.fq" ;
+		$mainArgs .= " -u ${prefix}_toassemble.fq" ;
 	}
 }
 

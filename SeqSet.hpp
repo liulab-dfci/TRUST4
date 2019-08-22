@@ -6190,8 +6190,26 @@ public:
 								int seqIdx = geneOverlap[0].seqIdx ;
 								if ( seqs[ seqIdx ].info[2].a != -1 )
 								{
-									for ( j = s, k =  seqs[ seqIdx ].info[2].a ; 
-										j >= 0 && k >= 0 ; --j, --k ) 
+									int rightMatch = 0 ;
+									for ( j = s , k = seqs[ seqIdx ].info[2].a ; 
+											read[j] && seqs[ seqIdx ].consensus[k] ; ++j, ++k )
+									{
+										//if ( read[j] != seqs[seqIdx].consensus[k] )
+										//	break ;
+
+										if ( read[j] == seqs[ seqIdx ].consensus[k] )
+										{
+											++rightMatch ;
+											if ( (double)rightMatch / ( j - s + 1 ) >= 0.75 )
+											{
+												matchCnt = rightMatch ;
+												hitLen = j - s + 1 ;
+											}
+										}
+									}
+
+									for ( j = s - 1, k = seqs[ seqIdx ].info[2].a - 1; 
+											j >= 0 && k >= 0 ; --j, --k ) 
 									{
 										if ( read[j] == 'M' )
 											break ;
@@ -6200,17 +6218,12 @@ public:
 											++matchCnt ;
 										++hitLen ;
 									}
-									for ( j = s + 1, k =  seqs[ seqIdx ].info[2].a + 1 ; 
-										read[j] && seqs[ seqIdx ].consensus[k] ; ++j, ++k )
-									{
-										if ( read[j] != seqs[seqIdx].consensus[k] )
-											break ;
-										++matchCnt ;
-										++hitLen ;
-									}
 								}
 								// hitLen by default is 0.
-								if ( hitLen <= 9 || (double)matchCnt / hitLen < 0.9 )
+								double similarity = 0.9 ;
+								if ( seqs[ seqIdx ].name[0] == 'I' )
+									similarity = 0.8 ;
+								if ( hitLen <= 9 || (double)matchCnt / hitLen < similarity )
 									cdr3Score = 0 ;
 								break ;
 							}
@@ -6244,15 +6257,23 @@ public:
 								int seqIdx = geneOverlap[2].seqIdx ;
 								if ( seqs[ seqIdx ].info[2].a != -1 )
 								{
-									for ( j = s, k = seqs[ seqIdx ].info[2].a ; j >= 0 && k >= 0 ; --j, --k ) 
+									int leftMatch = 0 ;
+									for ( j = e, k = seqs[ seqIdx ].info[2].a ; j >= 0 && k >= 0 ; --j, --k ) 
 									{
-										if ( read[j] != seqs[seqIdx].consensus[k] )
-											break ;
-										++matchCnt ;
-										++hitLen ;
+										//if ( read[j] != seqs[seqIdx].consensus[k] )
+										//	break ;
+
+										if ( read[j] == seqs[ seqIdx ].consensus[k] )
+										{
+											++leftMatch ;
+											if ( (double)leftMatch / ( e - j + 1 ) >= 0.75 )
+											{
+												matchCnt = leftMatch ;
+												hitLen = e - j + 1 ;
+											}
+										}
 									}
-									
-									for ( j = s + 1, k = seqs[ seqIdx ].info[2].a + 1 ; 
+									for ( j = e + 1, k = seqs[ seqIdx ].info[2].a + 1 ; 
 										read[j] && seqs[ seqIdx ].consensus[k] ; ++j, ++k )
 									{
 										if ( read[j] == 'M' )
@@ -6264,7 +6285,10 @@ public:
 
 									}
 								}
-								if ( hitLen <= 9 || (double)matchCnt / hitLen < 0.9 )
+								double similarity = 0.9 ;
+								if ( seqs[ seqIdx ].name[0] == 'I' )
+									similarity = 0.8 ;
+								if ( hitLen <= 9 || (double)matchCnt / hitLen < similarity )
 									cdr3Score = 0 ;
 								break ;
 							}
