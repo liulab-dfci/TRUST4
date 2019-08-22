@@ -6327,10 +6327,12 @@ public:
 						/*cdr3 = new char[e - s + 2  + 1 ] ;
 						memcpy( cdr3, read + s, e - s + 1 ) ;
 						cdr3[e - s + 1] = '\0' ;*/
-
-						cdr[2].seqIdx = 0 ;
-						cdr[2].readStart = s ;
-						cdr[2].readEnd = e ;
+						if ( s + 2 < geneOverlap[2].readStart )
+						{
+							cdr[2].seqIdx = 0 ;
+							cdr[2].readStart = s ;
+							cdr[2].readEnd = e ;
+						}
 					}
 				}
 			}
@@ -6362,10 +6364,12 @@ public:
 						/*cdr3 = new char[e - s + 2  + 1 ] ;
 						memcpy( cdr3, read + s, e - s + 1 ) ;
 						cdr3[e - s + 1] = '\0' ;*/
-
-						cdr[2].seqIdx = 0 ;
-						cdr[2].readStart = s ;
-						cdr[2].readEnd = e ;
+						if ( e - 2 > geneOverlap[0].readEnd )
+						{
+							cdr[2].seqIdx = 0 ;
+							cdr[2].readStart = s ;
+							cdr[2].readEnd = e ;
+						}
 					}
 				}
 			}
