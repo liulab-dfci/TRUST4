@@ -31,15 +31,15 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 	Usage: ./run-trust4 [OPTIONS]
 		Required:
 			-b STRING: path to bam file
-    			-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
+			-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
 		Optional:
-    			--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used). (recommended) 
-    			-o STRING: prefix of output files. (default: inferred from file prefix)
- 			-t INT: number of threads (default: 1)\n".
-    			--stage INT: start TRUST4 on specified stage (default: 0):\n".
-    				0: start from beginning (candidate read extraction)\n".
-    				1: start from assembly\n".
-    				2: start from annotation\n". 
+			--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used). (recommended) 
+			-o STRING: prefix of output files. (default: inferred from file prefix)
+			-t INT: number of threads (default: 1)\n".
+			--stage INT: start TRUST4 on specified stage (default: 0):\n".
+				0: start from beginning (candidate read extraction)\n".
+				1: start from assembly\n".
+				2: start from annotation\n". 
 
 ### Input/Output
 
@@ -93,9 +93,9 @@ The default report of TRUST4 is trust_cdr3.out, which
 
 The directory './example' in this distribution contains two BAM files, along with an example of a BAM list file. Run PsiCLASS with:
 
-	./run-trust4 -b example/s1.bam,example/s2.bam
+	./run-trust4 -b example/example.bam -f bcrtcr.fa --ref IMGT+C.fa
 
-The run will generate the files 
+The run will generate the files trust_raw.out, trust_final.out, trust_annot.out and trust_cdr3.out .
 
 ### Terms of use
 
