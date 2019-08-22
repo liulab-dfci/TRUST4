@@ -47,8 +47,19 @@ The primary input to TURST4
 
 ### Practical notes
 
-*Build custom V,J,C gene database (files for -f and --ref)* To generate The file specified by "-f"  
+*Build custom V,J,C gene database (files for -f and --ref)* 
 
+To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
+	
+	perl BuildDatabaseFa.pl reference.fa annotation.gtf bcr_tcr_gene_name.txt > bcrtcr.fa
+
+to generate the input for "-f". The "bcr_tcr_gene_name.txt" is provided as "human_vdjc.list" in the repository.
+
+Normally, the file specified by "--ref" is downloaded from IMGT website and then supplemented by sequence of constant genes, For example, for human, you can use command
+
+	perl BuildImgtAnnot.pl bcrtcr.fa Cgene.list Homo_sapien > IMGT+C.fa
+
+to generate the input for "--ref". The bcrtcr.fa is the file generated in previous step (for -f). Cgene.list is provided in the repository. The species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
 *Concise report* The default report of TRUST4 is trust_cdr3.out,  
 
