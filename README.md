@@ -1,4 +1,4 @@
-PsiCLASS
+TRUST4
 =======
 
 Described in: 
