@@ -74,9 +74,29 @@ my %DnaToAa = (
 		'GGT' => 'G',    # Glycine
 		);
 
+sub GetChainType
+{
+	foreach my $g (@_)
+	{
+		if ( $g =~ /^IGH/ )
+		{
+			return 0 ;
+		}
+		elsif ( $g =~ /^IGL/ )
+		{
+			return 0 ;
+		}
+		elsif ( $g =~ /^TR/ )
+		{
+			return 2 ;
+		}
+	}
+	return -1 ;
+}
+
 # read in the input
 open FP1, $ARGV[0] ;
-my $totalCnt = 0 ;
+my @totalCnt = (0, 0, 0) ;
 while ( <FP1> )
 {
 	chomp ;
@@ -92,7 +112,8 @@ while ( <FP1> )
 	{
 		@{ $cdr3{ $key } } = ( $cols[8], $cols[9] ) ;
 	}
-	$totalCnt += $cols[9] ;
+	my $type = GetChainType( $cols[2], $cols[3], $cols[4] ) ;
+	$totalCnt[ $type ] += $cols[9] if ( $type != -1 ) ;
 }
 close FP1 ;
 
@@ -130,5 +151,8 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 			}
 		}
 	}
-	printf( "%.2f\t%e\t%s\t%s\t%s\t*\t%s\t%s\n", $val[1], $val[1] / $totalCnt, $info[3], $aa, $info[0], $info[1], $info[2] ) ;
+	my $freq = 0 ;
+	my $type = GetChainType( $info[0], $info[1], $info[2] ) ;
+	$freq = $val[1] / $totalCnt[ $type ] if ( $type != -1 ) ;
+	printf( "%.2f\t%e\t%s\t%s\t%s\t*\t%s\t%s\n", $val[1], $freq, $info[3], $aa, $info[0], $info[1], $info[2] ) ;
 }
