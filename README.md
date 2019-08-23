@@ -82,7 +82,7 @@ Normally, the file specified by "--ref" is downloaded from IMGT website and then
 
 	perl BuildImgtAnnot.pl bcrtcr.fa Cgene.list Homo_sapien > IMGT+C.fa
 
-to generate the input for "--ref". The bcrtcr.fa is the file generated in previous step (for -f). Cgene.list is provided in the repository. The species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
+to generate the input for "--ref". The bcrtcr.fa is the file generated in previous step (for -f). Cgene.list is provided in the repository. The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
 * Simple report
 
@@ -90,7 +90,11 @@ The default report of TRUST4 is trust_cdr3.out is focus on DNA level. We provide
 
 	perl trust-simplerep.pl trust_cdr3.out > trust_report.out
 
-The columns are read_count, frequency(proportion of read_count), CDR3 dna, CDR3 amino acids, V, D, J, C genes. The D gene column is a place holder for now and is always "\*" indicating missing. Note that for frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. If you are interested in a subset of chains, you can "grep" those from trust_cdr3.out and run trust-simplerep.pl on the subset.
+The output is a tsv file and columns in the simple report are 
+
+	read_count frequency(proportion of read_count) CDR3_dna CDR3_amino_acids V D J C 
+	
+The D gene column is a place holder for now and is always "\*" indicating missing. Note that for frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. If you are interested in a subset of chains, you can "grep" those from trust_cdr3.out and run trust-simplerep.pl on the subset.
  
 ### Example
 
