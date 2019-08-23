@@ -84,11 +84,14 @@ Normally, the file specified by "--ref" is downloaded from IMGT website and then
 
 to generate the input for "--ref". The bcrtcr.fa is the file generated in previous step (for -f). Cgene.list is provided in the repository. The species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
-* Concise report
+* Simple report
 
-The default report of TRUST4 is trust_cdr3.out, which 
+The default report of TRUST4 is trust_cdr3.out is focus on DNA level. We provide a script "trust-simplerep.pl" that can convert the output to amino acids, collapse repeated entries and normalize the frequency. The command is
 
+	perl trust-simplerep.pl trust_cdr3.out > trust_report.out
 
+The columns are read_count, frequency(proportion of read_count), CDR3 dna, CDR3 amino acids, V, D, J, C genes. The D gene column is a place holder for now and is always "\*" indicating missing. Note that for frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. If you are interested in a subset of chains, you can "grep" those from trust_cdr3.out and run trust-simplerep.pl on the subset.
+ 
 ### Example
 
 The directory './example' in this distribution contains two BAM files, along with an example of a BAM list file. Run PsiCLASS with:
