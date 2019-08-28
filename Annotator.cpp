@@ -719,6 +719,20 @@ int main( int argc, char *argv[] )
 				compat.push_back( nc ) ;
 			}
 			// EM algorithm to estimate the count
+			/*if ( cdr3Reads[i].overlap.seqIdx == 178 )
+			{
+				int l ;
+				for ( l = 0 ; l < info.size() ; ++l )
+				{
+					fprintf( stderr, "%s %lf\n", info[l].seq, info[l].count ) ;
+				}
+				for ( int ll = i ; ll < j ; ++ll )
+				{
+					for ( l = 0 ; l < compat[ll - i].Size() ; ++l )
+						fprintf( stderr, "%d ", compat[ll - i][l]) ;
+					fprintf( stderr, "\n" ) ;
+				}
+			}*/	
 			AbundanceEstimation( compat, info ) ;
 
 			i = j ;
@@ -738,9 +752,13 @@ int main( int argc, char *argv[] )
 			std::vector<struct _CDR3info> &info = cdr3Infos[i] ;
 			int size = info.size() ;
 			// Output each CDR3 information
+			int effectiveJ = 0 ;
 			for ( j = 0 ; j < size ; ++j )
 			{
-				fprintf( fpOutput, "%s\t%d\t", seqSet.GetSeqName( i ), j ) ;
+				if ( info[j].count == 0 )
+					continue ;
+				fprintf( fpOutput, "%s\t%d\t", seqSet.GetSeqName( i ), effectiveJ ) ;
+				++effectiveJ ;
 				// The gene ids
 				for ( k = 0 ; k < 4 ; ++k )
 				{
