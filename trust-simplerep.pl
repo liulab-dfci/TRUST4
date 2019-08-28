@@ -82,7 +82,7 @@ sub GetChainType
 		{
 			return 0 ;
 		}
-		elsif ( $g =~ /^IGL/ )
+		elsif ( $g =~ /^IG/ )
 		{
 			return 0 ;
 		}
