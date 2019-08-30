@@ -18,6 +18,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used)\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t-t INT: number of threads (default: 1)\n".
+    "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
     "\t\t0: start from beginning (candidate read extraction)\n".
     "\t\t1: start from assembly\n".
@@ -54,6 +55,7 @@ my $useJellyfish = 0 ;
 my $prefix = "" ;
 my $vdjcFasta = "" ;
 my $vdjcRef = "" ;
+my $bamExtractorArgs = "" ;
 my $mainArgs = "" ;
 my $threadCnt = 1 ;
 my $stage = 0 ;
@@ -108,6 +110,10 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
+	elsif ( $ARGV[$i] eq "--abnormalUnmapFlag" )
+	{
+		$bamExtractorArgs .= " -u" ;
+	}
 	elsif ( $ARGV[$i] eq "--jellyfish" )
 	{
 		$useJellyfish = 1 ;
@@ -116,6 +122,10 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$stage = $ARGV[$i + 1] ;
 		++$i ;
+	}
+	else
+	{
+		die "Unknown parameter ".$ARGV[$i]."\n" ;
 	}
 }
 
@@ -158,7 +168,7 @@ if ( @bamFiles > 0 )
 {
 	if ( $stage <= 0 )
 	{
-		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $bamExtractorArgs" ) ;
 	}
 
 # determine paired-end or single-end

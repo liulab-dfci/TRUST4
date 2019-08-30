@@ -20,7 +20,7 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"Optional:\n"
 		"\t-o STRING: prefix to the output file\n"
 		"\t-t INT: number of threads (default: 1)\n"
-		"\t-u: filter unaligned read-pair (default: no filter)\n" ;
+		"\t-u: the flag or order of unaligned read-pair is not ordinary (default: not used)\n" ;
 
 static const char *short_options = "f:b:o:t:u" ;
 static struct option long_options[] = {
@@ -410,7 +410,7 @@ int main( int argc, char *argv[] )
 	FILE *fpRef = NULL ;
 	char prefix[127] = "toassemble" ;
 	Alignments alignments ;
-	bool filterUnalignedFragment = false ;
+	bool abnormalUnalignedFlag = false ;
 	int kmerLength = 9  ;
 	SeqSet refSet( kmerLength ) ;
 	int threadCnt = 1 ;
@@ -440,7 +440,7 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 'u' )
 		{
-			filterUnalignedFragment = true ;
+			abnormalUnalignedFlag = true ;
 		}
 		else if ( c == 't' )
 		{
@@ -540,13 +540,11 @@ int main( int argc, char *argv[] )
 		if ( !alignments.IsTemplateAligned() 
 			|| ( alignments.IsAligned() && ValidAlternativeChrom( alignments.GetChromName( alignments.GetChromId() ) ) ) )
 		{
-			if ( filterUnalignedFragment && !alignments.IsTemplateAligned() )
-				continue ;
-			
 			//if ( !alignments.IsTemplateAligned() && !refSet.HasHitInSet( buffer ) ) 
 			//	continue ;
 			
-			if ( !alignments.IsTemplateAligned() && alignments.fragStdev != 0 )
+			if ( !alignments.IsTemplateAligned() && alignments.fragStdev != 0 
+				&& !abnormalUnalignedFlag ) // And the two reads of unaligned template should come together. 
 			{
 				//printf( "filtered\n" ) ;
 				alignments.GetReadSeq( buffer ) ;
@@ -569,6 +567,7 @@ int main( int argc, char *argv[] )
 				TrimName( mateName ) ;
 				if ( name.compare( mateName ) != 0 )
 				{
+					fprintf( stderr, "%s\n%s\n", name.c_str(), mateName.c_str() ) ;
 					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
 					return EXIT_FAILURE ;
 				}
@@ -619,7 +618,7 @@ int main( int argc, char *argv[] )
 			//printf( "%s %s\n", alignments.GetChromName( alignments.GetChromId() ), alignments.GetReadId() ) ;
 			if ( alignments.fragStdev != 0 )
 			{
-				// reads from alternative chromosomes.
+				// reads from alternative chromosomes, or the unmapped flag is not set appropriately
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
 				if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
@@ -636,7 +635,7 @@ int main( int argc, char *argv[] )
 			}
 			else 
 			{
-				// single-end
+				// single-end or when the mate-pair flag is set in bad fashion.
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
 				if ( threadCnt == 1 ||  alignments.IsAligned() ) 
@@ -746,17 +745,13 @@ int main( int argc, char *argv[] )
 	{
 		if ( !alignments.IsPrimary() )
 			continue ;
-		if ( !alignments.IsTemplateAligned() ) // the sorted bam file should put all unaligned template at last (NO!).
+		if ( !alignments.IsTemplateAligned() && !abnormalUnalignedFlag ) 
+			// the sorted bam file should put all unaligned template at last (NO!).
 			continue ;
 
 		std::string name( alignments.GetReadId() ) ;
-		int len = name.length() ;
-		if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 
-				&& name[len - 2] == '/' )
-		{
-			name.erase( len - 2, 2 ) ; // Haven't tested yet.
-		}
-		
+		TrimName( name ) ;	
+
 		std::map<std::string, struct _candidate>::iterator it = candidates.find( name ) ;
 		if ( it == candidates.end() )
 			continue ;
