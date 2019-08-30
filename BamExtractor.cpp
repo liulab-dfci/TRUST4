@@ -564,7 +564,9 @@ int main( int argc, char *argv[] )
 				std::string mateName( alignments.GetReadId() ) ;
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
-
+						
+				TrimName( name ) ;
+				TrimName( mateName ) ;
 				if ( name.compare( mateName ) != 0 )
 				{
 					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
