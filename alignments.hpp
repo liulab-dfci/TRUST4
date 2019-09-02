@@ -586,7 +586,8 @@ public:
 			}
 
 			if ( mateDiffCnt < sampleMax && b->core.tid == b->core.mtid 
-				&& b->core.pos < b->core.mpos )
+				&& b->core.pos < b->core.mpos 
+				&& IsReverse() != IsMateReverse() ) //avoid chimeric
 			{
 				mateDiff[ mateDiffCnt ] = b->core.mpos - b->core.pos ;
 				++mateDiffCnt ;
@@ -604,7 +605,7 @@ public:
 		qsort( lens, lensCnt, sizeof( int ), CompInt ) ;
 		readLen = lens[ lensCnt - 1 ] ;
 		
-		if ( mateDiffCnt > 0 )
+		if ( hasMateCnt >= totalReadCnt / 2 ) //mateDiffCnt > 0 )
 		{
 			matePaired = true ;
 
@@ -628,7 +629,7 @@ public:
 		}
 		//printf( "readLen = %d\nfragLen = %d, fragStdev = %d\n", readLen, fragLen, fragStdev ) ;	
 
-		if ( hasMateCnt > 0 && fragStdev == 0 )
+		if ( hasMateCnt >= totalReadCnt / 2 && fragStdev == 0 )
 			fragStdev = 1 ;
 
 		delete[] lens ;

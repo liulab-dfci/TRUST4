@@ -635,7 +635,7 @@ int main( int argc, char *argv[] )
 			}
 			else 
 			{
-				// single-end or when the mate-pair flag is set in bad fashion.
+				// single-end 
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
 				if ( threadCnt == 1 ||  alignments.IsAligned() ) 
