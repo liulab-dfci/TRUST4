@@ -98,7 +98,7 @@ The D gene column is a place holder for now and is always "\*" indicating missin
  
 ### Example
 
-The directory './example' in this distribution contains two BAM files, along with an example of a BAM list file. Run PsiCLASS with:
+The directory './example' in this distribution contains one BAM files as input for TRUST4. Run PsiCLASS with:
 
 	./run-trust4 -b example/example.bam -f bcrtcr.fa --ref IMGT+C.fa
 
