@@ -5981,7 +5981,6 @@ public:
 				locateS = -1 ;
 			if ( removeLocateE )
 				locateE = -1 ;
-
 			sContigIdx = GetContigIdx( locateS, contigs ) ; 
 			eContigIdx = GetContigIdx( locateE, contigs ) ;
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
@@ -6316,6 +6315,8 @@ public:
 					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
 					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' ) )
 				{
+					while ( locateE + 2 >= len )
+						locateE -= 3 ;
 					locateS = contigs[ eContigIdx ].a + ( locateE - contigs[ eContigIdx ].a ) % 3 ;			
 					cdr3Score = 0 ;
 
@@ -6353,6 +6354,9 @@ public:
 					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
 					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' ) )
 				{
+					while ( locateS < 0 )
+						locateS += 3 ;
+
 					locateE = contigs[ sContigIdx ].b - 2 - ( contigs[ sContigIdx ].b - 2 - locateS ) % 3 ;
 					cdr3Score = 0 ;
 				
