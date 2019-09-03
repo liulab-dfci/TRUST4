@@ -1747,13 +1747,15 @@ private:
 		SimpleVector<bool> use ; // Buffer to represent whether to use the seq when computing overlaps
 		use.ExpandTo( seqCnt ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
-			use = false ;
+			use[i] = false ;
 
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( seqs[i].consensus == NULL ) 
 				continue ;
-			if ( use[i] == false )
+			//if ( use[i] == false )
+			//	continue ;
+			if ( prevAdj != NULL && nextAdj != NULL && prevAdj[i].size() + nextAdj[i].size() == 0 )
 				continue ;
 
 			// Update the use buffer 
