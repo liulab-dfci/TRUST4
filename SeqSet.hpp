@@ -1732,7 +1732,8 @@ private:
 	}
 	
 	// Only build the graph for the seqs with id marked true in "use" array.
-	int BuildBranchGraph( std::vector<struct _overlap> *adj, int leastOverlapLen, SimpleVector<bool> &use )
+	int BuildBranchGraph( std::vector<struct _overlap> *adj, int leastOverlapLen,
+		std::vector<struct _overlap> *prevAdj = NULL, std::vector<struct _overlap> *nextAdj = NULL )
 	{
 		// Build overlap graph.
 		int i, j, k ;
@@ -1743,6 +1744,11 @@ private:
 			if ( seqs[i].consensusLen > maxLen )
 				maxLen = seqs[i].consensusLen ;
 		align = new char[2 * maxLen + 2] ;
+		SimpleVector<bool> use ; // Buffer to represent whether to use the seq when computing overlaps
+		use.ExpandTo( seqCnt ) ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+			use = false ;
+
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( seqs[i].consensus == NULL ) 
@@ -1750,9 +1756,23 @@ private:
 			if ( use[i] == false )
 				continue ;
 
+			// Update the use buffer 
+			if ( prevAdj != NULL && nextAdj != NULL )
+			{
+				int prevCnt = prevAdj[i].size() ;
+				int nextCnt = nextAdj[i].size() ;
+
+				for ( k = 0 ; k < prevCnt ; ++k )
+					use[ prevAdj[i][k].seqIdx ] = true ;
+
+				for ( k = 0 ; k < nextCnt ; ++k )
+					use[ nextAdj[i][k].seqIdx ] = true ;
+			}
+
+
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
-			
+
 			double backupSimilarity = novelSeqSimilarity ;
 			novelSeqSimilarity = repeatSimilarity ;
 			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, 1, overlaps, &use ) ;
@@ -1767,18 +1787,19 @@ private:
 
 				if ( i == overlaps[j].seqIdx || use[ overlaps[j].seqIdx ] == false )
 					continue ;
-				
+
 				struct _overlap extendedOverlap ;
 				int addMatchCnt = 0 ;				
 				// Locally extend the overlap. In this case, the overlap actually just means share.
 				// Allow "radius" overhang.
 				int seqIdx = overlaps[j].seqIdx ;
-				int a, b, k ;
+
+				int a, b ;
 				int matchCnt = 0 ;
 				int rightExtend = 0;
 				int rightExtendMatchCnt = 0 ; 
 				for ( k = 1, a = overlaps[j].readEnd + 1, b = overlaps[j].seqEnd + 1 ; 
-					a < seqs[i].consensusLen && b < seqs[ seqIdx ].consensusLen ; ++a, ++b, ++k )
+						a < seqs[i].consensusLen && b < seqs[ seqIdx ].consensusLen ; ++a, ++b, ++k )
 				{
 					if ( IsPosWeightCompatible( seqs[i].posWeight[a], seqs[ seqIdx ].posWeight[b] ) )
 					{
@@ -1796,12 +1817,12 @@ private:
 				int leftExtend = 0 ;
 				int leftExtendMatchCnt = 0 ;
 				for ( k = 1, a = overlaps[j].readStart - 1, b = overlaps[j].seqStart - 1 ; 
-					a >= 0 && b >= 0 ; --a, --b, ++k )
+						a >= 0 && b >= 0 ; --a, --b, ++k )
 				{
 					/*if ( b >= seqs[ seqIdx ].consensusLen )
-						fprintf( stderr, "%d %d %d %d\n%s\n%s\n", overlaps[j].readStart, overlaps[j].readEnd,
-								overlaps[j].seqStart, overlaps[j].seqEnd,
-								seqs[i].consensus, seqs[ seqIdx ].consensus ) ;*/
+					  fprintf( stderr, "%d %d %d %d\n%s\n%s\n", overlaps[j].readStart, overlaps[j].readEnd,
+					  overlaps[j].seqStart, overlaps[j].seqEnd,
+					  seqs[i].consensus, seqs[ seqIdx ].consensus ) ;*/
 					if ( IsPosWeightCompatible( seqs[i].posWeight[a], seqs[ seqIdx ].posWeight[b] ) )
 					{
 						++matchCnt ;
@@ -1813,7 +1834,7 @@ private:
 						}
 					}
 				}
-				
+
 				extendedOverlap = overlaps[j] ;
 				extendedOverlap.readStart -= leftExtend ;
 				extendedOverlap.seqStart -= leftExtend ;
@@ -1841,6 +1862,19 @@ private:
 							extendedOverlap.similarity ) ;
 #endif				
 				}	
+			}
+			
+			// Reset the use buffer 
+			if ( prevAdj != NULL && nextAdj != NULL )
+			{
+				int prevCnt = prevAdj[i].size() ;
+				int nextCnt = nextAdj[i].size() ;
+
+				for ( k = 0 ; k < prevCnt ; ++k )
+					use[ prevAdj[i][k].seqIdx ] = false ;
+
+				for ( k = 0 ; k < nextCnt ; ++k )
+					use[ nextAdj[i][k].seqIdx ] = false ;
 			}
 		}
 		
@@ -3576,7 +3610,7 @@ public:
 		for ( i = 0 ; i < seqCnt ; ++i )
 			useInBranch[i] = true ;
 		
-		BuildBranchGraph( adj, leastOverlapLen, useInBranch ) ;
+		BuildBranchGraph( adj, leastOverlapLen ) ;
 
 		// Keep only the connections that representing overlapping information.
 		for ( i = 0 ; i < seqCnt ; ++i )
@@ -7411,7 +7445,7 @@ public:
 		
 		int backupHLR = hitLenRequired ;
 		hitLenRequired = leastOverlapLen ;
-		BuildBranchGraph( branchAdj, leastOverlapLen, useInBranch ) ;
+		BuildBranchGraph( branchAdj, leastOverlapLen, prevAdj, nextAdj ) ;
 		hitLenRequired = backupHLR ;
 
 		
