@@ -98,11 +98,11 @@ The D gene column is a place holder for now and is always "\*" indicating missin
  
 ### Example
 
-The directory './example' in this distribution contains one BAM files as input for TRUST4. Run PsiCLASS with:
+The directory './example' in this distribution contains one BAM files as input for TRUST4. Run TRUST4 with:
 
 	./run-trust4 -b example/example.bam -f bcrtcr.fa --ref IMGT+C.fa
 
-The run will generate the files trust_raw.out, trust_final.out, trust_annot.out and trust_cdr3.out .
+The run will generate the files trust_raw.out, trust_final.out, trust_annot.out and trust_cdr3.out and several fq/fa files.
 
 ### Terms of use
 
