@@ -5634,8 +5634,9 @@ public:
 				//&& locateE + 11 < contigs[ eContigIdx ].b + 1 
 				&& locateE > 15 + contigs[ eContigIdx ].a && locateE <= 60 + contigs[ eContigIdx ].a ) 
 			{
-				if ( strongLocateE || ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
-					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+				if ( strongLocateE || ( locateE + 11 < len
+					&& ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+					   DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
 					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
 					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' ) )
 				{
@@ -5664,7 +5665,8 @@ public:
 				//&& locateS - 6 > contigs[ sContigIdx ].a
 				&& locateS + 18 < contigs[ sContigIdx ].b + 1 && locateS + 2 + 60 > contigs[ sContigIdx ].b + 1 )
 			{
-				if ( strongLocateS || ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
+				if ( strongLocateS || ( locateS - 6 >= 0 
+					&& DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
 					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
 					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' ) )
 				{
@@ -6113,50 +6115,54 @@ public:
 				}
 				else if ( forcePartial )
 					cdr3Score = 0 ;
+				
 				// Now consider whether the gaps could create some false positive score CDR3.
-				int nCnt = 0 ;
-				// Gap on the boundary, then we need to adjust the CDR3 region.
-				//   this could happen when doing alignment, it does not check the overhang nucleotide.
-				if ( read[s] == 'M' )
+				if ( cdr3Score > 0 )
 				{
-					while ( read[s] == 'M' && s <= e )
-						s += 3 ;
-					cdr[2].readStart = s ;
-					cdr3Score = 0 ;
-					if ( s >= e )
+					int nCnt = 0 ;
+					// Gap on the boundary, then we need to adjust the CDR3 region.
+					//   this could happen when doing alignment, it does not check the overhang nucleotide.
+					if ( read[s] == 'M' )
 					{
-						cdr[2].seqIdx = -1 ;
-						cdr[2].readStart = cdr[2].readEnd = -1 ;
+						while ( read[s] == 'M' && s <= e )
+							s += 3 ;
+						cdr[2].readStart = s ;
+						cdr3Score = 0 ;
+						if ( s >= e )
+						{
+							cdr[2].seqIdx = -1 ;
+							cdr[2].readStart = cdr[2].readEnd = -1 ;
+						}
 					}
-				}
-				if ( read[e] == 'M' )
-				{
-					while ( read[e] == 'M' && e >= s )
-						e -= 3 ;
-					cdr[2].readEnd = e ;
-					cdr3Score = 0 ;
-					if ( e <= s )
+					if ( read[e] == 'M' )
 					{
-						 cdr[2].seqIdx = -1 ;
-						 cdr[2].readStart = cdr[2].readEnd = -1 ;
+						while ( read[e] == 'M' && e >= s )
+							e -= 3 ;
+						cdr[2].readEnd = e ;
+						cdr3Score = 0 ;
+						if ( e <= s )
+						{
+							cdr[2].seqIdx = -1 ;
+							cdr[2].readStart = cdr[2].readEnd = -1 ;
+						}
 					}
-				}
-				// Gap in the middle.
-				for ( i = s ; i <= e ; ++i )
-				{
-					if ( read[i] == 'N' )
+					// Gap in the middle.
+					for ( i = s ; i <= e ; ++i )
 					{
-						++nCnt ;
-						if ( nCnt >= 2 )
+						if ( read[i] == 'N' )
+						{
+							++nCnt ;
+							if ( nCnt >= 2 )
+							{
+								cdr3Score = 0 ;
+								break ;
+							}
+						}
+						else if ( read[i] == 'M' )
 						{
 							cdr3Score = 0 ;
 							break ;
 						}
-					}
-					else if ( read[i] == 'M' )
-					{
-						cdr3Score = 0 ;
-						break ;
 					}
 				}
 
@@ -6304,8 +6310,9 @@ public:
 					|| GetContigIdx( geneOverlap[0].readStart, contigs ) != GetContigIdx( geneOverlap[2].readStart, contigs  ) )
 				&& locateE > 15 + contigs[ eContigIdx ].a && locateE <= 60 + contigs[ eContigIdx ].a ) 
 			{
-				if ( strongLocateE || ( ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
-					 DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
+				if ( strongLocateE || ( locateE + 11 < len  
+					 && ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+					    DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' )
 					 && DnaToAa( read[locateE + 3], read[ locateE + 4], read[ locateE + 5 ] ) == 'G' 
 					 && DnaToAa( read[locateE + 9], read[ locateE + 10], read[ locateE + 11 ] ) == 'G' ) )
 				{
@@ -6341,7 +6348,8 @@ public:
 					GetContigIdx( geneOverlap[0].readStart, contigs ) != GetContigIdx( geneOverlap[2].readStart, contigs ) )  
 				&& locateS + 18 < contigs[ sContigIdx ].b + 1 && locateS + 2 + 60 > contigs[ sContigIdx ].b + 1 )
 			{
-				if ( strongLocateS || ( DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
+				if ( strongLocateS || ( locateS - 6 >= 0  
+					&& DnaToAa( read[locateS], read[ locateS + 1], read[ locateS + 2 ] ) == 'C' 
 					&& DnaToAa( read[locateS - 3], read[ locateS - 2], read[ locateS - 1 ] ) == 'Y'  
 					&& DnaToAa( read[locateS - 6], read[ locateS - 5], read[ locateS - 4 ] ) == 'Y' ) )
 				{
