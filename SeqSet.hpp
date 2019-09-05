@@ -6105,24 +6105,29 @@ public:
 						cdr3Score += 100.0 / 6 ;
 						++rightCnt ;
 					}
-				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
-						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
-					cdr3Score = 0 ;
-				else if ( s < 0 )  
+
+				
+				if ( s < 0 )  
 				{
 					// The CDR3 anchor based on alignment of V,J genes could create some boundary cases when indel. 
+					//    Since these come from alignment, it should happend to the case of missing V/J gene.
 					s = e % 3 ;
 					cdr[2].readStart = s ;
 					cdr3Score = 0 ;
 				}
-				else if ( e >= len )
+				if ( e >= len )
 				{
 					e = len - 1 - ( len - s ) % 3 ; 
 					cdr[2].readEnd = e ;
 					cdr3Score = 0 ;
 				}
+
+
+				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
+						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
+					cdr3Score = 0 ;
 				else if ( e + 6 >= len && !( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
-				                          	DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
+							DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
 					cdr3Score = 0 ;
 				else if ( cdr3Score < 99 && 
 					( geneOverlap[0].seqIdx != -1 && geneOverlap[0].seqStart > 100 && geneOverlap[0].readStart > 100 ) )
