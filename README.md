@@ -100,7 +100,7 @@ The directory './example' in this distribution contains one BAM files as input f
 
 	./run-trust4 -b example/example.bam -f hg38_bcrtcr.fa --ref human_IMGT+C.fa
 
-The run will generate the files trust_raw.out, trust_final.out, trust_annot.fa and trust_cdr3.out and several fq/fa files.
+The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa and TRUST_example_cdr3.out and several fq/fa files.
 
 ### Terms of use
 
