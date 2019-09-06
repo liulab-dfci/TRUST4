@@ -1,0 +1,208 @@
+#!/usr/bin/env perl
+
+use strict ;
+use warnings ;
+
+use Cwd 'cwd' ;
+use Cwd 'abs_path' ;
+use File::Basename ;
+
+die "usage: ./run-trust4 [OPTIONS]:\n".
+    "Required:\n".
+    #"\t[Input]:\n".
+    "\t-b STRING: path to bam file\n".
+    "\t-1 STRING -2 STRING: path to pair-end read files\n".
+    "\t-u STRING: path to single-end read file\n".
+    "\t-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
+    "Optional:\n".
+    "\t--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used)\n".
+    "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
+    "\t-t INT: number of threads (default: 1)\n".
+    "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
+    "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
+    "\t\t0: start from beginning (candidate read extraction)\n".
+    "\t\t1: start from assembly\n".
+    "\t\t2: start from annotation\n". 
+    #"\t--jellyfish: use jellyfish2 to count the kmers. (default: not used)\n"
+    "" 
+	if ( @ARGV == 0 ) ;
+
+sub system_call
+{
+	print STDERR "[".localtime()."] SYSTEM CALL: ".join(" ",@_)."\n";
+	system(@_) == 0
+		or die "system @_ failed: $?";
+	#print STDERR " finished\n";
+} 
+
+my $WD = dirname( abs_path( $0 ) ) ;
+my $kmerSize = 21 ;
+my $bloomFilterSize = 100000000 ;
+my $i ;
+
+my $jellyfishBin = "jellyfish" ;
+#if ( -e "$WD/jellyfish/bin/jellyfish" )
+#{
+#	$jellyfishBin = "$WD/jellyfish/bin/jellyfish" ;
+#}
+
+# process the options.
+my @singleFiles ;
+my @firstMateFiles ;
+my @secondMateFiles ;
+my @bamFiles ;
+my $useJellyfish = 0 ;
+my $prefix = "" ;
+my $vdjcFasta = "" ;
+my $vdjcRef = "" ;
+my $bamExtractorArgs = "" ;
+my $mainArgs = "" ;
+my $threadCnt = 1 ;
+my $stage = 0 ;
+
+print STDERR "[".localtime()."] TRUST4 begins.\n" ;
+
+for ( $i = 0 ; $i < @ARGV ; ++$i )
+{
+	if ( $ARGV[$i] eq "-1" )
+	{
+		push @firstMateFiles, $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "-2" )
+	{	
+		push @secondMateFiles, $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[ $i ] eq "-u" ) 
+	{
+		push @singleFiles, $ARGV[ $i + 1 ] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "-b" )
+	{
+		push @bamFiles, $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "-f" )
+	{	
+		$vdjcFasta = $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "-o" )
+	{
+		$prefix = $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--ref" )
+	{
+		$vdjcRef = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "-t" )
+	{
+		$threadCnt = $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--abnormalUnmapFlag" )
+	{
+		$bamExtractorArgs .= " -u" ;
+	}
+	elsif ( $ARGV[$i] eq "--jellyfish" )
+	{
+		$useJellyfish = 1 ;
+	}
+	elsif ( $ARGV[$i] eq "--stage" )
+	{
+		$stage = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	else
+	{
+		die "Unknown parameter ".$ARGV[$i]."\n" ;
+	}
+}
+
+if ( @bamFiles == 0 && @firstMateFiles == 0 && @singleFiles == 0 )
+{
+	die "Need to use -b/{-1,-2}/-u to specify input reads.\n" ;
+}
+
+if ( $vdjcFasta eq "" )
+{
+	die "Need to use -f to specify the sequence of annotated V/D/J/C genes' sequence.\n" ;
+}
+
+# Infer the output prefix.
+if ( $prefix eq "" )
+{
+	# infer the output prefix.
+	if ( @bamFiles > 0 )
+	{
+		$prefix = "TRUST_".( split /\./, basename( $bamFiles[0] ) )[0] ;
+	}
+	elsif ( @firstMateFiles > 0 )
+	{
+		$prefix = "TRUST_".( split /\./, basename( $firstMateFiles[0] ) )[0] ;
+	}
+	elsif ( @singleFiles > 0 )
+	{
+		$prefix = "TRUST_".( split /\./, basename( $singleFiles[0] ) )[0] ;
+	}
+	else
+	{
+		$prefix = "TRUST" ;
+	}
+
+	$mainArgs .= " -o $prefix" ;
+}
+
+# Extract the file
+if ( @bamFiles > 0 )
+{
+	if ( $stage <= 0 )
+	{
+		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $bamExtractorArgs" ) ;
+	}
+
+# determine paired-end or single-end
+	if ( -e $prefix."_toassemble_1.fq" )
+	{
+		push @firstMateFiles, $prefix."_toassemble_1.fq" ;
+		push @secondMateFiles, $prefix."_toassemble_2.fq" ;
+		$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
+	}
+	else
+	{
+		push @singleFiles, "${prefix}_toassemble.fq" ;
+		$mainArgs .= " -u ${prefix}_toassemble.fq" ;
+	}
+}
+
+# Run the assembly 
+if ( $stage <= 1 )
+{
+	system_call( "$WD/trust4 $mainArgs" ) ;
+}
+
+# Annotation 
+if ( $stage <= 2 )
+{
+	if ( $vdjcRef eq "" )
+	{
+		system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix --notIMGT > ${prefix}_annot.fa" ) ;
+	}
+	else
+	{
+		system_call( "$WD/annotator -f $vdjcRef -a ${prefix}_final.out -r ${prefix}_assembled_reads.fa -t $threadCnt -o $prefix > ${prefix}_annot.fa" ) ;
+	}
+}
+
+print STDERR "[".localtime()."] TRUST4 finishes.\n" ;
+# Filter and output.
