@@ -44,9 +44,9 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 
 The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
 
-TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.out is in fasta format for the annotation of the consensus assembly. And trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies.
+TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.fa is in fasta format for the annotation of the consensus assembly. And trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies.
 
-Each header of trust_annot.out is split into fields:
+Each header of trust_annot.fa is split into fields:
 
 	consensus_id consensus_length average_coverage annotations
 
@@ -99,9 +99,9 @@ The D gene column is a place holder for now and is always "\*" indicating missin
 
 The directory './example' in this distribution contains one BAM files as input for TRUST4. Run TRUST4 with:
 
-	./run-trust4 -b example/example.bam -f bcrtcr.fa --ref IMGT+C.fa
+	./run-trust4 -b example/example.bam -f hg38_bcrtcr.fa --ref human_IMGT+C.fa
 
-The run will generate the files trust_raw.out, trust_final.out, trust_annot.out and trust_cdr3.out and several fq/fa files.
+The run will generate the files trust_raw.out, trust_final.out, trust_annot.fa and trust_cdr3.out and several fq/fa files.
 
 ### Terms of use
 
