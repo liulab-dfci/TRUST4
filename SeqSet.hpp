@@ -4254,7 +4254,6 @@ public:
 			for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
 				read[j] = 'N' ;
 		}
-
 		if ( insertLen > 0 )
 		{
 			// Shift the sequence.
@@ -4280,7 +4279,6 @@ public:
 			cdr[2].similarity = 0.5 ;
 			return -1 ;	
 		}
-
 		if ( insertLen < -1 )
 			insertAt = -1 ;
 		return insertAt ;
@@ -4669,7 +4667,6 @@ public:
 			{
 				if ( i == 1 || geneOverlap[i].seqIdx == -1 )
 					continue ;
-
 				for ( j = 0 ; j < 4 ; ++j )
 				{
 					if ( j == 1 || i == j || geneOverlap[j].seqIdx == -1 )
@@ -4698,6 +4695,19 @@ public:
 					}
 				}
 			}
+
+			// Remove other secondary hits with inconsistent coordinate.
+			int size = allOverlaps.size() ;
+			for ( i = 0, k = 0 ; i < size ; ++i )
+			{
+				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
+				if ( allOverlaps[i].readEnd <= geneOverlap[ geneType ].readStart 
+					|| allOverlaps[i].readStart >= geneOverlap[ geneType].readEnd )
+					continue ;
+				allOverlaps[k] = allOverlaps[i] ;
+				++k ;
+			}
+			allOverlaps.resize( k ) ;
 		}
 		
 		// Extend overlap
@@ -6126,7 +6136,8 @@ public:
 				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
 						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
 					cdr3Score = 0 ;
-				else if ( e + 6 >= len && !( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
+				else if ( e + 6 >= len && locateE + 2 < len &&
+						!( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 							DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
 					cdr3Score = 0 ;
 				else if ( cdr3Score < 99 && 
@@ -6578,12 +6589,16 @@ public:
 		}
 
 		// Output CDR1,2,3 information.
+		//fprintf( stderr, "ERROR %s\n", read ) ;
 		for ( i = 0 ; i < 3 ; ++i )
 		{
+			//printf( "%d %d\n", cdr[i].readStart, cdr[i].readEnd ) ;
 			if ( cdr[i].seqIdx != -1 )
 			{
 				int len = cdr[i].readEnd - cdr[i].readStart + 1 ;
 				memcpy( r, read + cdr[i].readStart, len ) ;
+				//if ( len >= strlen( read ) || cdr[i].readStart < 0 || cdr[i].readStart + len - 1 >= strlen( read ))
+				//	fprintf( stderr, "ERROR %s\n", read ) ;
 			        r[len] = '\0' ;
 				
 				sprintf( buffer + strlen( buffer), " CDR%d(%d-%d):%.2lf=%s", i + 1, cdr[i].readStart, cdr[i].readEnd, 
