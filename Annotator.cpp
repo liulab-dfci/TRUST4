@@ -164,6 +164,8 @@ void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector<
 				//printf( "%d %d %d\n", i, j, compat[i][j] ) ;
 				sum += abundance[ compat[i][j] ] ;
 			}
+			if ( sum == 0 ) // Some read assignments can be incompatible with any cdr3 due to mate-pair disagreement.
+				continue ;
 			for ( j = 0 ; j < size ; ++j )
 				info[ compat[i][j] ].count += abundance[ compat[i][j] ] / sum ;
 		}
