@@ -146,6 +146,16 @@ void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector<
 			++abundance[ compat[i][0] ] ;
 	for ( i = 0 ; i < cCnt ; ++i )
 		sum += abundance[i] ;
+	
+	if ( sum == 0 && cCnt > 0 ) // This happens when the CDR3s are all created by disagreeed mate-pairs, 
+			// in this case, just report one.
+	{
+		info[0].count = rCnt ;
+		for ( i = 1 ; i < cCnt ; ++i )
+			info[i].count = 0 ;
+		return ;
+	}
+	
 	for ( i = 0 ; i < cCnt ; ++i )
 		abundance[i] /= sum ;
 
