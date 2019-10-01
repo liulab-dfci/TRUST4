@@ -20,6 +20,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
 		//"\t--partial: including partial CDR3s in the report (default: false)\n"
+		"\t--geneAlignment: output the gene alignment (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n";
 
@@ -41,6 +42,7 @@ static struct option long_options[] = {
 			{ "partial",no_argument, 0, 10002 },
 			{ "notIMGT", no_argument, 0, 10003 },
 			{ "noImpute", no_argument, 0, 10004 },
+			{ "geneAlignment", no_argument, 0, 10005 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -324,6 +326,7 @@ int main( int argc, char *argv[] )
 	bool includePartial = true ;
 	bool isIMGT = true ;
 	bool impute = true ;
+	bool outputGeneAlignment = false ;
 
 	while ( 1 )
 	{
@@ -372,6 +375,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10004 )
 		{
 			impute = false ;
+		}
+		else if ( c == 10005 )
+		{
+			outputGeneAlignment = true ;
 		}
 		else
 		{
@@ -507,7 +514,7 @@ int main( int argc, char *argv[] )
 		int len = seqSet.GetSeqConsensusLen( i ) ;
 		sprintf( buffer, ">%s %d %.2lf", seqSet.GetSeqName( i ), len, (double)weightSum / 500.0 ) ;
 		refSet.AnnotationToString( seqSet.GetSeqConsensus( i ), annotations[i].geneOverlap, 
-			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, buffer + strlen( buffer ) ) ;
+			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, outputGeneAlignment, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
 	}
 

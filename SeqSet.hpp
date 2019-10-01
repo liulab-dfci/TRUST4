@@ -6547,7 +6547,7 @@ public:
 	
 	// Convert the annotation information to string.
 	void AnnotationToString( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3],
-	                std::vector<struct _overlap> *secondaryGeneOverlaps, char *buffer ) 
+	                std::vector<struct _overlap> *secondaryGeneOverlaps, bool outputGeneAlignment, char *buffer ) 
 	{
 		int i, j ;
 		buffer[0] = '\0' ;
@@ -6607,7 +6607,73 @@ public:
 			else
 				sprintf( buffer + strlen( buffer), " CDR%d(0-0):0.00=null", i + 1 ) ;
 		}
+
+		if ( outputGeneAlignment )
+		{
+			for ( i = 0 ; i < 4 ; ++i )
+			{
+				if ( i == 1 )
+					continue ;
+
+				char *align = GetGeneOverlapAlignment( read, geneOverlap[i] ) ;
+				if ( align != NULL )
+				{
+					int k, l ;
+					j = geneOverlap[i].readStart ;
+					k = geneOverlap[j].seqStart ;
+					
+					// Convert the alignment results to another type of string, but showed 
+					//   how to obtain the read sequence from reference sequence.
+					// =: match. [ACGT]: mismatch. [\]: deletion. [acgt]: insertion. 
+					for ( l = 0 ; align[l] != -1 ; ++l )
+					{
+						if ( align[l] == EDIT_MATCH )
+						{
+							align[l] = '=' ;
+							++j ; ++k ;
+						}
+						else if ( align[l] == EDIT_MISMATCH )
+						{
+							align[l] = read[j] ;
+							++j ; ++k ;
+						}
+						else if ( align[l] == EDIT_DELETE )
+						{
+							align[l] = '\\' ;
+							++k ;
+						}
+						else if ( align[l] == EDIT_INSERT )
+						{
+							align[l] = read[j] - 'A' + 'a' ;
+							++j ;
+						}
+					}
+					align[l] = '\0' ;
+
+					sprintf( buffer + strlen( buffer ), " %s", align ) ;
+					delete[] align ;
+				}
+				else
+				{
+					sprintf( buffer + strlen( buffer ), " *" ) ;
+				}
+			}
+		}
 		free( r ) ;
+	}
+
+	char *GetGeneOverlapAlignment( char *read, struct _overlap gene )
+	{
+		if ( gene.seqIdx == -1 )
+			return NULL ;
+
+		int len = strlen( read ) ;
+		char *align ;
+		align = new char[ len + seqs[gene.seqIdx].consensusLen + 2 ] ;
+		AlignAlgo::GlobalAlignment( seqs[ gene.seqIdx ].consensus + gene.seqStart,
+				gene.seqEnd - gene.seqStart + 1,
+				read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
+		return align ;
 	}
 	
 	// Use the refSet to annotate current set.
