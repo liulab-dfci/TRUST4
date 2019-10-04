@@ -4047,7 +4047,7 @@ public:
 		return 0 ;
 	}
 	
-	void ShiftAnnotations( int at, int shift, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
+	void ShiftAnnotations( int at, int shift, int baseChange, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
 	                        std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
 		int i ;
@@ -4056,10 +4056,20 @@ public:
 			if ( geneOverlap[i].seqIdx == -1 )
 				continue ;
 
+			if ( geneOverlap[i].readStart <= at && at <= geneOverlap[i].readEnd )
+			{
+				geneOverlap[i].matchCnt += 2 * baseChange ;
+				geneOverlap[i].similarity = double( geneOverlap[i].matchCnt ) 
+					/ ( geneOverlap[i].readEnd - geneOverlap[i].readStart + 1 + shift
+						+ geneOverlap[i].seqEnd - geneOverlap[i].seqStart + 1 ) ;
+			}
+
 			if ( geneOverlap[i].readStart >= at )
 				geneOverlap[i].readStart += shift ;
 			if ( geneOverlap[i].readEnd >= at )
 				geneOverlap[i].readEnd += shift ;
+			
+
 		}
 
 		/*for ( i = 0 ; i < 3 ; ++i )
@@ -4079,6 +4089,14 @@ public:
 			int size = overlaps.size() ;
 			for ( i = 0 ; i < size ; ++i )
 			{
+				if ( overlaps[i].readStart <= at && at <= overlaps[i].readEnd )
+				{
+					overlaps[i].matchCnt += 2 * baseChange ;
+					overlaps[i].similarity = double( overlaps[i].matchCnt ) 
+						/ ( overlaps[i].readEnd - overlaps[i].readStart + 1 + shift +  
+								+ overlaps[i].seqEnd - overlaps[i].seqStart + 1 ) ;
+				}
+
 				if ( overlaps[i].readStart >= at )
 					overlaps[i].readStart += shift ;
 				if ( overlaps[i].readEnd >= at )
@@ -4270,7 +4288,7 @@ public:
 			cdr[2].readEnd = newEnd ;
 			cdr[2].similarity = 0.01 ;
 			// Shift what we found.
-			ShiftAnnotations( insertAt, insertLen, geneOverlap, secondaryGeneOverlaps ) ;
+			ShiftAnnotations( insertAt, insertLen, 0, geneOverlap, secondaryGeneOverlaps ) ;
 		}
 		else if ( insertLen == 0 )
 		{
@@ -4365,22 +4383,34 @@ public:
 		// Record where anchor[1] got shifted to
 		int shiftAt ;
 		int shift ;
+		int baseChange = 0 ; // The change t
 		for ( j = 0 ; j <= anchor[0].b ; ++j )
 			nr[j] = read[j] ;
-		if ( anchor[1].a >= anchor[0].a )
+		if ( anchor[1].a > anchor[0].a ) 
 		{
 			// Put in the imputed sequence
 			for ( i = anchor[0].a + 1 ; i < anchor[1].a ; ++i, ++j )
 				nr[j] = seqs[ seqIdx ].consensus[i] ;
-		}		
-		shiftAt = anchor[1].b ;
-		shift = j - anchor[1].b ;
-		for ( j = anchor[1].b ; read[j] ; ++j )
-			nr[j + shift] = read[j] ;
+			shiftAt = anchor[1].b ;
+			shift = j - anchor[1].b ; // shift could be negative is the imputed portion is shorter than gap.
+			for ( j = anchor[1].b ; read[j] ; ++j )
+				nr[j + shift] = read[j] ;
+			baseChange = anchor[1].a - anchor[0].a - 1 ;
+		}
+		else
+		{
+			// The two anchor portion overlaps.
+			shiftAt = anchor[1].b ;
+			int overlap = anchor[0].a - anchor[1].a + 1 ;
+			shift = ( anchor[0].b - overlap + 1 ) - anchor[1].b ;
+			for ( j = anchor[1].b + overlap ; read[j] ; ++j ) // anchor[1].b+overlap should not excess the read len.
+				nr[j + shift] = read[j] ;
+			baseChange = -overlap ;
+		}
 		nr[j + shift] = '\0' ; 
 		cdr[2].readEnd += shift ;
 		cdr[2].similarity = 0.01 ;
-		ShiftAnnotations( shiftAt, shift, geneOverlap, secondaryGeneOverlaps ) ;
+		ShiftAnnotations( shiftAt, shift, baseChange, geneOverlap, secondaryGeneOverlaps ) ;
 
 		return shiftAt ;
 	}
