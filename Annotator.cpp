@@ -356,27 +356,27 @@ int main( int argc, char *argv[] )
 		{
 			threadCnt = atoi( optarg ) ;
 		}
-		else if ( c == 10000 )
+		else if ( c == 10000 ) // --fasta
 		{
 			ignoreWeight = true ;
 		}
-		else if ( c == 10001 )
+		else if ( c == 10001 ) // --radius
 		{
 			radius = atoi( optarg ) ;
 		}
-		else if ( c == 10002 )
+		else if ( c == 10002 ) // --partial. not used
 		{
 			includePartial = true ;	
 		}
-		else if ( c == 10003 )
+		else if ( c == 10003 ) // notIMGT 
 		{
 			isIMGT = false ;
 		}
-		else if ( c == 10004 )
+		else if ( c == 10004 ) // noImpute
 		{
 			impute = false ;
 		}
-		else if ( c == 10005 )
+		else if ( c == 10005 ) // --geneAlignment
 		{
 			outputGeneAlignment = true ;
 		}
@@ -388,6 +388,8 @@ int main( int argc, char *argv[] )
 	}
 
 	refSet.InputRefFa( buffer, isIMGT ) ;
+	//refSet.OutputRef( stdout ) ;
+	//return 0 ;
 
 	if ( refSet.Size() == 0 )
 	{

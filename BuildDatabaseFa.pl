@@ -114,7 +114,7 @@ while ( <FP1> )
 		if ( $cols[8] =~ /gene_name \"(.*?)\"/ )
 		{
 			#print $1, "\n" ; 
-			$gname = $1 ;
+			$gname = uc($1) ;
 		}
 		else
 		{

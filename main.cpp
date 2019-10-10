@@ -211,11 +211,11 @@ int main( int argc, char *argv[] )
 		{
 			threadCnt = atoi( optarg ) ;
 		}
-		else if ( c == 10000 )
+		else if ( c == 10000 ) //debug-ns
 		{
 			seqSet.InputNovelFa( optarg ) ;
 		}
-		else if ( c == 10001) 
+		else if ( c == 10001) //noTrim
 		{
 			flagNoTrim =true ;
 		}

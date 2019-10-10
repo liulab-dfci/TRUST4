@@ -8459,6 +8459,22 @@ public:
 		}
 	}
 
+	void OutputRef( FILE *fp )
+	{
+		int i, j, k ;
+		int size = seqs.size() ;
+		for ( i = 0 ; i < size ; ++i )
+		{
+			if ( !seqs[i].isRef || seqs[i].consensus == NULL )
+				continue ;
+
+			fprintf( fp, ">%s %d %d %d %d %d\n%s\n", seqs[i].name, 
+					seqs[i].info[0].a, seqs[i].info[0].b, 
+					seqs[i].info[1].a, seqs[i].info[1].b, 
+					seqs[i].info[2].a, seqs[i].consensus ) ;
+		}
+	}
+
 	char *GetSeqName( int seqIdx )
 	{
 		return seqs[ seqIdx ].name ;
