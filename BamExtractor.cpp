@@ -392,6 +392,9 @@ void FinishWork( std::vector<struct _unmappedCandidate> work,
 	pthread_mutex_destroy( info.lockOutput ) ;
 	pthread_mutex_destroy( info.lockFreeThreads ) ;
 	pthread_cond_destroy( info.condFreeThreads ) ;
+	delete info.lockOutput ;
+	delete info.lockFreeThreads ;
+	delete info.condFreeThreads ;
 	ReleaseCustomData( threadArgs, threadCnt ) ;
 	delete[] threadArgs ;
 }
