@@ -350,7 +350,7 @@ int main( int argc, char *argv[] )
 						q[ offset + j ] = mateR.qual[j] ;
 					}
 					int len = offset + j ;
-					for ( j = 0 ; j < slen ; ++j )
+					for ( j = 0 ; j < slen && j < len ; ++j )
 					{
 						if ( j < offset || nr.qual[j] >= q[j] - 14 || r[j] == 'N' )
 						{
@@ -359,8 +359,8 @@ int main( int argc, char *argv[] )
 						}
 					}
 
-					if ( j > len ) 
-						len = j ;
+					//if ( j > len ) 
+					//	len = j ;
 					r[len] = q[len] = '\0' ;
 					
 					if ( 0 )//len > 4 )
