@@ -15,6 +15,9 @@
 #define SCORE_GAPEXTEND (-1)
 #define SCORE_INDEL (-4)
 
+#define SCORE_MATCH_LOCAL 1
+#define SCORE_MISMATCH_LOCAL (-2)
+
 struct _posWeight
 {
 	int count[4] ;
@@ -870,6 +873,99 @@ public:
 		//printf( "%d\n", score[lenp * bmax + lent] ) ;
 		return score[lenp * bmax + lent] ;
 	}
+	
+	static int LocalAlignment( char *t, int lent, char *p, int lenp, int &tstart, int &pstart, char *align )
+	{
+		int i, j ;
+		int *m = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ;
+		int bmax = ( lent + 1 ) ;
+		for ( i = 0 ; i <= lenp ; ++i )
+			m[i * bmax + 0] = 0 ;
+		for ( j = 0 ; j <= lent ; ++j )
+			m[0 * bmax + j] = 0 ;
+		
+		tstart = 0 ;
+		pstart = 0 ;
+		for ( i = 1 ; i <= lenp ; ++i )
+		{	
+			for ( j = 1 ; j <= lent ; ++j )
+			{
+				int score ;
+				score = m[ ( i - 1 ) * bmax + j - 1] + ( t[j - 1] == p[i - 1] ? SCORE_MATCH_LOCAL : SCORE_MISMATCH_LOCAL ) ;	
+				score = MAX( score, m[ i * bmax + ( j - 1 ) ] + SCORE_INDEL ) ;
+				score = MAX( score, m[ ( i - 1 ) * bmax + j ] + SCORE_INDEL ) ;
+				if ( score < 0 )
+					score = 0 ;
+				m[i * bmax + j ] = score ;
+			}
+		}
+
+		int tagi = lenp, tagj = lent ;
+		int maxScore = 0 ;
+		for ( i = 0 ; i <= lenp ; ++i )
+			for ( j = 0 ; j <= lent ; ++j )
+				if ( m[i * bmax + j] >= maxScore )
+				{
+					maxScore = m[i * bmax + j] ;
+					tagi = i ;
+					tagj = j ;
+				}
+		if ( maxScore == 0 )
+		{
+			delete[] m ;
+			return -1 ;
+		}
+		int tag = 0 ;
+		while ( tagi > 0 || tagj > 0 )
+		{
+			int max = m[tagi * bmax + tagj] ;
+			int a = 0 ;
+			if ( max == 0 )
+			{
+				tstart = tagj ;
+				pstart = tagi ;
+				break ;
+			}
+			if ( tagj > 0 && m[tagi * bmax + tagj - 1] + SCORE_INDEL == max )
+				a = EDIT_DELETE ;	
+			if ( tagi > 0 && m[ ( tagi - 1 ) * bmax + tagj] + SCORE_INDEL == max )
+				a = EDIT_INSERT ; 
+			if ( tagj > 0 && tagi > 0 )
+			{
+				int diff = ( t[ tagj - 1] == p[tagi - 1] ? SCORE_MATCH_LOCAL : SCORE_MISMATCH_LOCAL ) ;
+				if ( m[ ( tagi - 1) * bmax + tagj - 1 ] + diff == max )
+				{
+					if ( diff == SCORE_MATCH_LOCAL )
+						a = EDIT_MATCH ;
+					else
+						a = EDIT_MISMATCH ;
+				}
+			}
+
+			align[ tag ] = a ;
+			++tag ;
+			if ( a == EDIT_DELETE )
+				--tagj ;
+			else if ( a == EDIT_INSERT )
+				--tagi ;
+			else
+			{
+				--tagi ;
+				--tagj ;
+			}
+		}
+			
+		align[tag] = -1 ;
+		for ( i = 0, j = tag - 1 ; i < j ; ++i, --j )
+		{	
+			char tmp = align[i] ;
+			align[i] = align[j] ;
+			align[j] = tmp ;
+		}
+		delete[] m ;
+		//printf( "%d\n", score[lenp * bmax + lent] ) ;
+		return maxScore ;
+	}
 
 	static void VisualizeAlignment( char *t, int lent, char *p, int lenp, char *align )
 	{
@@ -987,6 +1083,7 @@ public:
 		
 		return overlapSize ;
 	}
+	
 	
 
 	// Find the partial suffix of a that match with prefix of b of length at least minLen.

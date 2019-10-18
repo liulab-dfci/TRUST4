@@ -3,7 +3,7 @@
 use strict ;
 use warnings ;
 
-die "usage: ./trust-simplerepo.pl xxx_cdr3.out [OPTIONS]\n" if ( @ARGV == 0 ) ;
+die "usage: ./trust-simplerepo.pl xxx_cdr3.out [--junction trust_annot.fa] > trust_report.out\n" if ( @ARGV == 0 ) ;
 my %cdr3 ;  
 
 # Copied from http://www.wellho.net/resources/ex.php4?item=p212/3to3
@@ -94,6 +94,24 @@ sub GetChainType
 	return -1 ;
 }
 
+my $i ;
+my $annotFile = "" ;
+for ( $i = 1 ; $i < @ARGV ; ++$i )
+{
+	if ( $ARGV[$i] == "--junction" )
+	{
+		$annotFile = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	else
+	{
+		die "Unknown option ", $ARGV[$i], "\n" ;
+	}
+}
+
+my %junctionInfo ; # V-end, V-del, VD(J)-Ins, D-Ldel, D-start, D-end, D-Rdel, DJ-Ins, J-del, J-start
+
+
 # read in the input
 open FP1, $ARGV[0] ;
 my @totalCnt = (0, 0, 0) ;
@@ -101,19 +119,19 @@ while ( <FP1> )
 {
 	chomp ;
 	my @cols = split ;
-	my $key = join( "\t", ( $cols[2], $cols[3], $cols[4], $cols[7] ) ) ;
+	my $key = join( "\t", ( $cols[2], $cols[3], $cols[4], $cols[5], $cols[8] ) ) ;
 	if ( defined $cdr3{ $key } )
 	{
 		my $val = \@{ $cdr3{ $key } } ;
-		$val->[0] = $cols[8] if ( $cols[8] > $val->[0] ) ;
-		$val->[1] += $cols[9] ;
+		$val->[0] = $cols[9] if ( $cols[9] > $val->[0] ) ;
+		$val->[1] += $cols[10] ;
 	}
 	else
 	{
-		@{ $cdr3{ $key } } = ( $cols[8], $cols[9] ) ;
+		@{ $cdr3{ $key } } = ( $cols[9], $cols[10] ) ;
 	}
-	my $type = GetChainType( $cols[2], $cols[3], $cols[4] ) ;
-	$totalCnt[ $type ] += $cols[9] if ( $type != -1 ) ;
+	my $type = GetChainType( $cols[2], $cols[4], $cols[5] ) ;
+	$totalCnt[ $type ] += $cols[10] if ( $type != -1 ) ;
 }
 close FP1 ;
 
@@ -122,7 +140,7 @@ print( "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\n" ) ;
 foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 {
 	my @val = @{ $cdr3{ $key } } ;
-	my @info = split /\t/, $key ;
+	my @info = split /\t/, $key ; # V, D, J, C. CDR3
 	my $aa = "" ;
 	if ( $val[0] == 0 )
 	{
@@ -130,14 +148,14 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 	}
 	else
 	{
-		if ( length( $info[3] ) % 3 != 0 )
+		if ( length( $info[4] ) % 3 != 0 )
 		{
 			$aa = "out_of_frame" ;
 		}
 		else
 		{
-			my $len = length( $info[3] ) ;
-			my $s = uc( $info[3] ) ;
+			my $len = length( $info[4] ) ;
+			my $s = uc( $info[4] ) ;
 			for ( my $i = 0 ; $i < $len ; $i += 3 )
 			{
 				if ( !defined $DnaToAa{ substr( $s, $i, 3 ) } )
@@ -152,7 +170,7 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 		}
 	}
 	my $freq = 0 ;
-	my $type = GetChainType( $info[0], $info[1], $info[2] ) ;
+	my $type = GetChainType( $info[0], $info[2], $info[3] ) ;
 	$freq = $val[1] / $totalCnt[ $type ] if ( $type != -1 ) ;
-	printf( "%.2f\t%e\t%s\t%s\t%s\t*\t%s\t%s\n", $val[1], $freq, $info[3], $aa, $info[0], $info[1], $info[2] ) ;
+	printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s\n", $val[1], $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
 }

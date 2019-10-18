@@ -21,7 +21,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
 		//"\t--partial: including partial CDR3s in the report (default: false)\n"
 		"\t--geneAlignment: output the gene alignment (default: not set)\n"
-		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))"
+		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -783,8 +783,8 @@ int main( int argc, char *argv[] )
 				// The gene ids
 				for ( k = 0 ; k < 4 ; ++k )
 				{
-					if ( k == 1 )
-						continue ;
+					//if ( k == 1 )
+					//	continue ;
 					if ( annotations[i].geneOverlap[k].seqIdx == -1 )
 						fprintf( fpOutput, "*\t" ) ;	
 					else

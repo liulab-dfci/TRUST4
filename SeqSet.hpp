@@ -4462,6 +4462,107 @@ public:
 		return -1 ;
 	}
 	
+	// Annotate the D gene
+	int AnnotateReadDGene( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
+		std::vector<struct _overlap> *secondaryGeneOverlaps )
+	{
+		int i, j, k ;
+		std::vector< std::vector<struct _overlap> > overlaps ;
+		SimpleVector<int> dGeneSeqIdx ;
+
+		int seqCnt = seqs.size() ;
+		int anchorSeqIdx = -1 ;
+		
+		if ( cdr[2].seqIdx == -1 || cdr[2].similarity == 0 )
+			return -1 ;
+
+		if ( geneOverlap[0].seqIdx != -1 )
+			anchorSeqIdx = geneOverlap[0].seqIdx ;
+		else if ( geneOverlap[2].seqIdx != -1 )
+			anchorSeqIdx = geneOverlap[2].seqIdx ;
+		else
+			return -1 ;
+
+		// Only consider IGH, TRB, TRD
+		if ( seqs[ anchorSeqIdx ].name[2] != 'H' && seqs[ anchorSeqIdx ].name[2] != 'B' 
+			&& seqs[ anchorSeqIdx ].name[2] != 'D' )
+			return -1 ;
+		
+		int maxDlen = 0 ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( seqs[i].isRef && GetGeneType( seqs[i].name ) == 1 
+				&& ( seqs[i].name[0] == seqs[anchorSeqIdx].name[0] )
+				&& ( seqs[i].name[2] == seqs[anchorSeqIdx].name[2] ) 
+				&& ( seqs[i].name[1] == seqs[anchorSeqIdx].name[1] ) )
+			{
+				if ( seqs[i].consensusLen > maxDlen )
+					maxDlen = seqs[i].consensusLen ;
+				dGeneSeqIdx.PushBack( i ) ;
+			}
+		}
+		
+		seqCnt = dGeneSeqIdx.Size() ;
+		std::vector<struct _overlap> dOverlaps ;
+		int cdr3Len = cdr[2].readEnd - cdr[2].readStart + 1 ;
+		char *align = new char[ cdr3Len ] ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int seqStart ;
+			int readStart ;
+			int seqIdx = dGeneSeqIdx[i] ;
+			int alignScore = AlignAlgo::LocalAlignment( seqs[ seqIdx ].consensus, seqs[ seqIdx ].consensusLen,
+				read + cdr[2].readStart, cdr3Len, seqStart, readStart, align ) ;
+
+			if ( alignScore >= 5 * SCORE_MATCH_LOCAL )
+			{
+				readStart += cdr[2].readStart ;
+				int readEnd = readStart - 1 ;
+				int seqEnd = seqStart - 1 ;
+				for ( j = 0 ; align[j] != -1 ; ++j )
+				{
+					if ( align[j] != EDIT_INSERT )
+						++seqEnd ;
+					if ( align[j] != EDIT_DELETE )
+						++readEnd ;
+				}
+
+				//printf( "%s\n", seqs[seqIdx].name ) ;
+				//AlignAlgo::VisualizeAlignment( seqs[ seqIdx ].consensus + seqStart, seqEnd - seqStart + 1,
+				//	read + readStart, readEnd - readStart + 1, align ) ;
+				
+				int matchCnt, mismatchCnt, indelCnt ;
+				GetAlignStats( align, false, matchCnt, mismatchCnt, indelCnt ) ;
+
+				struct _overlap no ;
+				no.seqIdx = seqIdx ;
+				no.seqStart = seqStart ; no.seqEnd = seqEnd ;
+				no.readStart = readStart ; no.readEnd = readEnd;
+				no.matchCnt = 2 * matchCnt ;
+				no.similarity = (double)no.matchCnt / ( seqEnd - seqStart + 1 + readEnd - readStart + 1 ) ;
+								
+				dOverlaps.push_back( no ) ;
+			}
+		}
+		delete[] align ;
+
+		if ( dOverlaps.size() == 0 )
+			return -1 ;
+		
+		int bestTag = 0 ;
+		int overlapCnt = dOverlaps.size() ;
+		//std::sort( dOverlaps.begin(), dOverlaps.end() ) ;
+		for ( i = 1 ; i < overlapCnt ; ++i )
+		{
+			if ( IsBetterGeneMatch( dOverlaps[i], dOverlaps[bestTag], 1.0) )
+			{
+				bestTag = i ;
+			}
+		}
+		geneOverlap[1] = dOverlaps[bestTag] ;
+		return dOverlaps[bestTag].seqIdx ;
+	}
+
 	// Figure out the gene composition for the read. 
 	// Return successful or not.
 	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
@@ -4599,6 +4700,11 @@ public:
 		overlapCnt = overlaps.size() ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
+			// Remove the hits on the D gene
+			if ( GetGeneType( seqs[ overlaps[i].seqIdx ].name ) == 1 )
+				continue ;
+
+			// Remove those overlaps that was secondary as well.
 			if ( !seqUsed[ overlaps[i].seqIdx ] && overlaps[i].similarity >= 0.8 )
 			{
 				seqUsed[ overlaps[i].seqIdx ] = true ;
@@ -5667,16 +5773,20 @@ public:
 					}
 				}
 			}
-			if ( locateE + 2 - locateS + 1 < 18 )
+
+			if ( locateS != -1 && locateE != -1 )
 			{
-				if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 )
-					locateS = -1 ;
-				else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1  )
-					locateE = -1 ;
-			}
-			else if ( locateE + 2 - locateS + 1 >= 180 && ( geneOverlap[0].seqIdx == -1 || geneOverlap[1].seqIdx == -1 ) ) 
-			{
-				locateS = locateE = -1 ;
+				if ( locateE + 2 - locateS + 1 < 18 )
+				{
+					if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 )
+						locateS = -1 ;
+					else if ( geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx == -1  )
+						locateE = -1 ;
+				}
+				else if ( locateE + 2 - locateS + 1 >= 180 && ( geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 ) ) 
+				{
+					locateS = locateE = -1 ;
+				}
 			}
 			
 			// If there a gap in the middle of CDR3, pick one side.
@@ -6471,6 +6581,11 @@ public:
 			cdr[2].similarity = cdr3Score / 100.0 ;
 				
 		}
+
+		if ( detailLevel >= 2 && cdr[2].similarity > 0 )
+		{
+			AnnotateReadDGene( read, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+		}
 		if ( vAlign != NULL )
 			delete[] vAlign ;
 
@@ -6586,8 +6701,8 @@ public:
 		// Output the V, J, C information
 		for ( i = 0 ; i < 4 ; ++i )
 		{
-			if ( i == 1 )
-				continue ;
+			//if ( i == 1 )
+			//	continue ;
 			if ( geneOverlap[i].seqIdx != -1 )
 			{
 				int seqIdx = geneOverlap[i].seqIdx ;
