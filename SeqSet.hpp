@@ -4439,6 +4439,7 @@ public:
 			jInAnchor = true ;
 		//if ( cdr[2].readEnd >= geneOverlap[0].readStart && cdr[2].readEnd <= geneOverlap[2].readEnd )
 		//	jInAnchor = true ;
+		int ret = -1 ;
 		if ( vInAnchor && jInAnchor )	
 		{
 			int j ;
@@ -4447,7 +4448,7 @@ public:
 					break ;
 			if ( j <= cdr[2].readEnd )
 				// There is a gap in side the CDR3 region.
-				return ImputeInternalCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+				ret = ImputeInternalCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
 			else
 				return -1 ;
 		}
@@ -4457,9 +4458,12 @@ public:
 			for ( j = cdr[2].readStart ; j <= cdr[2].readEnd ; ++j )
 				if ( read[j] == 'N' )
 					return -1 ;
-			return ImputeAnchorCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+			ret = ImputeAnchorCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
 		}
-		return -1 ;
+		
+		if ( ret != -1 )
+			AnnotateReadDGene( nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+		return ret ;
 	}
 	
 	// Annotate the D gene
