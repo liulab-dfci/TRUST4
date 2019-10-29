@@ -124,7 +124,6 @@ if ( $reportJunctionInfo == 1 )
 		my @vCoord ;
 		my @dCoord ;
 		my @jCoord ;
-		my @cCoord ;
 		my @cdr3Coord ;
 
 		if ( $cols[3] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
@@ -153,15 +152,7 @@ if ( $reportJunctionInfo == 1 )
 			#die "Wrong format $header\n" ;
 			next ;
 		}
-		if ( $cols[6] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
-		{
-			@cCoord = ($1, $2, $3, $4, $5) ;
-		}
-		else
-		{
-			#die "Wrong format $header\n" ;
-			next ;
-		}
+		
 		next if ( $vCoord[2] >= $jCoord[1] ) ;		
 		next if ( $cols[9] =~ /:0\.00/ ) ;
 		if ( $cols[9] =~ /CDR3\(([0-9]+?)-([0-9]+?)\)/ )
