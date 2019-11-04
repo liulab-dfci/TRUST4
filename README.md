@@ -49,7 +49,7 @@ Each header of trust_annot.fa is split into fields:
 
 	consensus_id consensus_length average_coverage annotations
 
-"annotaions" also has several field, corresponding to annotation of V,J,C, CDR1, CDR2 and CDR3 respectively. For the annotation of the genes, it follows the pattern 
+"annotaions" also has several field, corresponding to annotation of V,D,J,C, CDR1, CDR2 and CDR3 respectively. For the annotation of the genes, it follows the pattern 
 
 	gene_name(reference_gene_length):(consensus_start-consensus_end):(reference_start-reference_length):similarity
 	
@@ -63,7 +63,7 @@ The coordinate is 0-based.
 
 The output trust_cdr3.out is a tsv file. The fields are:
 
-	consensus_id	index_within_consensus	V_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count
+	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count
 
 
 ### Practical notes

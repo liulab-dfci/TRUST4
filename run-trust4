@@ -178,10 +178,14 @@ if ( @bamFiles > 0 )
 		push @secondMateFiles, $prefix."_toassemble_2.fq" ;
 		$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
 	}
-	else
+	elsif ( -e $prefix."_toassemble.fq" )
 	{
 		push @singleFiles, "${prefix}_toassemble.fq" ;
 		$mainArgs .= " -u ${prefix}_toassemble.fq" ;
+	}
+	elsif ( $stage <= 1 )
+	{
+		die "Could not find files like ${prefix}_toassemble*.fq\n" ;
 	}
 }
 
