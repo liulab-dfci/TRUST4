@@ -4593,6 +4593,9 @@ public:
 
 		contigCnt = GetContigIntervals( read, contigs ) ;
 		char *contigBuffer = new char[len + 1] ;
+
+		int locatePartialMatchMinLen = 8 ; // The minimum length to detect those small hits
+
 		//if ( detailLevel > 0 )
 		// Obtain the overlaps for each contig
 		contigOverlaps.resize( contigCnt ) ;
@@ -4851,6 +4854,16 @@ public:
 		}
 		
 		// Extend overlap
+		if ( detailLevel >= 2 )
+		{
+			// Change gap nucleotide from 'N' to 'M'
+			for ( i = 0 ; i < contigCnt - 1 ; ++i )
+			{
+				for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
+					read[j] = 'M' ;
+			}
+		}
+
 		if ( detailLevel >= 1 )
 		{
 			char *align = new char[ 2 * len + 2 ] ;
@@ -4930,6 +4943,61 @@ public:
 						( allOverlaps[i].seqEnd - allOverlaps[i].seqStart + 1 + 
 							allOverlaps[i].readEnd - allOverlaps[i].readStart + 1 ) ;
 			}
+
+			if ( detailLevel >= 2 )
+			{
+				// See whether we can improve gene alignment information across contigs anchoring CDR3.
+				// There might be short overhang portion near contig break point.
+				for ( i = 0 ; i < size ; ++i )
+				{
+					int seqIdx = allOverlaps[i].seqIdx ;		
+					
+					int geneType = GetGeneType( seqs[seqIdx].name ) ;
+					if ( geneType == 0 && read[ allOverlaps[i].readEnd + 1 ] == 'M' )
+					{
+						int contigIdx = GetContigIdx( allOverlaps[i].readEnd, contigs ) + 1 ;
+						int matchLen = 0 ;
+						int geneOffset = AlignAlgo::LocatePartialSufPrefExactMatch(
+								seqs[seqIdx].consensus + allOverlaps[i].seqEnd + 1, 
+								seqs[seqIdx].consensusLen - allOverlaps[i].seqEnd - 1, 
+								read + contigs[contigIdx].a,
+								contigs[contigIdx].b - contigs[contigIdx].a + 1,
+								locatePartialMatchMinLen, matchLen ) ;
+						if ( geneOffset != -1 )
+						{
+							int tmp = allOverlaps[i].seqEnd - allOverlaps[i].seqStart + 1 +  
+								allOverlaps[i].readEnd - allOverlaps[i].readStart + 1 ;
+							allOverlaps[i].readEnd = contigs[contigIdx].a + matchLen - 1 ;
+							allOverlaps[i].seqEnd = allOverlaps[i].seqEnd + 1 + geneOffset + matchLen - 1 ;
+							allOverlaps[i].matchCnt += 2 * matchLen ;
+							allOverlaps[i].similarity = (double)(allOverlaps[i].matchCnt ) / (tmp + 2 * matchLen) ;
+						}
+					}
+					else if ( geneType == 2 && allOverlaps[i].readStart > 0
+							&& read[allOverlaps[i].readStart - 1] == 'M' )
+					{
+						int contigIdx = GetContigIdx( allOverlaps[i].readStart, contigs ) - 1 ;
+						int matchLen = 0 ;
+						
+						int geneOffset = AlignAlgo::LocatePartialSufSufExactMatch( 
+								seqs[seqIdx].consensus, allOverlaps[i].seqStart,
+								read + contigs[contigIdx].a, 
+								contigs[contigIdx].b - contigs[contigIdx].a + 1,
+								locatePartialMatchMinLen, matchLen ) ;
+						if ( geneOffset != -1 )
+						{
+							int tmp = allOverlaps[i].seqEnd - allOverlaps[i].seqStart + 1 +  
+								allOverlaps[i].readEnd - allOverlaps[i].readStart + 1 ;
+							allOverlaps[i].readStart = contigs[contigIdx].b - matchLen + 1 ;
+							allOverlaps[i].seqStart = geneOffset ;
+							allOverlaps[i].matchCnt += 2 * matchLen ;
+							allOverlaps[i].similarity = (double)(allOverlaps[i].matchCnt ) / (tmp + 2 * matchLen) ;
+						}
+		
+					}
+				}
+			}
+
 			std::sort( allOverlaps.begin(), allOverlaps.end() ) ;
 			
 			for ( i = 0 ; i < 4 ; ++i )
@@ -5041,20 +5109,12 @@ public:
 			delete[] rvr ;
 		}
 
+
 		// Infer CDR1,2,3.
 		char *cdr1 = NULL ;
 		char *cdr2 = NULL ;
 		char *vAlign = NULL ;
 		
-		if ( detailLevel >= 2 )
-		{
-			// Change gap nucleotide from 'N' to 'M'
-			for ( i = 0 ; i < contigCnt - 1 ; ++i )
-			{
-				for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
-					read[j] = 'M' ;
-			}
-		}
 
 		if ( detailLevel >= 2 && geneOverlap[0].seqIdx != -1 
 			&& ( geneOverlap[2].seqIdx == -1 || geneOverlap[0].readStart < geneOverlap[2].readStart ) )
@@ -5182,7 +5242,7 @@ public:
 							far = true ;
 					if ( far )
 					{
-						s = e - 18 ;
+						/*s = e - 18 ;
 						if ( s < 0 )
 							s = e % 3 ;
 						for ( i = e ; i >= s ; i -= 3 )
@@ -5196,7 +5256,19 @@ public:
 							s = 0 ;
 							e = len ;
 							boundS = 1 ;
+						}*/
+
+						if ( seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
+							&& geneOverlap[0].seqEnd < seqs[ geneOverlap[0].seqIdx ].info[2].a )
+						{
+							s = e - 18 ;
 						}
+						if ( seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 
+							&& geneOverlap[2].seqStart > seqs[ geneOverlap[0].seqIdx ].info[2].a )
+						{
+							e = s + 18 ;
+						}
+						
 					}
 				}
 				else
@@ -5307,7 +5379,6 @@ public:
 						break ;
 					}
 			}
-
 			int locateS = -1 ;
 			int locateE = -1 ;
 			int extendS = -1 ;
@@ -5415,7 +5486,32 @@ public:
 					}
 				}
 			}
-			
+
+			if (locateS == -1 && geneOverlap[0].seqIdx != -1 
+					&& seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 )
+			{
+				// Use the gene sequence information to infer the location
+				struct _seqWrapper &seq = seqs[ geneOverlap[0].seqIdx ] ;
+				for ( i = s ; i >= boundS ; --i )
+				{
+					if ( DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' ) 
+					{
+						int matchLen = 0 ; 
+						int geneOffset = AlignAlgo::LocatePartialSufPrefExactMatch( 
+								seq.consensus + seq.info[2].a, seq.consensusLen - seq.info[2].a,
+								read + i + 6, len - ( i + 6 ),
+								locatePartialMatchMinLen, matchLen ) ;
+						if ( geneOffset != -1 && geneOffset == 0 )
+						{
+							locateS = i + 6 ;
+							strongLocateS = true ;
+							break ;
+						}
+					}
+
+				}
+			}
+
 			if ( locateS == -1 )
 			{
 				// Try the YxC motif
@@ -5660,6 +5756,32 @@ public:
 						}
 					}
 
+
+					if (locateE == -1 && geneOverlap[2].seqIdx != -1 
+						&& seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 )
+					{
+						// Use the gene sequence information to infer the location
+						struct _seqWrapper &seq = seqs[ geneOverlap[2].seqIdx ] ;
+						for ( i = e ; i < boundE ; ++i )
+						{
+							if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'W' 
+								||  DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'F' )
+							{
+								int matchLen = 0 ; 
+								int geneOffset = AlignAlgo::LocatePartialSufSufExactMatch( 
+										seq.consensus, seq.info[2].a + 1,
+										read, i + 1,
+										locatePartialMatchMinLen, matchLen ) ;
+								if ( geneOffset != -1 )
+								{
+									locateE = i ;
+									strongLocateE = true ;
+									break ;
+								}
+							}
+							
+						}
+					}
 
 					if ( 0 )//locateE == -1 )
 					{
@@ -5915,7 +6037,7 @@ public:
 						geneOffset = AlignAlgo::LocatePartialSufPrefExactMatch( 
 								seq.consensus + seq.info[2].a, seq.consensusLen - seq.info[2].a,
 								read + locateS, len - locateS,
-								10, matchLen ) ;
+								locatePartialMatchMinLen, matchLen ) ;
 						if ( geneOffset == -1 )
 							geneOffset = seq.info[2].a ;
 						else
@@ -6048,7 +6170,7 @@ public:
 							geneOffset = AlignAlgo::LocatePartialSufSufExactMatch( 
 								seq.consensus, seq.info[2].a + 1,
 								read, locateE + 1,
-								8, matchLen ) ;
+								locatePartialMatchMinLen, matchLen ) ;
 							if ( geneOffset == -1 )
 								geneOffset = seq.info[2].a ;
 							else
@@ -6171,6 +6293,7 @@ public:
 				locateS = -1 ;
 			if ( removeLocateE )
 				locateE = -1 ;
+
 			sContigIdx = GetContigIdx( locateS, contigs ) ; 
 			eContigIdx = GetContigIdx( locateE, contigs ) ;
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
@@ -6239,7 +6362,6 @@ public:
 						++leftCnt ;
 					}
 				}
-
 				if ( locateE + 2 < len && ( DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'W' ||
 						DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
 				{
@@ -6275,7 +6397,6 @@ public:
 					cdr[2].readEnd = e ;
 					cdr3Score = 0 ;
 				}
-
 
 				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
 						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
@@ -6382,8 +6503,8 @@ public:
 
 						if ( s >= contigs[i].a && s <= contigs[i].b )
 						{
-							if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
-								&& leftCnt < 3 )
+							if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].readStart <= contigs[i - 1].b 
+								&& leftCnt < 3 && !strongLocateS )
 							{
 								// Check whether it matches the sequence of the V gene.
 								int matchCnt = 0 ;
@@ -6451,7 +6572,7 @@ public:
 						if ( e >= contigs[i].a && e <= contigs[i].b )
 						{
 							if ( geneOverlap[2].seqIdx != -1 && geneOverlap[2].readEnd >= contigs[i + 1].a 
-								&& rightCnt < 3 )
+								&& rightCnt < 3 && !strongLocateE )
 							{
 								int matchCnt = 0 ;
 								int hitLen = 0 ;
@@ -6459,7 +6580,7 @@ public:
 								if ( seqs[ seqIdx ].info[2].a != -1 )
 								{
 									int leftMatch = 0 ;
-									for ( j = e, k = seqs[ seqIdx ].info[2].a ; j >= 0 && k >= 0 ; --j, --k ) 
+									for ( j = e, k = seqs[ seqIdx ].info[2].a + 2 ; j >= 0 && k >= 0 ; --j, --k ) 
 									{
 										//if ( read[j] != seqs[seqIdx].consensus[k] )
 										//	break ;
@@ -6474,7 +6595,7 @@ public:
 											}
 										}
 									}
-									for ( j = e + 1, k = seqs[ seqIdx ].info[2].a + 1 ; 
+									for ( j = e + 1, k = seqs[ seqIdx ].info[2].a + 3 ; 
 										read[j] && seqs[ seqIdx ].consensus[k] ; ++j, ++k )
 									{
 										if ( read[j] == 'M' )
