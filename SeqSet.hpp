@@ -4104,6 +4104,7 @@ public:
 			}
 		}
 	}
+
 	
 	// Impute the CDR3 by extension to the anchor case.
 	int ImputeAnchorCDR3( char *read, char *nr, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
@@ -4139,6 +4140,36 @@ public:
 		{
 			for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
 				read[j] = 'M' ;
+		}
+		// Double check whether anchor is in the gap 
+		bool vAnchorInGap = false ;
+		bool jAnchorInGap = false ;
+		if ( vInAnchor ) 
+		{
+			int dest = geneOverlap[0].readEnd - ( geneOverlap[0].seqEnd - seqs[geneOverlap[0].seqIdx].info[2].a ) ;
+			for ( i = geneOverlap[0].readEnd ; i >= dest ; --i )
+			{
+				if ( read[i] == 'M' )
+				{
+					vInAnchor = false ;
+					vAnchorInGap = true ;
+					break ;
+				}
+			}
+		}
+
+		if ( jInAnchor )
+		{
+			int dest = geneOverlap[2].readStart + ( seqs[geneOverlap[2].seqIdx].info[2].a + 2 - geneOverlap[2].seqStart) ;
+			for ( i = geneOverlap[2].readStart ; i <= dest ; ++i )
+			{
+				if ( read[i] == 'M' )
+				{
+					jInAnchor = false ;
+					jAnchorInGap = true ;
+					break ;
+				}
+			}
 		}
 
 		if ( !vInAnchor ) 
@@ -4178,11 +4209,21 @@ public:
 			}
 			else
 			{
-				// [CDR3 [V..]  ]
-				// This should happen in boundary case, otherwise the extension in annotateread should 
-				// 	fix it.
-				seqOffset = geneOverlap[0].seqStart ;
-				readOffset = geneOverlap[0].readStart ;
+				if ( vAnchorInGap )
+				{
+					//[V..NN[CDR3 NN..  V]     CDR3]
+					int contigIdx = GetContigIdx( geneOverlap[0].readEnd, contigs ) ;
+					readOffset = contigs[contigIdx].a ; 
+					seqOffset = geneOverlap[0].seqEnd - (geneOverlap[0].readEnd - readOffset) ;
+				}
+				else
+				{
+					// [CDR3 [V..]  ]
+					// This should happen in boundary case, otherwise the extension in annotateread should 
+					// 	fix it.
+					seqOffset = geneOverlap[0].seqStart ;
+					readOffset = geneOverlap[0].readStart ;
+				}
 			}
 			if ( seqOffset != -1 )
 			{
@@ -4206,7 +4247,7 @@ public:
 				}
 			}
 		}
-		else 
+		else if ( !jInAnchor ) 
 		{
 			// For the j side.
 			seqIdx = geneOverlap[2].seqIdx ;
@@ -4241,8 +4282,17 @@ public:
 			}
 			else
 			{
-				readOffset = geneOverlap[2].readEnd ;
-				seqOffset = geneOverlap[2].seqEnd ; 
+				if ( jAnchorInGap )
+				{
+					int contigIdx = GetContigIdx( geneOverlap[2].readStart, contigs ) ;
+					readOffset = contigs[contigIdx].b ; 
+					seqOffset = geneOverlap[2].seqStart + ( readOffset - geneOverlap[2].readStart ) ;
+				}
+				else
+				{
+					readOffset = geneOverlap[2].readEnd ;
+					seqOffset = geneOverlap[2].seqEnd ; 
+				}
 			}
 
 			if ( seqOffset != -1 )
@@ -4450,7 +4500,9 @@ public:
 				// There is a gap in side the CDR3 region.
 				ret = ImputeInternalCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
 			else
-				return -1 ;
+			{
+				ret = ImputeAnchorCDR3( read, nr, geneOverlap, cdr, secondaryGeneOverlaps ) ;
+			}
 		}
 		else if ( vInAnchor || jInAnchor )
 		{
@@ -5361,7 +5413,7 @@ public:
 			
 			if ( geneOverlap[2].seqIdx != -1 && boundE > geneOverlap[2].readEnd )
 				boundE = geneOverlap[2].readEnd ;
-			if ( geneOverlap[0].seqIdx == -1 && s > boundS )
+			if ( /*geneOverlap[0].seqIdx == -1 &&*/ s >= boundS )
 			{	
 				for ( i = s ; i >= boundS ; --i )
 					if ( read[i] == 'M' )
@@ -5370,7 +5422,7 @@ public:
 						break ;
 					}
 			}
-			if ( geneOverlap[2].seqIdx == -1 && e < boundE - 1 )
+			if ( /*geneOverlap[2].seqIdx == -1 &&*/ e <= boundE - 1 )
 			{
 				for ( i = e ; i < boundE ; ++i )
 					if ( read[i] == 'M' )
@@ -5445,6 +5497,8 @@ public:
 
 				}
 			}
+			
+		
 			// The YYC motif on V gene, mentioned in TRUST3 paper, but seems not mentioned in IMGT Junction Analysis.
 			if ( locateS == -1 )
 			{
@@ -5899,7 +5953,6 @@ public:
 					}
 				}
 			}
-
 			if ( locateS != -1 && locateE != -1 )
 			{
 				if ( locateE + 2 - locateS + 1 < 18 )
@@ -6293,7 +6346,7 @@ public:
 				locateS = -1 ;
 			if ( removeLocateE )
 				locateE = -1 ;
-
+			
 			sContigIdx = GetContigIdx( locateS, contigs ) ; 
 			eContigIdx = GetContigIdx( locateE, contigs ) ;
 			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
@@ -6382,7 +6435,6 @@ public:
 						++rightCnt ;
 					}
 
-				
 				if ( s < 0 )  
 				{
 					// The CDR3 anchor based on alignment of V,J genes could create some boundary cases when indel. 
@@ -6397,7 +6449,6 @@ public:
 					cdr[2].readEnd = e ;
 					cdr3Score = 0 ;
 				}
-
 				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
 						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
 					cdr3Score = 0 ;
@@ -6482,6 +6533,22 @@ public:
 					}
 				}
 
+				// If the V, J gene already contain the anchor and but the anchor motif is in the gap then we 
+				//    need to force the CDR3 to be partial.
+				if ( geneOverlap[0].seqIdx != -1 && seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 )
+				{
+					if ( geneOverlap[0].seqEnd >= seqs[ geneOverlap[0].seqIdx ].info[2].a + 2 
+						&& s > geneOverlap[0].readEnd )
+						cdr3Score = 0 ;
+				}
+				if ( geneOverlap[2].seqIdx != -1 && seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 )
+				{
+					if ( geneOverlap[2].seqStart <= seqs[ geneOverlap[2].seqIdx ].info[2].a  
+						&& e < geneOverlap[2].readStart )
+						cdr3Score = 0 ;
+				}
+
+
 				if ( cdr3Score < 100 )
 				{
 					for ( i = 1 ; i < contigCnt ; ++i )
@@ -6503,7 +6570,7 @@ public:
 
 						if ( s >= contigs[i].a && s <= contigs[i].b )
 						{
-							if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].readStart <= contigs[i - 1].b 
+							if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd <= contigs[i - 1].b 
 								&& leftCnt < 3 && !strongLocateS )
 							{
 								// Check whether it matches the sequence of the V gene.
@@ -6571,7 +6638,7 @@ public:
 						}*/
 						if ( e >= contigs[i].a && e <= contigs[i].b )
 						{
-							if ( geneOverlap[2].seqIdx != -1 && geneOverlap[2].readEnd >= contigs[i + 1].a 
+							if ( geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart >= contigs[i + 1].a 
 								&& rightCnt < 3 && !strongLocateE )
 							{
 								int matchCnt = 0 ;
