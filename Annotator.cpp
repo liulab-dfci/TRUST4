@@ -658,6 +658,7 @@ int main( int argc, char *argv[] )
 		
 		// Compute the abundance for each CDR3.
 		// If there is no read span the whole CDR3 region, use consensus.
+		PrintLog( "Compute CDR3 abundance." ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( annotations[i].cdr[2].seqIdx == -1 )

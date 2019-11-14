@@ -55,6 +55,9 @@ struct _sortRead
 
 	int strand ;
 
+	int mateIdx ; // the index of its mate pair.
+	int info ; // some random information, such as it's index in orginal array.
+
 	bool operator<( const struct _sortRead &b )
 	{
 		if ( minCnt != b.minCnt )
@@ -159,7 +162,7 @@ int main( int argc, char *argv[] )
 	SeqSet seqSet( indexKmerLength ) ; // Only hold the novel seq.
 	SeqSet refSet( 9 ) ;
 	KmerCount kmerCount( 21 ) ;
-	char outputPrefix[200] = "trust" ;
+	char outputPrefix[1024] = "trust" ;
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
@@ -535,7 +538,37 @@ int main( int argc, char *argv[] )
 #endif
 	
 	kmerCount.Release() ;
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		sortedReads[i].info = i ;
+		sortedReads[i].mateIdx = -1 ;
+	}
+	for ( i = 0 ; i < readCnt - 1 ; ++i )
+	{
+		if ( !strcmp( sortedReads[i].id, sortedReads[i + 1].id ) )
+		{
+			sortedReads[i].mateIdx = i + 1 ;
+			sortedReads[i + 1].mateIdx = i ;
+			++i ;	
+		}
+	}
 	std::sort( sortedReads.begin(), sortedReads.end() ) ;
+	
+
+	SimpleVector<int> originToSortedIdx ;
+	SimpleVector<bool> goodCandidate ; // Use mate pair alignment information to infer 
+					   // whether this read could be a good candidate
+	originToSortedIdx.ExpandTo( readCnt ) ;
+	goodCandidate.ExpandTo( readCnt ) ;
+	for ( i = 0 ; i < readCnt ; ++i )
+		originToSortedIdx[ sortedReads[i].info ] = i ;
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		if ( sortedReads[i].mateIdx != -1 )
+			sortedReads[i].mateIdx = originToSortedIdx[ sortedReads[i].mateIdx ] ;
+		goodCandidate[i] = false ;
+	}
+	originToSortedIdx.Release() ;
 	PrintLog( "Finish sorting the reads." ) ;
 	
 	std::vector<int> rescueReadIdx ;
@@ -563,6 +596,7 @@ int main( int argc, char *argv[] )
 		/*++assembledReadCnt ;
 		assembledReadIdx.push_back( i ) ;
 		continue ;*/
+		static struct _overlap geneOverlap[4] ;
 
 #ifdef DEBUG
 		printf( "%s %s %d %lf\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].minCnt, sortedReads[i].avgCnt ) ;
@@ -573,7 +607,6 @@ int main( int argc, char *argv[] )
 		if ( i == 0 || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) )
 		{
 			//printf( "new stuff\n" ) ;
-			struct _overlap geneOverlap[4] ;
 			//buffer[0] = '\0' ;
 			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, NULL ) ;
 			
@@ -704,11 +737,20 @@ int main( int argc, char *argv[] )
 						{
 							break ;
 						}
+
 					if ( !filter )
 					{
 						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
 							sortedReads[i].read, geneOverlap[j].strand ) ;
 
+					}
+					else if ( goodCandidate[i] )
+					{
+						// The mate is matched well, we use motif to check whether this could be
+						//   from CDR3.
+						if ( seqSet.HasMotif( sortedReads[i].read, -sortedReads[ sortedReads[i].mateIdx ].strand ) )
+							addRet = seqSet.InputNovelRead( "Novel", sortedReads[i].read, 
+									-sortedReads[ sortedReads[i].mateIdx ].strand ) ;
 					}
 					//printf( "hello %d %d. %d %d %d %d\n", i, addRet, geneOverlap[0].seqIdx,
 					//		geneOverlap[1].seqIdx, geneOverlap[2].seqIdx, geneOverlap[3].seqIdx ) ;
@@ -733,6 +775,23 @@ int main( int argc, char *argv[] )
 		{
 			++assembledReadCnt ;
 			assembledReadIdx.push_back( i ) ;
+
+			if ( sortedReads[i].mateIdx > i )
+			{
+				bool good = false ;
+				if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].similarity >= 0.9 
+						&& sortedReads[i].strand == 1 )
+					good = true ;
+
+				for ( j = 2 ; j <= 3 ; ++j )
+				{
+					if ( geneOverlap[j].seqIdx != -1 && geneOverlap[j].similarity >= 0.9 
+							&& sortedReads[i].strand == -1 )
+						good = true ;
+
+				}
+				goodCandidate[ sortedReads[i].mateIdx ] = good ;
+			}
 		}
 
 		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
@@ -755,7 +814,7 @@ int main( int argc, char *argv[] )
 	}
 	seqSet.UpdateAllConsensus() ;
 	PrintLog(  "Assembled %d reads.", assembledReadCnt ) ;
-	
+
 	// Go through the second round.
 	// TODO: user-defined number of rounds.
 	/*seqSet.ResetPosWeight() ;

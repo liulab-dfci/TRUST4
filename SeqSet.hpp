@@ -560,7 +560,9 @@ private:
 			// filter based on the repeatability of overlaps.
 			for ( i = 0 ; i <= 1 ; ++i )
 			{
-				if ( possibleOverlapCnt[i] > 10000 )
+				if ( possibleOverlapCnt[i] > 100000 )
+					novelMinHitRequired[i] = longestHits[i] * 0.75 ;
+				else if ( possibleOverlapCnt[i] > 10000 )
 					novelMinHitRequired[i] = longestHits[i] / 2 ;
 				else if ( possibleOverlapCnt[i] > 1000 )
 					novelMinHitRequired[i] = longestHits[i] / 3 ;
@@ -1019,7 +1021,6 @@ private:
 						}
 					}
 					skipCnt = 0 ;
-
 					for ( j = 0 ; j < size ; ++j )
 					{
 						struct _hit nh ;
@@ -1060,7 +1061,7 @@ private:
 		GetHitsFromRead( read, rcRead, strand, hits, puse ) ;
 		delete[] rcRead ;
 		
-		//printf( "hitsize=%d; %d\n", hits.Size(), kmerLength ) ;
+		//printf( "hitsize=%d; %d %d\n", hits.Size(), seqs.size(), kmerLength ) ;
 		// Find the overlaps.
 		// Sort the hits
 		if ( hits.Size() > 2 * seqs.size() ) 
@@ -1103,6 +1104,7 @@ private:
 			//hitLenRequired = ( len / 3 < hitLenRequired ? hitLenRequired : ( len / 3 ) ) ;
 			filterHits = 1 ;
 		}
+		
 		int overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
 		
 		//if ( !strcmp( read, "TAGTAATCACTACTGGGCCTGGATCCGCCAGCCCCCAGGGAAAGGGCTGGAGTGGATTGGGAGTATCCATTCTAGTGGGAGCACCTACTTCAACCCGTCCCTCAAGAGTCGAGTCTCCACATCCGTAGACACGTCCGACAATCAAGTCTCCCTGAAGCTGAGGTCTGTGACCGCCGCAGACACGGCTGTGTATTACTGTGCGAGACAGTTTCTCCATCTGGACCCCATGTCCAACTGGTTCGACCCCCGG") && filterHits == 0  )
@@ -2102,7 +2104,7 @@ public:
 		return seqIdx ;
 	}	
 	
-	int InputNovelRead( char *id, char *read, int strand )
+	int InputNovelRead( const char *id, char *read, int strand )
 	{
 		struct _seqWrapper ns ;
 		ns.name = strdup( id ) ;
@@ -3877,6 +3879,54 @@ public:
 		return seqs.size() ;
 	}
 
+	// Return: 2-bit: left bit: V motif, right bit: J motif
+	int HasMotif( char *read, int strand )
+	{
+		if ( strand == 0 )
+			return 0 ;
+
+		int i, j, k ;
+		char *r = read ;
+		char *aa = strdup( read ) ;
+		int len = strlen( read ) ;
+		if ( strand == -1 )
+		{
+			r = strdup( read ) ;
+			ReverseComplement( r, read, len ) ;
+		}
+		
+		int ret = 0 ;
+		for ( k = 0 ; k <= 2 ; ++k )	
+		{
+			for ( i = k, j = 0 ; i < len ; i += 3, ++j )
+				aa[j] = DnaToAa( read[i], read[i + 1], read[i + 2] ) ;
+
+			for ( i = 0 ; i + 2 < j ; ++i ) // YYC
+				if ( aa[i] == 'Y' && aa[i + 1] == 'Y' && aa[i + 2] == 'C' )
+				{
+					ret |= 2 ;
+					break ;
+				}
+
+			for ( i = 0 ; i + 3 < j ; ++i ) // F/W G*G
+				if ( ( aa[i] == 'F' || aa[i] == 'W' ) && 
+					aa[i + 1] == 'G' && aa[i + 3] == 'G' )
+				{
+					ret |= 1 ;
+					break ;
+				}
+
+		}
+
+		if ( strand == -1 )
+		{
+			free( r ) ;	
+		}
+		free( aa ) ;
+
+		return ret ;
+	}
+
 	int GetGeneType( char *name )
 	{
 		int geneType = -1 ;
@@ -4002,7 +4052,7 @@ public:
 		else
 			return false ;
 	}
-
+	
 	int GetContigIntervals( char *read, SimpleVector<struct _pair> &contigs )
 	{
 		int i, j ;

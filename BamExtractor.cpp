@@ -411,7 +411,7 @@ int main( int argc, char *argv[] )
 	int c, option_index ;
 	option_index = 0 ;
 	FILE *fpRef = NULL ;
-	char prefix[127] = "toassemble" ;
+	char prefix[1024] = "toassemble" ;
 	Alignments alignments ;
 	bool abnormalUnalignedFlag = false ;
 	int kmerLength = 9  ;
