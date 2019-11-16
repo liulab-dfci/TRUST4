@@ -5500,6 +5500,8 @@ public:
 				int startFrame = geneOverlap[0].seqStart % 3 ;
 				s = geneOverlap[0].readEnd + ( geneOverlap[0].readEnd - geneOverlap[0].readStart - startFrame ) % 3 ;
 				s = s + 6 < len ? s + 6 : s ;
+				if ( s >= len ) // the case geneOverlap[0].readEnd is len - 1
+					s-= 3 ;
 				e = s + 12 ;
 				if ( s - 31 > boundS )
 					boundS = s - 31 ;
