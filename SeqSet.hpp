@@ -34,6 +34,8 @@ struct _hit
 	int readOffset ;
 	int strand ; // -1: different strand, 1: same strand. When strand==-1, the readOffset is the offset in the rcSeq.
 	
+	int repeats ; // record how many times this hit with other index part.
+
 	bool operator<( const struct _hit &b ) const
 	{
 		if ( strand != b.strand )
@@ -538,6 +540,7 @@ private:
 		//    each hit is matched to too many places and the skip hits mechanism is triggered.
 		int novelMinHitRequired[2] = {3, 3} ;
 		int refMinHitRequired[2] = {3, 3} ;
+		bool removeOnlyRepeats[2] = {false, false} ; // Remove the hits on a seq that are all repeats hit.
 		if ( filter == 1 )
 		{
 			int possibleOverlapCnt[2] = {0, 0} ;
@@ -551,10 +554,23 @@ private:
 				if ( !seqs[ hits[i].indexHit.idx].isRef )
 				{
 					if ( j - i > novelMinHitRequired[ isPlusStrand ] )
-						++possibleOverlapCnt[ isPlusStrand] ;
-					if ( j - i > longestHits[ isPlusStrand] )
+						++possibleOverlapCnt[ isPlusStrand ] ;
+					if ( j - i > longestHits[ isPlusStrand ] )
 						longestHits[ isPlusStrand] = j - i  ;
 				}
+				
+				if ( !removeOnlyRepeats[isPlusStrand] )
+				{
+					int cnt = 0 ;
+					for ( k = i ; k < j ; ++k )
+						if ( hits[k].repeats <= 10000 )
+							++cnt ;
+					if ( cnt >= novelMinHitRequired[ isPlusStrand ] )
+					{
+						removeOnlyRepeats[ isPlusStrand ] = true ;
+					}
+				}
+
 				i = j ;
 			}
 			// filter based on the repeatability of overlaps.
@@ -582,7 +598,8 @@ private:
 			int minHitRequired = novelMinHitRequired[ ( 1 + hits[i].strand ) / 2 ] ;
 			if ( seqs[ hits[i].indexHit.idx].isRef )
 				minHitRequired = refMinHitRequired[ ( 1 + hits[i].strand ) / 2 ];
-		
+			
+
 			/*if ( filter == 1 && readLen > 0 )
 			{
 				int readStart = hits[i].readOffset, readEnd = hits[j - 1].readOffset + kmerLength - 1 ;
@@ -613,6 +630,24 @@ private:
 			{
 				i = j ;
 				continue ;
+			}
+			
+			if ( removeOnlyRepeats[( 1 + hits[i].strand ) / 2] )
+			{
+				bool hasUnique = false ;
+				for ( k = i ; k < j ; ++k )
+				{
+					if ( hits[k].repeats <= 10000 )
+					{
+						hasUnique = true ;
+						break ;
+					}
+				}
+				if ( !hasUnique )
+				{
+					i = j ;
+					continue ;
+				}
 			}
 
 			hitCoordDiff.Clear() ;
@@ -656,6 +691,24 @@ private:
 					continue ;
 				}
 
+
+				if ( removeOnlyRepeats[( 1 + hits[i].strand ) / 2] )
+				{
+					bool hasUnique = false ;
+					for ( k = s ; k < e ; ++k )
+					{
+						if ( hits[k].repeats <= 10000 )
+						{
+							hasUnique = true ;
+							break ;
+						}
+					}
+					if ( !hasUnique )
+					{
+						s = e ;
+						continue ;
+					}
+				}
 				// [s, e) holds the candidate in the array of hitCoordDiff 
 				concordantHitCoord.Clear() ;
 				for ( k = s ; k < e ; ++k )
@@ -671,6 +724,7 @@ private:
 				//	printf( "%d (%d-%d): %d %s %d %d\n", i, s, e, hits[i].indexHit.idx, seqs[ hits[i].indexHit.idx ].name, concordantHitCoord[k].a, concordantHitCoord[k].b ) ;
 
 				// Compute the longest increasing subsequence.
+				//printf( "lis for %d (%d %d; %d %d). strand=%d (%d)\n", e - s, i, j, s, e, hits[i].strand, seqs.size() ) ;
 				hitCoordLIS.Clear() ;
 				int lisSize = LongestIncreasingSubsequence( concordantHitCoord, hitCoordLIS ) ; 
 				if ( lisSize * kmerLength < hitLenRequired )
@@ -977,6 +1031,17 @@ private:
 					}
 
 					skipCnt = 0 ;
+					int repeats = size ;
+					if ( puse != NULL )
+					{
+						repeats = 0 ;
+						for ( j = 0 ; j < size ; ++j )
+						{
+							if ( !puse->Get( indexHit[j].idx ) ) 
+								continue ;
+							++repeats ;
+						}
+					}
 
 					for ( j = 0 ; j < size ; ++j )
 					{
@@ -984,6 +1049,7 @@ private:
 						nh.indexHit = indexHit[j] ;
 						nh.readOffset = i - kmerLength + 1 ;
 						nh.strand = 1 ;
+						nh.repeats = repeats ;
 						if ( puse != NULL && !puse->Get( indexHit[j].idx ) )
 							continue ;
 						hits.PushBack( nh ) ;
@@ -1021,12 +1087,26 @@ private:
 						}
 					}
 					skipCnt = 0 ;
+					
+					int repeats = size ;
+					if ( puse != NULL )
+					{
+						repeats = 0 ;
+						for ( j = 0 ; j < size ; ++j )
+						{
+							if ( !puse->Get( indexHit[j].idx ) ) 
+								continue ;
+							++repeats ;
+						}
+					}
+
 					for ( j = 0 ; j < size ; ++j )
 					{
 						struct _hit nh ;
 						nh.indexHit = indexHit[j] ;
 						nh.readOffset = i - kmerLength + 1 ;
 						nh.strand = -1 ;
+						nh.repeats = repeats ;
 						if ( puse != NULL && !puse->Get( indexHit[j].idx ) )
 							continue ;
 

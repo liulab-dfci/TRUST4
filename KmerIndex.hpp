@@ -16,13 +16,25 @@ struct _indexInfo
 	//int strand ;
 } ;
 
+
+#define KINDEX_HASH_MAX 1000003
+
 class KmerIndex
 {
 private:
-	std::map< uint64_t, SimpleVector<struct _indexInfo> > index ;
+	std::map< uint64_t, SimpleVector<struct _indexInfo> > *index ;
 	SimpleVector<struct _indexInfo> nullHit ;
+
+	int GetHash( uint64_t k )
+	{
+		return k % KINDEX_HASH_MAX ;
+	}
 public:
-	KmerIndex() {}
+	KmerIndex() 
+	{
+		index = new std::map< uint64_t, SimpleVector<struct _indexInfo> >[KINDEX_HASH_MAX] ;
+	}
+
 	~KmerIndex()
 	{
 		int sum = 0 ;
@@ -31,13 +43,16 @@ public:
 		//	sum += /*sizeof( hash[i] ) +*/ hash[i].Memory() ;
 		//}
 		//printf( "%s: %d %d %d\n", __func__, hashSize, sizeof( hash[0] ), hash[0].Memory() ) ;
+		if ( index != NULL )
+			delete[] index ;
 	}
 
 	void Clear()
 	{
-		//index.clear() ;	
-	
-		std::map<uint64_t, SimpleVector<struct _indexInfo> >().swap( index ) ;
+		//index.clear() ;
+		int i ;
+		for ( i = 0 ; i < KINDEX_HASH_MAX ; ++i )	
+			std::map<uint64_t, SimpleVector<struct _indexInfo> >().swap( index[i] ) ;
 	}
 
 	void Insert( KmerCode &kmerCode, index_t idx, index_t offset, int strand )
@@ -48,7 +63,9 @@ public:
 		newEntry.idx = idx ;
 		newEntry.offset = offset ;
 		//newEntry.strand = strand ;
-		index[ kmerCode.GetCode() ].PushBack( newEntry ) ;
+		uint64_t kcode = kmerCode.GetCode() ;
+		int h = GetHash( kcode ) ;
+		index[h][ kcode ].PushBack( newEntry ) ;
 		
 		//printf( "%d\n", hash[key].Memory() ) ;
 	}
@@ -78,9 +95,10 @@ public:
 		if ( !kmerCode.IsValid() )
 			return &nullHit ;
 		uint64_t kcode = kmerCode.GetCode() ;
-		
-		std::map< uint64_t, SimpleVector<struct _indexInfo> >::iterator it = index.find( kcode ) ;
-		if ( it == index.end() )
+		int h = GetHash( kcode ) ;
+
+		std::map< uint64_t, SimpleVector<struct _indexInfo> >::iterator it = index[h].find( kcode ) ;
+		if ( it == index[h].end() )
 			return &nullHit ;
 		else
 			return &(it->second) ;
