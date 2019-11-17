@@ -4600,7 +4600,8 @@ public:
 	{
 		if ( cdr[2].seqIdx == -1 || cdr[2].similarity != 0  
 				|| geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 
-				|| seqs[ geneOverlap[0].seqIdx ].info[2].a == -1 || seqs[ geneOverlap[2].seqIdx ].info[2].a == -1 ) 
+				|| seqs[ geneOverlap[0].seqIdx ].info[2].a == -1 || seqs[ geneOverlap[2].seqIdx ].info[2].a == -1 
+				|| geneOverlap[0].readEnd >= geneOverlap[2].readStart ) 
 			return -1 ;
 		if ( seqs[ geneOverlap[0].seqIdx ].name[0] != 'T' )
 			return -1 ;
@@ -4823,9 +4824,10 @@ public:
 					
 					int effectiveLen = ovs[i].readEnd - ovs[i].readStart + 1 
 						+ ovs[i].seqEnd - ovs[i].seqStart +1 ;
-
+					
 					for ( j = k - 1 ; j >= 0 ; --j )
 					{
+						bool extended = false  ;
 						int cnt2 = contigOverlaps[j].size() ;
 						int l ;
 						for ( l = 0 ; l < cnt2 ; ++l )
@@ -4833,22 +4835,29 @@ public:
 							struct _overlap &o = contigOverlaps[j][l] ;
 							if ( o.seqIdx == ovs[i].seqIdx )
 							{
-								if ( o.seqEnd < ovs[i].seqStart + 31 ) 
+								if ( o.seqEnd < ovs[i].seqStart + 31 
+									&& o.readStart <= contigs[j + 1].a + 10 
+									&& ovs[i].readEnd <= contigs[j].b - 10 ) 
 								{
 									ovs[i].readStart = o.readStart ;
 									ovs[i].seqStart = o.seqStart ;
 									ovs[i].matchCnt += o.matchCnt ;
 									effectiveLen += o.readEnd - o.readStart + 1 
 										+ o.seqEnd - o.seqStart + 1 ;
+									extended = true ;
 								}
 								//printf( "<=+ %s: %d %d. %d %d\n", seqs[ ovs[i].seqIdx ].name, ovs[i].matchCnt, effectiveLen, o.matchCnt, o.readEnd - o.readStart + 1 + o.seqEnd - o.seqStart + 1 ) ;
 								break ;
 							}
 						}
+						
+						if ( !extended )
+							break ;
 					}
 
 					for ( j = k + 1 ; j < contigCnt ; ++j )
 					{
+						bool extended = false ;
 						int cnt2 = contigOverlaps[j].size() ;
 						int l ;
 						for ( l = 0 ; l < cnt2 ; ++l )
@@ -4856,18 +4865,24 @@ public:
 							struct _overlap &o = contigOverlaps[j][l] ;
 							if ( o.seqIdx == ovs[i].seqIdx )
 							{
-								if ( o.seqStart > ovs[i].seqEnd - 31 )
+								if ( o.seqStart > ovs[i].seqEnd - 31 
+									&& o.readEnd <= contigs[j - 1].b - 10 
+									&& ovs[i].readStart <= contigs[j].a + 10 ) 
 								{
 									ovs[i].readEnd = o.readEnd ;
 									ovs[i].seqEnd = o.seqEnd ;
 									ovs[i].matchCnt += o.matchCnt ;
 									effectiveLen += o.readEnd - o.readStart + 1 
 										+ o.seqEnd - o.seqStart + 1 ;
+									extended = true ;
 								}
 								//printf( "=>+ %s: %d %d. %d %d\n", seqs[ ovs[i].seqIdx ].name, ovs[i].matchCnt, effectiveLen, o.matchCnt, o.readEnd - o.readStart + 1 + o.seqEnd - o.seqStart + 1 ) ;
 								break ;
 							}
 						}
+
+						if ( !extended )
+							break ;
 					}
 					ovs[i].similarity = (double)ovs[i].matchCnt / effectiveLen ;
 				//	printf( "%s: %lf\n", seqs[ ovs[i].seqIdx ].name, ovs[i].similarity ) ;
@@ -6581,6 +6596,7 @@ public:
 					cdr[2].readEnd = e ;
 					cdr3Score = 0 ;
 				}
+				
 				if ( cdr3Score < 99 && ( ( leftCnt < 3 && geneOverlap[0].seqIdx == -1 ) 
 						|| ( rightCnt < 3 && geneOverlap[2].seqIdx == -1 ) ) )
 					cdr3Score = 0 ;
@@ -6589,7 +6605,8 @@ public:
 							DnaToAa( read[locateE], read[ locateE + 1], read[ locateE + 2 ] ) == 'F' ) )
 					cdr3Score = 0 ;
 				else if ( cdr3Score < 99 && 
-					( geneOverlap[0].seqIdx != -1 && geneOverlap[0].seqStart > 100 && geneOverlap[0].readStart > 100 ) )
+					( geneOverlap[0].seqIdx != -1 && geneOverlap[0].seqStart > 100 && geneOverlap[0].readStart > 100 ) 
+					&& ( !strongLocateS || leftCnt < 3 ) )
 					cdr3Score = 0 ;
 				else if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && s >= geneOverlap[2].readStart )
 					cdr3Score = 0 ;
