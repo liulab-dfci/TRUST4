@@ -58,6 +58,8 @@ struct _sortRead
 	int mateIdx ; // the index of its mate pair.
 	int info ; // some random information, such as it's index in orginal array.
 
+	struct _overlap geneOverlap[4] ; // Rough annotation of the read
+
 	bool operator<( const struct _sortRead &b )
 	{
 		if ( minCnt != b.minCnt )
@@ -73,6 +75,16 @@ struct _sortRead
 	}
 } ;
 
+struct _quickAnnotateReadsThreadArg
+{
+	int tid ;
+	int threadCnt ; 
+
+	SeqSet *refSet ;
+	std::vector<struct _sortRead> *pSortedReads ;
+	int readCnt ;
+} ;
+
 struct _assignReadsThreadArg
 {
 	int tid ;
@@ -82,6 +94,7 @@ struct _assignReadsThreadArg
 	std::vector<struct _assignRead> *pAssembledReads ;
 	int assembledReadCnt ;
 } ;
+
 
 bool CompSortReadById( const struct _Read &a, const struct _Read &b )
 {
@@ -123,6 +136,27 @@ void PrintLog( const char *fmt, ... )
 	char stime[500] ;
 	strftime( stime, sizeof( stime ), "%c", localT ) ;
 	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+}
+
+void *QuickAnnotateReads_Thread( void *pArg )
+{
+	struct _quickAnnotateReadsThreadArg &arg = *( (struct _quickAnnotateReadsThreadArg *)pArg ) ;
+	int start, end ;
+	int i, j ;
+	std::vector< struct _sortRead> &sortedReads = *arg.pSortedReads ;
+	start = arg.readCnt / arg.threadCnt * arg.tid ;
+	end = start + arg.readCnt / arg.threadCnt ;
+	if ( arg.tid == arg.threadCnt - 1 )
+		end = arg.readCnt ;
+	struct _overlap geneOverlap[4] ;
+	for ( i = start ; i < end ; ++i )
+	{
+		if ( i == start || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) )
+			arg.refSet->AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, NULL ) ;
+		for ( j = 0 ; j < 4 ; ++j )
+			sortedReads[i].geneOverlap[j] = geneOverlap[j] ;
+	}
+	pthread_exit( NULL ) ;
 }
 
 void *AssignReads_Thread( void *pArg )
@@ -568,9 +602,164 @@ int main( int argc, char *argv[] )
 			sortedReads[i].mateIdx = originToSortedIdx[ sortedReads[i].mateIdx ] ;
 		goodCandidate[i] = false ;
 	}
-	originToSortedIdx.Release() ;
 	PrintLog( "Finish sorting the reads." ) ;
 	
+
+	// Quickly annoate the reads.
+	if ( threadCnt <= 1 )
+	{
+		struct _overlap geneOverlap[4] ;
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( i == 0 || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) )
+				refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, NULL ) ;
+			for ( j = 0 ; j < 4 ; ++j )
+				sortedReads[i].geneOverlap[j] = geneOverlap[j] ;
+		}
+	}
+	else
+	{
+		pthread_t *threads = new pthread_t[ threadCnt ] ;
+		struct _quickAnnotateReadsThreadArg *args = new struct _quickAnnotateReadsThreadArg[threadCnt] ;
+		pthread_attr_t attr ;
+		
+		pthread_attr_init( &attr ) ;
+		pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+		
+		for ( i = 0 ; i < threadCnt ; ++i )
+		{
+			args[i].tid = i ;
+			args[i].threadCnt = threadCnt ;
+			args[i].refSet = &refSet ;
+			args[i].pSortedReads = &sortedReads ;
+			args[i].readCnt = readCnt ;
+			pthread_create( &threads[i], &attr, QuickAnnotateReads_Thread, (void *)( args + i ) ) ;
+		}
+
+		for ( i = 0 ; i < threadCnt ; ++i )
+			pthread_join( threads[i], NULL ) ;
+	
+
+		delete[] threads ;
+		delete[] args ;
+	}
+
+	// Remove the redudant sequence before V gene.
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
+		if ( geneOverlap[0].seqIdx == -1 )
+			continue ;
+		bool mayTrim = false ;
+		if ( geneOverlap[0].seqStart < 31 && geneOverlap[0].similarity > 0.9 )
+			mayTrim  = true ;
+
+		if ( geneOverlap[0].similarity > 0.95 && 
+			geneOverlap[0].seqStart <= refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) * 2 / 3 )
+			mayTrim = true ; 
+
+		if ( !mayTrim )
+			continue ;
+		
+		int trimBase = geneOverlap[0].readStart ;
+		if ( trimBase <= 0 )
+			continue ;
+
+		if ( geneOverlap[2].seqIdx != -1 
+			&& geneOverlap[2].readStart < trimBase )
+			continue ;
+		if ( geneOverlap[3].seqIdx != -1 
+			&& geneOverlap[3].readStart < trimBase )
+			continue ;
+
+		if ( sortedReads[i].len - trimBase < 31 )
+		{
+			free( sortedReads[i].id ) ;
+			free( sortedReads[i].read ) ;
+			if ( sortedReads[i].qual != NULL )
+				free( sortedReads[i].qual ) ;
+			sortedReads[i].read = NULL ;
+			continue ;
+		}
+		
+		if ( geneOverlap[0].strand >= 0 )
+		{
+			// Remove the first bases
+			int len = sortedReads[i].len ;
+			for ( j = trimBase ; j <= len ; ++j )
+			{
+				sortedReads[i].read[j - trimBase] = sortedReads[i].read[j] ;
+				if ( sortedReads[i].qual != NULL )
+					sortedReads[i].qual[j - trimBase] = sortedReads[i].qual[j] ;
+
+			}
+
+			for ( j = 0 ; j < 4 ; ++j )
+			{
+				if ( geneOverlap[j].seqIdx == -1 )
+					continue ;
+				geneOverlap[j].readStart -= trimBase ;
+				geneOverlap[j].readEnd -= trimBase ;
+				geneOverlap[j].seqStart -= trimBase ;
+				geneOverlap[j].seqEnd -= trimBase ;
+			}
+		}
+		else
+		{
+			// Remove the last bases.
+			int len = sortedReads[i].len ;
+			sortedReads[i].read[len - trimBase] = '\0' ;
+			if ( sortedReads[i].qual != NULL )
+				sortedReads[i].qual[len - trimBase] = '\0' ;
+		}
+		sortedReads[i].len -= trimBase ;
+	}
+	
+	// Remove the sequences whose J gene is not associate with C gene.
+	/*for ( i = 0 ; i < readCnt ; ++i )
+	{
+		struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
+		if ( sortedReads[i].read == NULL )
+			continue ;
+
+		if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx == -1 )
+		{
+			if ( geneOverlap[2].similarity > 0.9 && 
+				sortedReads[i].len - geneOverlap[2].readEnd > 50 ) // With 50 base but could not identify C gene
+			{
+				free( sortedReads[i].id ) ;
+				free( sortedReads[i].read ) ;
+				if ( sortedReads[i].qual != NULL )
+					free( sortedReads[i].qual ) ;
+				sortedReads[i].read = NULL ;
+			}
+		}
+	}*/
+
+	k = 0 ;
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		if ( sortedReads[i].read != NULL )
+		{
+			originToSortedIdx[i] = k ;
+			sortedReads[k] = sortedReads[i] ;
+			++k ;
+		}
+		else
+			originToSortedIdx[i] = -1 ;
+	}
+
+	// Don't forget to update the mateidx.
+	for ( i = 0 ; i < k ; ++i )
+	{
+		if ( sortedReads[i].mateIdx != -1 )
+			sortedReads[i].mateIdx = originToSortedIdx[ sortedReads[i].mateIdx ] ;
+	}
+
+	originToSortedIdx.Release() ;
+	sortedReads.resize( k ) ;
+	readCnt = k ;
+
 	std::vector<int> rescueReadIdx ;
 	std::vector<int> assembledReadIdx ;
 	int assembledReadCnt = 0 ;
@@ -608,7 +797,9 @@ int main( int argc, char *argv[] )
 		{
 			//printf( "new stuff\n" ) ;
 			//buffer[0] = '\0' ;
-			refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, NULL ) ;
+			//refSet.AnnotateRead( sortedReads[i].read, 0, geneOverlap, NULL, NULL ) ;
+			for ( j = 0 ; j < 4 ; ++j )
+				geneOverlap[j] = sortedReads[i].geneOverlap[j] ;
 			
 			// If the order of V,D,J,C is wrong from this read, then we ignore this.
 			//   probably from read through in cyclic fragment.
@@ -620,7 +811,9 @@ int main( int argc, char *argv[] )
 			{
 				if ( geneOverlap[j].seqIdx == -1 )
 					continue ;
-				printf( "%d: %d %d %d %d %lf\n", j, geneOverlap[j].seqIdx, geneOverlap[j].readStart, geneOverlap[j].readEnd, 
+				printf( "%d: %s %d %d; %d %d; %d %lf\n", j, refSet.GetSeqName( geneOverlap[j].seqIdx ), 
+					geneOverlap[j].readStart, geneOverlap[j].readEnd,
+					geneOverlap[j].seqStart, geneOverlap[j].seqEnd,
 					geneOverlap[j].strand, geneOverlap[j].similarity ) ;
 			}*/
 			for ( j = 0 ; j < 4 ; ++j )
@@ -776,20 +969,35 @@ int main( int argc, char *argv[] )
 			++assembledReadCnt ;
 			assembledReadIdx.push_back( i ) ;
 
-			if ( sortedReads[i].mateIdx > i )
+			if ( sortedReads[i].mateIdx > i ) // This handles the case mateIdx = -1
 			{
 				bool good = false ;
+				bool maySpan = false ;
 				if ( geneOverlap[0].seqIdx != -1 && geneOverlap[0].similarity >= 0.9 
 						&& sortedReads[i].strand == 1 )
+				{
 					good = true ;
+					if ( geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart > geneOverlap[0].readEnd )
+						maySpan = true ;
+					if ( geneOverlap[3].seqIdx != -1 && geneOverlap[3].readStart > geneOverlap[0].readEnd )
+						maySpan = true ;
+				}
 
 				for ( j = 2 ; j <= 3 ; ++j )
 				{
 					if ( geneOverlap[j].seqIdx != -1 && geneOverlap[j].similarity >= 0.9 
 							&& sortedReads[i].strand == -1 )
+					{
 						good = true ;
+						if ( geneOverlap[0].seqIdx != -1 && geneOverlap[j].readStart > geneOverlap[0].readEnd )
+							maySpan = true ;
+					}
 
 				}
+
+				if ( maySpan ) // If the read can span V,J, then there is no need to force add its mate.
+					good = false ;
+
 				goodCandidate[ sortedReads[i].mateIdx ] = good ;
 			}
 		}

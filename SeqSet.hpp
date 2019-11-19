@@ -1175,7 +1175,7 @@ private:
 			std::sort( hits.BeginAddress(), hits.EndAddress() ) ;
 		//if ( readType == 0 )
 		//	for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
-		//		printf( "- %d %d %d %d\n", it->readOffset, it->indexHit.idx, it->indexHit.offset, it->strand ) ;
+		//		printf( "- %d %s %d %d\n", it->readOffset, seqs[ it->indexHit.idx ].name, it->indexHit.offset, it->strand ) ;
 
 		//int hitLenRequired = 31 ;
 		int filterHits = 0 ;
@@ -1186,6 +1186,7 @@ private:
 		}
 		
 		int overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
+		//printf( "overlapCnt = %d\n", overlapCnt ) ;
 		
 		//if ( !strcmp( read, "TAGTAATCACTACTGGGCCTGGATCCGCCAGCCCCCAGGGAAAGGGCTGGAGTGGATTGGGAGTATCCATTCTAGTGGGAGCACCTACTTCAACCCGTCCCTCAAGAGTCGAGTCTCCACATCCGTAGACACGTCCGACAATCAAGTCTCCCTGAAGCTGAGGTCTGTGACCGCCGCAGACACGGCTGTGTATTACTGTGCGAGACAGTTTCTCCATCTGGACCCCATGTCCAACTGGTTCGACCCCCGG") && filterHits == 0  )
 		//for ( i = 0 ; i < overlapCnt ; ++i )
