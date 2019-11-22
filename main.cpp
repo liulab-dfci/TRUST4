@@ -655,7 +655,7 @@ int main( int argc, char *argv[] )
 			mayTrim  = true ;
 
 		if ( geneOverlap[0].similarity > 0.95 && 
-			geneOverlap[0].seqStart <= refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) * 2 / 3 )
+			geneOverlap[0].seqStart <= refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) / 3 )
 			mayTrim = true ; 
 
 		if ( !mayTrim )
