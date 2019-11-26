@@ -7043,6 +7043,30 @@ public:
 			delete[] cdr3 ;
 		return 1 ;
 	}
+
+	int GetEqualSecondaryGeneOverlap( struct _overlap &primaryOverlap, int geneType, std::vector<struct _overlap> *secondaryGeneOverlaps, 
+		std::vector<int> &secondaryOverlapIdx )
+	{
+		int i ;
+		int seqIdx = primaryOverlap.seqIdx ;
+		if ( seqIdx == -1 || secondaryGeneOverlaps == NULL )
+			return 0 ;
+		
+		std::vector<struct _overlap> &overlaps = *secondaryGeneOverlaps ;
+		int size = overlaps.size() ;
+		for ( i = 0 ; i < size ; ++i )
+		{
+			struct _overlap &overlap = overlaps[i] ;
+			
+			if ( GetGeneType( seqs[ seqIdx ].name ) != geneType )
+				continue ;
+			if ( primaryOverlap.similarity == overlap.similarity &&
+				primaryOverlap.readEnd - primaryOverlap.readStart  == overlap.readEnd - overlap.readStart &&
+				primaryOverlap.seqEnd - primaryOverlap.seqStart == overlap.seqEnd - overlap.seqStart )
+				secondaryOverlapIdx.push_back( i ) ;
+		}
+		return secondaryOverlapIdx.size() ;
+	}
 	
 	// Convert the annotation information to string.
 	void AnnotationToString( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3],

@@ -789,8 +789,20 @@ int main( int argc, char *argv[] )
 					if ( annotations[i].geneOverlap[k].seqIdx == -1 )
 						fprintf( fpOutput, "*\t" ) ;	
 					else
-						fprintf( fpOutput, "%s\t", 
+					{
+						fprintf( fpOutput, "%s", 
 							refSet.GetSeqName( annotations[i].geneOverlap[k].seqIdx ) ) ;
+						std::vector<int> secondaryOverlapIdx ;
+						int size = refSet.GetEqualSecondaryGeneOverlap( annotations[i].geneOverlap[k],
+							k, &annotations[i].secondaryGeneOverlaps, secondaryOverlapIdx ) ;
+						int l ;
+						for ( l = 0 ; l < size ; ++l )
+						{
+							int seqIdx = annotations[i].secondaryGeneOverlaps[ secondaryOverlapIdx[l] ].seqIdx ;
+							fprintf( fpOutput, ",%s", refSet.GetSeqName( seqIdx ) ) ; 
+						}
+						fprintf( fpOutput, "\t" ) ;
+					}
 				}
 				// Output CDR1,2
 				for ( k = 0 ; k < 2 ; ++k )

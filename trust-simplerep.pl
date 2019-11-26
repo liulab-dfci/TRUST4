@@ -312,9 +312,14 @@ while ( <FP1> )
 	chomp ;
 	my @cols = split ;
 	my $assemblyId = $cols[0] ;
-	my $cgene = InferConstantGene( $cols[2], $cols[4], $cols[5] ) ;
-	my $key = join( "\t", ( $cols[2], $cols[3], $cols[4], $cgene, $cols[8] ) ) ;
-	my $type = GetChainType( $cols[2], $cols[4], $cols[5] ) ;
+	my $vgene = (split /,/, $cols[2])[0] ;
+	my $dgene = (split /,/, $cols[3])[0] ;
+	my $jgene = (split /,/, $cols[4])[0] ;
+	my $cgene = (split /,/, $cols[5])[0] ;
+	
+	$cgene = InferConstantGene( $vgene, $jgene, $cgene ) ;
+	my $key = join( "\t", ( $vgene, $dgene, $jgene, $cgene, $cols[8] ) ) ;
+	my $type = GetChainType( $vgene, $jgene, $cgene ) ;
 	
 	if ($type == 2) # TCR
 	{
