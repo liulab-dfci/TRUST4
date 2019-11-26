@@ -2323,8 +2323,10 @@ public:
 		delete[] buckets[1] ;
 		//printf( "%d %d\n", hitCnt, overlaps.size() ) ;	
 		for ( i = 0 ; i < overlaps.size() ; ++i )
+		{
+			//printf( "%s\n", seqs[ overlaps[i].seqIdx ].name ) ;
 			delete overlaps[i].hitCoords ;
-
+		}
 		if ( overlaps.size() == 0 )
 			return false ;
 		/*printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
@@ -6608,6 +6610,16 @@ public:
 				else if ( cdr3Score < 99 && 
 					( geneOverlap[0].seqIdx != -1 && geneOverlap[0].seqStart > 100 && geneOverlap[0].readStart > 100 ) 
 					&& ( !strongLocateS || leftCnt < 3 ) )
+					cdr3Score = 0 ;
+				else if ( cdr3Score < 99 &&
+						geneOverlap[0].seqIdx != -1 && ( !strongLocateS || leftCnt < 3 ) &&
+						( GetContigIdx( geneOverlap[0].readEnd, contigs ) == GetContigIdx(s, contigs)) && 
+						( ( seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
+							&& geneOverlap[0].seqEnd + ( s - geneOverlap[0].readEnd + 1 ) + 31 < 
+								seqs[ geneOverlap[0].seqIdx ].info[2].a ) 
+						|| ( seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
+							&& geneOverlap[0].seqEnd + ( s - geneOverlap[0].readEnd + 1 ) + 51 < 
+								seqs[ geneOverlap[0].seqIdx ].consensusLen ) ) )
 					cdr3Score = 0 ;
 				else if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && s >= geneOverlap[2].readStart )
 					cdr3Score = 0 ;
