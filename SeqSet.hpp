@@ -7061,8 +7061,8 @@ public:
 			if ( GetGeneType( seqs[ seqIdx ].name ) != geneType )
 				continue ;
 			if ( primaryOverlap.similarity == overlap.similarity &&
-				primaryOverlap.readEnd - primaryOverlap.readStart  == overlap.readEnd - overlap.readStart &&
-				primaryOverlap.seqEnd - primaryOverlap.seqStart == overlap.seqEnd - overlap.seqStart )
+				primaryOverlap.readEnd - primaryOverlap.readStart  == overlap.readEnd - overlap.readStart )
+				// &&primaryOverlap.seqEnd - primaryOverlap.seqStart == overlap.seqEnd - overlap.seqStart )
 				secondaryOverlapIdx.push_back( i ) ;
 		}
 		return secondaryOverlapIdx.size() ;

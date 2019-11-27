@@ -214,7 +214,6 @@ void AnnotationTieBreak( struct _annotate *annotations, SeqSet &seqSet, SeqSet &
 		int weightSum = seqSet.GetSeqWeightSum( i ) ;
 		int len = seqSet.GetSeqConsensusLen( i ) ;
 		double avgWeight = (double)weightSum / len ;
-	
 		for ( k = 0 ; k < 4 ; ++k )
 		{
 			if ( annotations[i].geneOverlap[k].seqIdx == -1 )
@@ -222,7 +221,7 @@ void AnnotationTieBreak( struct _annotate *annotations, SeqSet &seqSet, SeqSet &
 			abundance[ annotations[i].geneOverlap[k].seqIdx ] += avgWeight ;
 		}		
 	}
-	
+
 	// Break ties
 	for ( i = 0 ; i < seqCnt ; ++i )
 	{
@@ -236,20 +235,17 @@ void AnnotationTieBreak( struct _annotate *annotations, SeqSet &seqSet, SeqSet &
 			int size = overlaps.size() ;
 			for ( j = 0 ; j < size ; ++j )
 			{
-				if ( refSet.GetGeneType( refSet.GetSeqName( overlaps[j].seqIdx ) ) == j )
-					break ;
-			}
-			if ( j >= size )
-				continue ;
-			if ( overlaps[j].readStart == geneOverlap[k].readStart 
-				&& overlaps[j].readEnd == geneOverlap[k].readEnd 
-				&& overlaps[j].similarity == geneOverlap[k].similarity 
-				&& abundance[ overlaps[j].seqIdx ] > abundance[ geneOverlap[k].seqIdx ] ) 
-			{
-				struct _overlap tmp ;
-				tmp = geneOverlap[k] ;
-				geneOverlap[k] = overlaps[j] ;
-				overlaps[j] = tmp ;
+				if ( refSet.GetGeneType( refSet.GetSeqName( overlaps[j].seqIdx ) ) != k )
+					continue ;
+				if ( overlaps[j].readEnd - overlaps[j].readStart == geneOverlap[k].readEnd - geneOverlap[k].readStart 
+						&& overlaps[j].similarity == geneOverlap[k].similarity 
+						&& abundance[ overlaps[j].seqIdx ] > abundance[ geneOverlap[k].seqIdx ] ) 
+				{
+					struct _overlap tmp ;
+					tmp = geneOverlap[k] ;
+					geneOverlap[k] = overlaps[j] ;
+					overlaps[j] = tmp ;
+				}
 			}
 		}
 	}
