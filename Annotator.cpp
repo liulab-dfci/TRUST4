@@ -531,7 +531,7 @@ int main( int argc, char *argv[] )
 		std::vector<struct _assignRead> cdr3Reads ; // Keep the information of the reads aligned to cdr3 region.
 		std::vector<struct _assignRead> assembledReads ;
 		int assembledReadCnt ;
-
+		
 		while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
 		{
 			fscanf( fpReads, "%s", seq ) ; 
@@ -543,6 +543,17 @@ int main( int argc, char *argv[] )
 			assembledReads.push_back( nr ) ;
 		}
 		assembledReadCnt = assembledReads.size() ;
+		
+		int longReadCnt = 0 ;
+		for ( i = 0 ; i < assembledReadCnt ; ++i )
+		{
+			if ( strlen( assembledReads[i].read ) >= 200 )
+				++longReadCnt ;
+		}
+		if ( longReadCnt > assembledReadCnt / 2 )
+		{
+			seqSet.SetIsLongSeqSet( true ) ;
+		}
 		
 		if ( threadCnt <= 1 )
 		{

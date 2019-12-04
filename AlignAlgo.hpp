@@ -9,7 +9,7 @@
 #define EDIT_INSERT 2
 #define EDIT_DELETE 3
 
-#define SCORE_MATCH 5
+#define SCORE_MATCH 2
 #define SCORE_MISMATCH (-2)
 #define SCORE_GAPOPEN (-4)
 #define SCORE_GAPEXTEND (-1)

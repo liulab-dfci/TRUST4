@@ -643,7 +643,7 @@ int main( int argc, char *argv[] )
 		delete[] threads ;
 		delete[] args ;
 	}
-
+	PrintLog( "Finish rough annotations." ) ;
 	// Remove the redudant sequence before V gene.
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
@@ -693,16 +693,6 @@ int main( int argc, char *argv[] )
 					sortedReads[i].qual[j - trimBase] = sortedReads[i].qual[j] ;
 
 			}
-
-			for ( j = 0 ; j < 4 ; ++j )
-			{
-				if ( geneOverlap[j].seqIdx == -1 )
-					continue ;
-				geneOverlap[j].readStart -= trimBase ;
-				geneOverlap[j].readEnd -= trimBase ;
-				geneOverlap[j].seqStart -= trimBase ;
-				geneOverlap[j].seqEnd -= trimBase ;
-			}
 		}
 		else
 		{
@@ -712,9 +702,116 @@ int main( int argc, char *argv[] )
 			if ( sortedReads[i].qual != NULL )
 				sortedReads[i].qual[len - trimBase] = '\0' ;
 		}
+
+		for ( j = 0 ; j < 4 ; ++j )
+		{
+			if ( geneOverlap[j].seqIdx == -1 )
+				continue ;
+			geneOverlap[j].readStart -= trimBase ;
+			geneOverlap[j].readEnd -= trimBase ;
+			if ( geneOverlap[j].readStart < 0 )
+				geneOverlap[j].readStart = 0 ;
+			if ( geneOverlap[j].readEnd < 0 )
+			{
+				geneOverlap[j].readEnd = 0 ;
+				geneOverlap[j].seqIdx = -1 ;
+			}
+		}
 		sortedReads[i].len -= trimBase ;
 	}
 	
+	// Remove constant gene for non IGH genes for long reads.
+	if ( firstReadLen > 200 )
+	{
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			int len = sortedReads[i].len ;
+			struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
+			if ( geneOverlap[3].seqIdx == -1 || sortedReads[i].read == NULL )
+				continue ;
+
+			bool mayTrim = false ;
+			if ( geneOverlap[3].seqStart < indexKmerLength && geneOverlap[3].similarity > 0.95 
+				&& geneOverlap[3].readEnd + indexKmerLength >= sortedReads[i].len 
+				&& refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
+				mayTrim  = true ;
+			if ( !mayTrim )
+				continue ;
+			int trimBase = ( len - geneOverlap[3].readStart ) + geneOverlap[3].seqStart ;
+			if ( trimBase <= 0 )
+				continue ;
+
+			if ( geneOverlap[2].seqIdx != -1 
+					&& geneOverlap[2].readStart + trimBase >= sortedReads[i].len )
+				continue ;
+			if ( geneOverlap[0].seqIdx != -1 
+					&& geneOverlap[0].readStart + trimBase >= sortedReads[i].len )
+				continue ;
+
+			if ( sortedReads[i].len - trimBase < 31 )
+			{
+				free( sortedReads[i].id ) ;
+				free( sortedReads[i].read ) ;
+				if ( sortedReads[i].qual != NULL )
+					free( sortedReads[i].qual ) ;
+				sortedReads[i].read = NULL ;
+				continue ;
+			}
+
+			if ( geneOverlap[3].strand < 0 )
+			{
+				// Remove the first bases
+				for ( j = trimBase ; j <= len ; ++j )
+				{
+					sortedReads[i].read[j - trimBase] = sortedReads[i].read[j] ;
+					if ( sortedReads[i].qual != NULL )
+						sortedReads[i].qual[j - trimBase] = sortedReads[i].qual[j] ;
+
+				}
+
+				geneOverlap[3].seqIdx = -1 ;
+			}
+			else
+			{
+				// Remove the last bases.
+				sortedReads[i].read[len - trimBase] = '\0' ;
+				if ( sortedReads[i].qual != NULL )
+					sortedReads[i].qual[len - trimBase] = '\0' ;
+				geneOverlap[3].seqIdx = -1 ;
+			}
+			for ( j = 0 ; j < 4 ; ++j )
+			{
+				if ( geneOverlap[j].seqIdx == -1 )
+					continue ;
+				if ( geneOverlap[j].readStart + trimBase >= len )
+				{
+					geneOverlap[j].readStart = len - 1 ;
+					geneOverlap[j].seqIdx = -1 ;
+				}
+				if ( geneOverlap[j].readEnd + trimBase >= len )
+					geneOverlap[j].readEnd = len - 1 ;
+			}
+			sortedReads[i].len -= trimBase ;
+		}
+	}
+	
+	// Remove the reads that are too short if this is a long read data set.
+	if ( firstReadLen > 200 )
+	{
+		for ( i = 0 ; i < readCnt ; ++i )
+			if ( sortedReads[i].read != NULL && sortedReads[i].len < firstReadLen / 3 )
+			{
+				free( sortedReads[i].id ) ;
+				free( sortedReads[i].read ) ;
+				if ( sortedReads[i].qual != NULL )
+					free( sortedReads[i].qual ) ;
+				sortedReads[i].read = NULL ;
+				continue ;
+			}
+		
+		seqSet.SetIsLongSeqSet( true ) ;
+	}
+
 	// Remove the sequences whose J gene is not associate with C gene.
 	/*for ( i = 0 ; i < readCnt ; ++i )
 	{
@@ -779,6 +876,9 @@ int main( int argc, char *argv[] )
 			l = 21 ;
 		seqSet.SetHitLenRequired( l ) ;
 	}
+
+	if ( firstReadLen > 200 )
+		changeKmerLengthThreshold /= 2 ;
 
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
@@ -875,7 +975,8 @@ int main( int argc, char *argv[] )
 				double similarityThreshold = 0.9 ;
 				if ( sortedReads[i].minCnt >= 20 )
 					similarityThreshold = 0.97 ;
-				else if ( sortedReads[i].minCnt >= 2 )
+				else if ( sortedReads[i].minCnt >= 2
+					|| ( sortedReads[i].minCnt >= 5 && firstReadLen > 200 ) )
 				{
 					//double tmp = 1.0 - 4.0 / sortedReads[i].len ;
 					//similarityThreshold = tmp < 0.95 ? tmp : 0.95 ;
@@ -930,7 +1031,7 @@ int main( int argc, char *argv[] )
 						{
 							break ;
 						}
-
+					
 					if ( !filter )
 					{
 						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
@@ -1036,6 +1137,8 @@ int main( int argc, char *argv[] )
 	}*/
 
 	int rescueReadCnt = rescueReadIdx.size() ;
+	if ( firstReadLen > 200 )
+		rescueReadCnt = 0 ;
 	PrintLog( "Try to rescue %d reads for assembly.", rescueReadCnt) ;
 	assembledReadCnt = 0 ;
 	for ( i = 0 ; i < rescueReadCnt ; ++i )
@@ -1156,7 +1259,8 @@ int main( int argc, char *argv[] )
 			continue ;
 		extendedSeq.InputRefSeq( name, refSet.GetSeqConsensus( i ) + constantGeneEnd ) ;
 	}*/
-	
+	if ( firstReadLen > 200 )
+		extendedSeq.SetIsLongSeqSet( true ) ;
 	extendedSeq.SetNovelSeqSimilarity( 0.95 ) ;
 	if ( threadCnt <= 1 )
 	{
