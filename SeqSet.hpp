@@ -7239,7 +7239,7 @@ public:
 		{
 			struct _overlap &overlap = overlaps[i] ;
 			
-			if ( GetGeneType( seqs[ seqIdx ].name ) != geneType )
+			if ( GetGeneType( seqs[ overlap.seqIdx ].name ) != geneType )
 				continue ;
 			if ( primaryOverlap.similarity == overlap.similarity &&
 				primaryOverlap.readEnd - primaryOverlap.readStart  == overlap.readEnd - overlap.readStart )
