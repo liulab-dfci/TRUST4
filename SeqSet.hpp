@@ -7231,8 +7231,9 @@ public:
 		int seqIdx = primaryOverlap.seqIdx ;
 		if ( seqIdx == -1 || secondaryGeneOverlaps == NULL )
 			return 0 ;
-		
+			
 		std::vector<struct _overlap> &overlaps = *secondaryGeneOverlaps ;
+		secondaryOverlapIdx.resize( 0 ) ;
 		int size = overlaps.size() ;
 		for ( i = 0 ; i < size ; ++i )
 		{
