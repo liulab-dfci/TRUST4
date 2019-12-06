@@ -44,21 +44,32 @@ void InsertAdj( int u, int v, struct _adj *adj, int &adjUsed )
 }
 
 // Prim algorithm for minimum spanning tree
-void Prim( int **dist, int n,  struct _adj *adj, int &adjUsed )
+void Prim( int **dist, int n,  struct _adj *adj, int &adjUsed, int offset, std::vector<struct _cdr3> &cdr3s )
 {
 	int i, j ;
 	struct _pair *minDist = new struct _pair[n] ; // a-dist, b-the node used to connect
 	bool *used = new bool[n] ;
 	memset( used, false, sizeof(bool) * n ) ;
 
-	minDist[0].a = 0 ;
-	minDist[0].b = 0 ;
-	for ( i = 1 ; i < n ; ++i )
+	int max = -1 ;
+	int maxTag = -1 ;
+	for ( i = 0 ; i < n ; ++i )
+		if ( cdr3s[i + offset].abund > max )
+		{
+			max = cdr3s[i + offset].abund ;
+			maxTag = i ;
+		}
+
+	minDist[maxTag].a = 0 ;
+	minDist[maxTag].b = 0 ;
+	for ( i = 0 ; i < n ; ++i )
 	{
-		minDist[0].a = dist[0][i] ;
-		minDist[0].b = 0 ;
+		if ( i == maxTag )
+			continue ;
+		minDist[i].a = dist[maxTag][i] ;
+		minDist[i].b = maxTag ;
 	}
-	used[0] = true ;
+	used[maxTag] = true ;
 	
 	for ( i = 1 ; i < n ; ++i )
 	{
@@ -66,10 +77,17 @@ void Prim( int **dist, int n,  struct _adj *adj, int &adjUsed )
 		int minTag = -1 ;
 		for ( j = 0 ; j < n ; ++j )
 		{
-			if ( !used[j] && minDist[j].a < min )
+			if ( !used[j] )
 			{
-				min = minDist[j].a ;
-				minTag = j ;
+				if ( minDist[j].a < min )
+				{
+					min = minDist[j].a ;
+					minTag = j ;
+				}
+				else if ( minDist[j].a == min && cdr3s[j + offset].abund > cdr3s[minTag + offset].abund )
+				{
+					minTag = j ;
+				}
 			}
 		}
 
@@ -79,10 +97,18 @@ void Prim( int **dist, int n,  struct _adj *adj, int &adjUsed )
 
 		for ( j = 0 ; j < n ; ++j )
 		{
-			if ( !used[j] && dist[minTag][j] < minDist[j].a )
+			if ( !used[j] )
 			{
-				minDist[j].a = dist[minTag][j] ;
-				minDist[j].b = minTag ;
+				if ( dist[minTag][j] < minDist[j].a )
+				{
+					minDist[j].a = dist[minTag][j] ;
+					minDist[j].b = minTag ;
+				}
+				else if ( dist[minTag][j] == minDist[j].a 
+					&& cdr3s[minTag + offset].abund > cdr3s[ minDist[j].b + offset ].abund )
+				{
+					minDist[j].b = minTag ;
+				}
 			}
 		}
 	}
@@ -92,22 +118,22 @@ void Prim( int **dist, int n,  struct _adj *adj, int &adjUsed )
 }
 
 // Return: whether it is a leaf.
-int OrderMST( int tag, struct _adj *adj, int n, int *parent, std::vector<int> &leaves )
+int LongestRootLeafDistMST( int tag, struct _adj *adj, int n, bool *visited, int **dist )
 {
+	visited[tag] = true ;
+
 	int p = adj[tag].next ;
-	int ret = 1 ;
+	int ret = 0 ;
 	while ( p != -1 )
 	{
-		if ( parent[adj[tag].v] == -1 )
+		if ( visited[ adj[p].v ] == false )
 		{
-			parent[ adj[tag].v ] = tag ;
-			OrderMST( adj[tag].v, adj, n, parent, leaves ) ;
-			ret = 0 ;
+			int tmp = dist[tag][ adj[p].v ] + LongestRootLeafDistMST( adj[p].v, adj, n, visited, dist ) ;
+			if ( tmp > ret )
+				ret = tmp ;
 		}
-		p = adj[tag].next ;
+		p = adj[p].next ;
 	}
-	if ( ret == 1 )
-		leaves.push_back( tag ) ;
 	return ret ;
 }
 
@@ -134,10 +160,11 @@ void PrintMST( FILE *fp, int tag, int parent, bool *visited, int **dist, int off
 	if ( childCnt > 0 )
 		fprintf( fp, ")" ) ;
 	if ( parent == tag ) // root
-		fprintf( fp, "%s_%d;\n", clusterIdToName[ cdr3[tag + offset].clusterId ].c_str(), cdr3[tag + offset].subId ) ; 
+		fprintf( fp, "%s_%d_%.2lf;\n", clusterIdToName[ cdr3[tag + offset].clusterId ].c_str(), cdr3[tag + offset].subId,
+			cdr3[tag + offset].abund ) ; 
 	else
-		fprintf( fp, "%s_%d:%d", clusterIdToName[ cdr3[tag + offset].clusterId ].c_str(), 
-			cdr3[tag + offset].subId, dist[parent][tag] ) ;
+		fprintf( fp, "%s_%d_%.2lf:%d", clusterIdToName[ cdr3[tag + offset].clusterId ].c_str(), 
+			cdr3[tag + offset].subId, cdr3[tag + offset].abund, dist[parent][tag] ) ;
 }
 
 
@@ -224,7 +251,7 @@ int main( int argc, char *argv[] )
 		adjUsed = k ;
 		
 		// Build the tree
-		Prim( dist, n, adj, adjUsed ) ;
+		Prim( dist, n, adj, adjUsed, i, cdr3s ) ;
 
 		// Find the root for the tree
 		std::vector<int> leaves ;
@@ -236,14 +263,11 @@ int main( int argc, char *argv[] )
 
 		int bestRoot = -1 ;
 		int minMaxRootLeafDist = LINE_WIDTH ;
+		bool *visited = new bool[n] ;
 		for ( k = 0 ; k < n ; ++k )
 		{
-			int lcnt = leaves.size() ;
-			int max = -1 ;
-			for ( l = 0 ; l < lcnt ; ++l )
-				if ( leaves[l] != k && dist[k][leaves[l]] > max )
-					max = dist[k][leaves[l]] ;
-
+			memset( visited, false, sizeof( bool ) * n ) ;
+			int max = LongestRootLeafDistMST( k, adj, n, visited, dist ) ;
 			if ( max < minMaxRootLeafDist )
 			{
 				bestRoot = k ;
@@ -257,7 +281,6 @@ int main( int argc, char *argv[] )
 		}
 
 		// Output the tree
-		bool *visited = new bool[n] ;
 		memset( visited, false, sizeof( bool ) * n ) ;
 		PrintMST( stdout, bestRoot, bestRoot, visited, dist, i, adj, cdr3s, clusterIdToName ) ;
 	
