@@ -4980,7 +4980,7 @@ public:
 			}
 			std::sort( contigOverlaps[k].begin(), contigOverlaps[k].end() ) ;
 			
-			//std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
+			std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
 			//for ( i = 0 ; i < contigOverlapCnt ; ++i )
 			//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
 		}
@@ -5116,8 +5116,9 @@ public:
 			if ( BT && name[0] != BT )
 				continue ;
 			BT = name[0] ;
-			
-			if ( chain && name[2] != chain )
+			if ( chain && !( name[2] == chain 
+				|| ( name[2] == 'D' && chain == 'A' ) 
+				|| ( name[2] == 'A' && chain == 'D' ) ) )
 				continue ;
 			chain = name[2] ;
 

@@ -720,110 +720,114 @@ int main( int argc, char *argv[] )
 		sortedReads[i].len -= trimBase ;
 	}
 	
-	// Remove constant gene for non IGH genes for long reads.
-	if ( firstReadLen > 200 )
+	// Remove redundant sequences after constant gene ; a
+	// and also constant gene for non IGH genes for long reads.
+	for ( i = 0 ; i < readCnt ; ++i )
 	{
-		for ( i = 0 ; i < readCnt ; ++i )
-		{
-			int len = sortedReads[i].len ;
-			struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
-			if ( geneOverlap[3].seqIdx == -1 || sortedReads[i].read == NULL )
-				continue ;
-
-			bool mayTrim = false ;
-			if ( geneOverlap[3].seqStart < indexKmerLength && geneOverlap[3].similarity > 0.95 
-				&& geneOverlap[3].readEnd + indexKmerLength >= sortedReads[i].len 
-				&& refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
-				mayTrim  = true ;
-			if ( !mayTrim )
-				continue ;
-			int trimBase = ( len - geneOverlap[3].readStart ) + geneOverlap[3].seqStart ;
-			if ( trimBase <= 0 )
-				continue ;
-
-			if ( geneOverlap[2].seqIdx != -1 
-					&& geneOverlap[2].readStart + trimBase >= sortedReads[i].len )
-				continue ;
-			if ( geneOverlap[0].seqIdx != -1 
-					&& geneOverlap[0].readStart + trimBase >= sortedReads[i].len )
-				continue ;
-
-			if ( sortedReads[i].len - trimBase < 31 )
-			{
-				free( sortedReads[i].id ) ;
-				free( sortedReads[i].read ) ;
-				if ( sortedReads[i].qual != NULL )
-					free( sortedReads[i].qual ) ;
-				sortedReads[i].read = NULL ;
-				continue ;
-			}
-
-			if ( geneOverlap[3].strand < 0 )
-			{
-				// Remove the first bases
-				for ( j = trimBase ; j <= len ; ++j )
-				{
-					sortedReads[i].read[j - trimBase] = sortedReads[i].read[j] ;
-					if ( sortedReads[i].qual != NULL )
-						sortedReads[i].qual[j - trimBase] = sortedReads[i].qual[j] ;
-
-				}
-
-				geneOverlap[3].seqIdx = -1 ;
-			}
-			else
-			{
-				// Remove the last bases.
-				sortedReads[i].read[len - trimBase] = '\0' ;
-				if ( sortedReads[i].qual != NULL )
-					sortedReads[i].qual[len - trimBase] = '\0' ;
-				geneOverlap[3].seqIdx = -1 ;
-			}
-			for ( j = 0 ; j < 4 ; ++j )
-			{
-				if ( geneOverlap[j].seqIdx == -1 )
-					continue ;
-				if ( geneOverlap[j].readStart + trimBase >= len )
-				{
-					geneOverlap[j].readStart = len - 1 ;
-					geneOverlap[j].seqIdx = -1 ;
-				}
-				if ( geneOverlap[j].readEnd + trimBase >= len )
-					geneOverlap[j].readEnd = len - 1 ;
-			}
-			sortedReads[i].len -= trimBase ;
-		}
-	}
-	
-	// Remove the reads that are too short if this is a long read data set.
-	if ( firstReadLen > 200 )
-	{
-		for ( i = 0 ; i < readCnt ; ++i )
-			if ( sortedReads[i].read != NULL && sortedReads[i].len < firstReadLen / 3 )
-			{
-				free( sortedReads[i].id ) ;
-				free( sortedReads[i].read ) ;
-				if ( sortedReads[i].qual != NULL )
-					free( sortedReads[i].qual ) ;
-				sortedReads[i].read = NULL ;
-				continue ;
-			}
-		
-		seqSet.SetIsLongSeqSet( true ) ;
-	}
-
-	// Remove the sequences whose J gene is not associate with C gene.
-	/*for ( i = 0 ; i < readCnt ; ++i )
-	{
+		int len = sortedReads[i].len ;
 		struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
-		if ( sortedReads[i].read == NULL )
+		if ( geneOverlap[3].seqIdx == -1 || sortedReads[i].read == NULL )
 			continue ;
 
-		if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx == -1 )
+		bool mayTrim = false ;
+		if ( geneOverlap[3].seqStart < indexKmerLength && geneOverlap[3].similarity > 0.95 )
+				//&& geneOverlap[3].readEnd + indexKmerLength >= sortedReads[i].len 
+				//&& refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
+			mayTrim  = true ;
+		if ( !mayTrim )
+			continue ;
+		
+		int trimBase = len - geneOverlap[3].readEnd ;
+		if ( firstReadLen > 200 && refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
 		{
-			if ( geneOverlap[2].similarity > 0.9 && 
-				sortedReads[i].len - geneOverlap[2].readEnd > 50 ) // With 50 base but could not identify C gene
+			trimBase = ( len - geneOverlap[3].readStart ) + geneOverlap[3].seqStart ;
+		}
+		
+		if ( trimBase <= 0 )
+			continue ;
+
+		if ( geneOverlap[2].seqIdx != -1 
+				&& geneOverlap[2].readStart + trimBase >= sortedReads[i].len )
+			continue ;
+		if ( geneOverlap[0].seqIdx != -1 
+				&& geneOverlap[0].readStart + trimBase >= sortedReads[i].len )
+			continue ;
+
+		if ( sortedReads[i].len - trimBase < 31 )
+		{
+			free( sortedReads[i].id ) ;
+			free( sortedReads[i].read ) ;
+			if ( sortedReads[i].qual != NULL )
+				free( sortedReads[i].qual ) ;
+			sortedReads[i].read = NULL ;
+			continue ;
+		}
+
+		if ( geneOverlap[3].strand < 0 )
+		{
+			// Remove the first bases
+			for ( j = trimBase ; j <= len ; ++j )
 			{
+				sortedReads[i].read[j - trimBase] = sortedReads[i].read[j] ;
+				if ( sortedReads[i].qual != NULL )
+					sortedReads[i].qual[j - trimBase] = sortedReads[i].qual[j] ;
+
+			}
+
+			geneOverlap[3].seqIdx = -1 ;
+		}
+		else
+		{
+			// Remove the last bases.
+			sortedReads[i].read[len - trimBase] = '\0' ;
+			if ( sortedReads[i].qual != NULL )
+				sortedReads[i].qual[len - trimBase] = '\0' ;
+			geneOverlap[3].seqIdx = -1 ;
+		}
+		for ( j = 0 ; j < 4 ; ++j )
+		{
+			if ( geneOverlap[j].seqIdx == -1 )
+				continue ;
+			if ( geneOverlap[j].readStart + trimBase >= len )
+			{
+				geneOverlap[j].readStart = len - 1 ;
+				geneOverlap[j].seqIdx = -1 ;
+			}
+			if ( geneOverlap[j].readEnd + trimBase >= len )
+				geneOverlap[j].readEnd = len - 1 ;
+		}
+		sortedReads[i].len -= trimBase ;
+	}
+
+// Remove the reads that are too short if this is a long read data set.
+if ( firstReadLen > 200 )
+{
+	for ( i = 0 ; i < readCnt ; ++i )
+		if ( sortedReads[i].read != NULL && sortedReads[i].len < firstReadLen / 3 )
+		{
+			free( sortedReads[i].id ) ;
+			free( sortedReads[i].read ) ;
+			if ( sortedReads[i].qual != NULL )
+				free( sortedReads[i].qual ) ;
+			sortedReads[i].read = NULL ;
+			continue ;
+		}
+
+	seqSet.SetIsLongSeqSet( true ) ;
+}
+
+// Remove the sequences whose J gene is not associate with C gene.
+/*for ( i = 0 ; i < readCnt ; ++i )
+  {
+  struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
+  if ( sortedReads[i].read == NULL )
+  continue ;
+
+  if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx == -1 )
+  {
+  if ( geneOverlap[2].similarity > 0.9 && 
+  sortedReads[i].len - geneOverlap[2].readEnd > 50 ) // With 50 base but could not identify C gene
+  {
 				free( sortedReads[i].id ) ;
 				free( sortedReads[i].read ) ;
 				if ( sortedReads[i].qual != NULL )
