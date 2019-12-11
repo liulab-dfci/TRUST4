@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <vector>
 #include <string>
@@ -9,7 +10,10 @@
 
 #define LINE_WIDTH 50000
 
-char usage[] = "Usage: clone-evo xxx_cdr3.out > yyy_evo.out\n" ;
+char usage[] = "Usage: clone-evo xxx_cdr3.out [OPTIONS] > yyy_evo.out\n"
+	"Options:\n" 
+	"\t-a FLOAT: only consider clonotypes more abundant than specified value (default: 2.0)\n"
+	;
 
 struct _cdr3
 {
@@ -184,6 +188,18 @@ int main( int argc, char *argv[] )
 	}
 
 	int i, j, k ;
+
+	double minAbund = 2 ;
+
+	for ( i = 2 ; i < argc ; ++i )
+	{
+		if ( !strcmp( argv[i], "-a" ) )
+		{
+			minAbund = atof( argv[i + 1] ) ;
+			i += 1 ;
+		}
+	}
+
 	FILE *fp ;
 	fp = fopen( argv[1], "r" ) ;
 
@@ -217,6 +233,9 @@ int main( int argc, char *argv[] )
 		nc.clusterId = clusterId ;
 		nc.subId = k ;
 		nc.abund = abund ;
+
+		if ( nc.abund < minAbund )
+			continue ;
 		cdr3s.push_back( nc ) ;
 	}
 	
