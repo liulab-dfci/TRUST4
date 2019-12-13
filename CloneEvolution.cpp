@@ -233,6 +233,12 @@ int main( int argc, char *argv[] )
 		nc.clusterId = clusterId ;
 		nc.subId = k ;
 		nc.abund = abund ;
+		
+		for ( i = 0 ; seq[i] ; ++i )
+			if ( seq[i] == 'N' )
+				break ;
+		if (seq[i] == 'N' )
+			continue ;
 
 		if ( nc.abund < minAbund )
 			continue ;
