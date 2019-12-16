@@ -31,21 +31,22 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 	Usage: ./run-trust4 [OPTIONS]
 		Required:
 			-b STRING: path to bam file
-			-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
+			-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes
 		Optional:
 			--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used). (recommended) 
 			-o STRING: prefix of output files. (default: inferred from file prefix)
-			-t INT: number of threads (default: 1)\n".
-			--stage INT: start TRUST4 on specified stage (default: 0):\n".
-				0: start from beginning (candidate read extraction)\n".
-				1: start from assembly\n".
-				2: start from annotation\n". 
+			-t INT: number of threads (default: 1)
+			--stage INT: start TRUST4 on specified stage (default: 0)
+				0: start from beginning (candidate read extraction)
+				1: start from assembly
+				2: start from annotation
+				3: start from generating the report table
 
 ### Input/Output
 
 The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
 
-TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.fa is in fasta format for the annotation of the consensus assembly. And trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies.
+TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.fa is in fasta format for the annotation of the consensus assembly. trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies. And trust_report.tsv is a report file focusing on CDR3 and is compatible with other repertoire analysis tool such as VDJTools. 
 
 Each header of trust_annot.fa is split into fields:
 
@@ -67,6 +68,11 @@ The output trust_cdr3.out is a tsv file. The fields are:
 
 	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count
 
+The output trust_report.tsv is a tsv file. The fileds are:
+	
+	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C 
+
+For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. 
 
 ### Practical notes
 
@@ -86,15 +92,11 @@ to generate the input for "--ref". The bcrtcr.fa is the file generated in previo
 
 * Simple report
 
-The default report of TRUST4 is trust_cdr3.out is focus on DNA level. We provide a script "trust-simplerep.pl" that can convert the output to amino acids, collapse repeated entries and normalize the frequency. The command is
+The last step of generating simple report can be done with the command:
 
 	perl trust-simplerep.pl trust_cdr3.out > trust_report.out
 
-The output is a tsv file and columns in the simple report are 
-
-	read_count frequency(proportion of read_count) CDR3_dna CDR3_amino_acids V D J C 
-	
-The D gene column is a place holder for now and is always "\*" indicating missing. Note that for frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. If you are interested in a subset of chains, you can "grep" those from trust_cdr3.out and run trust-simplerep.pl on the subset.
+If you are interested in a subset of chains, you can "grep" those from trust_cdr3.out and run trust-simplerep.pl on the subset.
  
 ### Example
 
@@ -102,7 +104,7 @@ The directory './example' in this distribution contains one BAM files as input f
 
 	./run-trust4 -b example/example.bam -f bcrtcr.fa --ref IMGT+C.fa
 
-The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa and TRUST_example_cdr3.out and several fq/fa files.
+The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa, TRUST_example_cdr3.out, TRUST_example_report.tsv and several fq/fa files.
 
 ### Terms of use
 
