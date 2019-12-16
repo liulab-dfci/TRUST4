@@ -5,6 +5,7 @@ use warnings ;
 
 die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n". 
 	"OPTIONS:\n".
+	"\t--decimalCnt: the count column uses decimal instead of truncated integer. (default: not used)\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n"
 	if ( @ARGV == 0 ) ;
@@ -174,7 +175,7 @@ my $i ;
 my $annotFile = "" ;
 my $reportJunctionInfo = 0 ;
 my $tcrErrorFilter = 0.05 ;
-
+my $roundDownCount = 1 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--junction" )
@@ -187,6 +188,10 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	{
 		$tcrErrorFilter = $ARGV[$i + 1] ;
 		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--decimalCnt" )
+	{
+		$roundDownCount = 0 ;
 	}
 	else
 	{
@@ -390,7 +395,16 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 	my $freq = 0 ;
 	my $type = GetChainType( $info[0], $info[2], $info[3] ) ;
 	$freq = $val[1] / $totalCnt[ $type ] if ( $type != -1 ) ;
-	printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+	if ($roundDownCount == 1 )
+	{
+		my $cnt = int($val[1]) ;
+		next if ($cnt == 0) ;
+		printf( "%d\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $cnt, $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+	}
+	else
+	{
+		printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+	}
 	if ( $reportJunctionInfo == 1 )
 	{
 	        if ( defined $junctionInfo{$val[2]} )
