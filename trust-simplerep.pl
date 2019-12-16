@@ -3,7 +3,13 @@
 use strict ;
 use warnings ;
 
-die "usage: ./trust-simplerepo.pl xxx_cdr3.out [--junction trust_annot.fa] > trust_report.out\n" if ( @ARGV == 0 ) ;
+die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n". 
+	"OPTIONS:\n".
+	"\t--decimalCnt: the count column uses decimal instead of truncated integer. (default: not used)\n".
+	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
+	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n"
+	if ( @ARGV == 0 ) ;
+
 my %cdr3 ;  
 
 # Copied from http://www.wellho.net/resources/ex.php4?item=p212/3to3
@@ -94,9 +100,82 @@ sub GetChainType
 	return -1 ;
 }
 
+sub GetDetailChainType
+{
+	foreach my $g (@_)
+	{
+		if ( $g =~ /^IGH/ )
+		{
+			return 0 ;
+		}
+		elsif ( $g =~ /^IGK/ )
+		{
+			return 1 ;
+		}
+		elsif ( $g =~ /^IGL/ )
+		{
+			return 2 ;
+		}
+		elsif ( $g =~ /^TRA/ )
+		{
+			return 3 ;
+		}
+		elsif ( $g =~ /^TRB/ )
+		{
+			return 4 ;
+		}
+		elsif ( $g =~ /^TRG/ )
+		{
+			return 5 ;
+		}
+		elsif ( $g =~ /^TRD/ )
+		{
+			return 6 ;
+		}
+	}
+	
+}
+
+# Use input V, J, C gene to report back the C gene if it is missing.
+sub InferConstantGene
+{
+	my $ret = $_[2] ;
+	my $i ;
+	
+	if ($_[2] ne "*")
+	{
+		for ( $i = 0 ; $i <= 1 ; ++$i )
+		{
+			next if ( $_[$i] eq "*" ) ;
+			if ( !($_[$i] =~ /^IGH/) )
+			{
+				$ret = substr($ret, 0, 4 );
+				last ;
+			}
+		}
+		
+		return $ret ;
+	}
+	
+	for ( $i = 0 ; $i <= 1 ; ++$i )
+	{
+		next if ( $_[$i] eq "*" ) ;
+		if ( $_[$i] =~ /^IGH/ )
+		{
+			return $ret ;
+		}
+		my $prefix = substr( $_[$i], 0, 3 ) ;
+		
+		return $prefix."C" ; 
+	}
+	return $ret ;
+}
+
 my $i ;
 my $annotFile = "" ;
 my $reportJunctionInfo = 0 ;
+my $tcrErrorFilter = 0.05 ;
+my $roundDownCount = 1 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--junction" )
@@ -104,6 +183,15 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 		$annotFile = $ARGV[$i + 1] ;
 		$reportJunctionInfo = 1 ;
 		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--filterTcrError" )
+	{
+		$tcrErrorFilter = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--decimalCnt" )
+	{
+		$roundDownCount = 0 ;
 	}
 	else
 	{
@@ -200,7 +288,27 @@ if ( $reportJunctionInfo == 1 )
 	}
 	close FP1 ;
 }
-# read in the input
+
+# collect the read count for each assembly id.
+open FP1, $ARGV[0] ;
+my %assemblyMostReads ; 
+while ( <FP1> )
+{
+	chomp ;
+	my @cols = split ;
+	my $assemblyId = $cols[0] ;
+	if ( defined $assemblyMostReads{ $assemblyId } )
+	{
+		$assemblyMostReads{$assemblyId} = $cols[10] if ($cols[10] > $assemblyMostReads{ $assemblyId });
+	}
+	else
+	{
+		$assemblyMostReads{$assemblyId} = $cols[10] ;
+	}
+}
+close FP1 ;
+
+# Read in the input
 open FP1, $ARGV[0] ;
 my @totalCnt = (0, 0, 0) ;
 my %cdr3AssemblyId ; # Record which assembly is representative for the cdr3
@@ -208,8 +316,24 @@ while ( <FP1> )
 {
 	chomp ;
 	my @cols = split ;
-	my $key = join( "\t", ( $cols[2], $cols[3], $cols[4], $cols[5], $cols[8] ) ) ;
 	my $assemblyId = $cols[0] ;
+	my $vgene = (split /,/, $cols[2])[0] ;
+	my $dgene = (split /,/, $cols[3])[0] ;
+	my $jgene = (split /,/, $cols[4])[0] ;
+	my $cgene = (split /,/, $cols[5])[0] ;
+	
+	$cgene = InferConstantGene( $vgene, $jgene, $cgene ) ;
+	my $key = join( "\t", ( $vgene, $dgene, $jgene, $cgene, $cols[8] ) ) ;
+	my $type = GetChainType( $vgene, $jgene, $cgene ) ;
+	
+	if ($type == 2) # TCR
+	{
+		if ($cols[10] < $assemblyMostReads{$assemblyId} * $tcrErrorFilter ) 
+		{
+			next ;
+		}
+	}
+
 	if ( defined $cdr3{ $key } )
 	{
 		my $val = \@{ $cdr3{ $key } } ;
@@ -224,7 +348,6 @@ while ( <FP1> )
 	{
 		@{ $cdr3{ $key } } = ( $cols[9], $cols[10], $assemblyId ) ;
 	}
-	my $type = GetChainType( $cols[2], $cols[4], $cols[5] ) ;
 	$totalCnt[ $type ] += $cols[10] if ( $type != -1 ) ;
 }
 close FP1 ;
@@ -260,7 +383,7 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 			{
 				if ( !defined $DnaToAa{ substr( $s, $i, 3 ) } )
 				{	
-					$aa = "?" ;
+					$aa .= "?" ;
 				}
 				else
 				{
@@ -272,7 +395,16 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 	my $freq = 0 ;
 	my $type = GetChainType( $info[0], $info[2], $info[3] ) ;
 	$freq = $val[1] / $totalCnt[ $type ] if ( $type != -1 ) ;
-	printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+	if ($roundDownCount == 1 )
+	{
+		my $cnt = int($val[1]) ;
+		next if ($cnt == 0) ;
+		printf( "%d\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $cnt, $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+	}
+	else
+	{
+		printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+	}
 	if ( $reportJunctionInfo == 1 )
 	{
 	        if ( defined $junctionInfo{$val[2]} )
