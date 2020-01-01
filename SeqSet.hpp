@@ -4305,6 +4305,18 @@ public:
 			else if ( a.similarity < b.similarity )
 				return false ;
 		}
+		
+		// Different alleles may have some effects on the boundary.
+		// Then we pick the one with no less coverage portion and higher similiarty.
+		if (threshold == 1.0 && IsSameGeneAllele(seqs[a.seqIdx].name, seqs[ b.seqIdx].name))
+		{
+			if ( ( a.seqEnd - a.seqStart + 1 ) / (double)(seqs[a.seqIdx].consensusLen) 
+				>= (b.seqEnd - b.seqStart + 1) / (double)seqs[b.seqIdx].consensusLen
+				&& a.similarity > b.similarity)
+			{
+				return true ;
+			}
+		}
 
 		if ( matchCnt > b.matchCnt * threshold )
 			return true ;
