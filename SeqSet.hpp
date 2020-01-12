@@ -4266,7 +4266,7 @@ public:
 					&& b.seqEnd >= seqs[ b.seqIdx ].consensusLen - gapAllow /*&& b.readEnd >= seqs[b.seqIdx].consensusLen*/ ) 
 			{
 				//matchCnt = a.matchCnt / (double)seqs[ a.seqIdx ].consensusLen * seqs[ b.seqIdx ].consensusLen ;
-				if ( a.similarity - 0.1 > b.similarity )
+				if ( a.similarity - 0.1 > b.similarity && (a.matchCnt > b.matchCnt - 20))
 				{
 					// Check whether a's high similarity coming from the sequence it matched is a 
 					bool directlyBetter = true ;
@@ -4284,7 +4284,7 @@ public:
 					if ( directlyBetter )
 						return true ;
 				}
-				else if ( a.similarity + 0.1 < b.similarity )
+				else if ( a.similarity + 0.1 < b.similarity && a.matchCnt <= b.matchCnt - 20 )
 					return false ;
 			}
 			else if (  a.seqEnd >= seqs[ a.seqIdx ].consensusLen - gapAllow && a.readEnd >= seqs[a.seqIdx].consensusLen 
@@ -4992,7 +4992,7 @@ public:
 			}
 			std::sort( contigOverlaps[k].begin(), contigOverlaps[k].end() ) ;
 			
-			std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
+			//std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
 			//for ( i = 0 ; i < contigOverlapCnt ; ++i )
 			//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
 		}
@@ -7235,6 +7235,91 @@ public:
 		if ( cdr3 != NULL )
 			delete[] cdr3 ;
 		return 1 ;
+	}
+	
+	//  How similar the CDR3 is to the germline sequence.
+	double GetCDR3Similarity( char *seq, struct _overlap geneOverlap[4], struct _overlap cdr[3] )
+	{
+		int i ;
+		if ( cdr[2].similarity <= 0 ) // partial CDR3.
+			return 0 ;
+		if ( geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 )
+			return 0 ;
+		int seqIdx = geneOverlap[0].seqIdx ;
+		int hasD = 0 ;
+		
+		if ( geneOverlap[0].readEnd < cdr[2].readStart || geneOverlap[0].readStart > cdr[2].readStart )
+			return 0 ;
+		if ( geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].readEnd < cdr[2].readEnd )
+			return 0 ;
+		
+		if ( seqs[seqIdx].name[2] == 'H' || seqs[seqIdx].name[2] != 'B' 
+			|| seqs[seqIdx].name[2] != 'D' )
+		{
+			// Contains D gene
+			if ( geneOverlap[1].seqIdx == -1 )
+				return 0 ;
+			hasD = 1 ;
+		}
+		
+		int matchCnt = 0, mismatchCnt = 0, indelCnt = 0 ;
+		int len = strlen( seq ) ;
+		char *align ;
+		align = new char[ 3 * len + 102] ;
+		len = 0 ;
+		int seqStart, seqEnd, readStart, readEnd ;
+		for ( i = 0 ; i < 3 ; ++i )
+		{
+			if ( hasD == 0 && i == 1 )
+				continue ;
+			struct _overlap gene = geneOverlap[i] ;
+			if ( i == 0 )
+			{
+				readStart = cdr[2].readStart ;
+				readEnd = gene.readEnd ;
+				
+				if ( seqs[gene.seqIdx].info[2].a != -1 )
+					seqStart = seqs[gene.seqIdx].info[2].a ;
+				else
+					seqStart = gene.seqEnd - (readEnd - readStart) ;
+				seqEnd = gene.seqEnd ; 
+			}
+			else if ( i == 1 )
+			{
+				readStart = gene.readStart ;
+				readEnd = gene.readEnd ;
+				seqStart = gene.seqStart ;
+				seqEnd = gene.seqEnd ;
+			}
+			else if ( i == 2 )
+			{
+				readStart = gene.readStart ;
+				readEnd = cdr[2].readEnd ;
+
+				seqStart = gene.seqStart ;
+				if ( seqs[gene.seqIdx].info[2].a != -1 )
+					seqEnd = seqs[gene.seqIdx].info[2].a ;
+				else
+					seqEnd = gene.seqStart + (readEnd - readStart) ;
+			}
+
+			if ( readEnd - readStart < 0 || seqEnd - seqStart < 0 )
+			{
+				// Annotation coordinate is wrong. Force the similarity to be 0.
+				matchCnt = 0 ;
+				break ;
+			}
+			
+			AlignAlgo::GlobalAlignment( seqs[ gene.seqIdx ].consensus + seqStart,
+					seqEnd - seqStart + 1,
+					seq + readStart - cdr[2].readStart, readEnd - readStart + 1, align ) ;
+
+			GetAlignStats( align, true, matchCnt, mismatchCnt, indelCnt ) ;
+			len += ( seqEnd - seqStart + 1 ) ;
+		}
+
+		delete[] align ;
+		return (double)matchCnt / len ;
 	}
 
 	int GetEqualSecondaryGeneOverlap( struct _overlap &primaryOverlap, int geneType, std::vector<struct _overlap> *secondaryGeneOverlaps, 

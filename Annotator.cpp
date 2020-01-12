@@ -824,7 +824,9 @@ int main( int argc, char *argv[] )
 						fprintf( fpOutput, "%s\t", buffer ) ;
 					}
 				}
-				fprintf( fpOutput, "%s\t%.2lf\t%.2lf\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count ) ;
+				fprintf( fpOutput, "%s\t%.2lf\t%.2lf\t%.2f\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count,
+					refSet.GetCDR3Similarity( info[j].seq, annotations[i].geneOverlap, 
+						annotations[i].cdr ) * 100.0 ) ;
 			}
 			
 		}
