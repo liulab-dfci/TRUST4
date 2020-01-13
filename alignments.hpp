@@ -284,18 +284,24 @@ public:
 	int GetChromIdFromName( const char *s )
 	{
 		std::string ss( s ) ;
-		if ( chrNameToId.find( ss ) == chrNameToId.end() )
+		if ( chrNameToId.find( ss ) != chrNameToId.end() )
+			return chrNameToId[ss] ;
+		
+		if ( strlen(s) >= 4 )
 		{
 			std::string ns( s + 3 ) ;
-			if ( chrNameToId.find( ns ) == chrNameToId.end() )
-			{
-				printf( "Unknown genome name: %s\n", s ) ;
-				exit( 1 ) ;
-			}
-			else
+			if ( chrNameToId.find( ns ) != chrNameToId.end() )
 				return chrNameToId[ ns ] ;
 		}
-		return chrNameToId[ss] ;
+
+		std::string ns( std::string("chr") + ss) ;
+		if ( chrNameToId.find( ns ) != chrNameToId.end() )
+			return chrNameToId[ ns ] ;
+
+
+		printf( "Unknown genome name: %s\n", s ) ;
+		exit( 1 ) ;
+		return 0 ;
 	}
 
 	int GetChromLength( int tid )

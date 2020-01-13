@@ -11,16 +11,17 @@
 #define LINE_WIDTH 50000
 
 char usage[] = "Usage: clone-evo xxx_cdr3.out [OPTIONS] > yyy_evo.out\n"
-	"Options:\n" 
+	"Options:\n"
 	"\t-a FLOAT: only consider clonotypes more abundant than specified value (default: 2.0)\n"
 	;
 
 struct _cdr3
 {
 	char *seq ;
-	int clusterId ;
-	int subId ;
+	int clusterId ; // belongs to this cluster
+	int subId ; // the id within this cluster.
 	double abund ;
+	double similarity ;
 } ;
 
 struct _adj
@@ -207,11 +208,11 @@ int main( int argc, char *argv[] )
 	while ( fgets( buffer, sizeof(buffer), fp ) != NULL )
 	{
 		char clusterIdBuffer[1024]  ;
-		double score, abund ;
-		sscanf( buffer, "%s %d %s %s %s %s %s %s %s %lf %lf", clusterIdBuffer, &k, 
+		double score, abund, similarity ;
+		sscanf( buffer, "%s %d %s %s %s %s %s %s %s %lf %lf %lf", clusterIdBuffer, &k, 
 			buffer2, buffer2, buffer2, buffer2,
 			buffer2, buffer2, seq,
-			&score, &abund ) ;
+			&score, &abund, &similarity ) ;
 
 		if ( score == 0 )
 			continue ;
@@ -233,6 +234,7 @@ int main( int argc, char *argv[] )
 		nc.clusterId = clusterId ;
 		nc.subId = k ;
 		nc.abund = abund ;
+		nc.similarity = similarity ;
 		
 		for ( i = 0 ; seq[i] ; ++i )
 			if ( seq[i] == 'N' )
@@ -287,10 +289,18 @@ int main( int argc, char *argv[] )
 		}
 
 		int bestRoot = -1 ;
+		int maxSimilarity = 0 ;
 		int minMaxRootLeafDist = LINE_WIDTH ;
+		for ( k = 0 ; k < n ; ++k )
+		{
+			if ( cdr3s[i + k].similarity > maxSimilarity )
+				maxSimilarity = cdr3s[i + k].similarity ;
+		}
 		bool *visited = new bool[n] ;
 		for ( k = 0 ; k < n ; ++k )
 		{
+			if ( cdr3s[i + k].similarity < maxSimilarity )
+				continue ;
 			memset( visited, false, sizeof( bool ) * n ) ;
 			int max = LongestRootLeafDistMST( k, adj, n, visited, dist ) ;
 			if ( max < minMaxRootLeafDist )
