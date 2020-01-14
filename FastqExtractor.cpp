@@ -95,7 +95,7 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
 	if ( qual != NULL )
 		fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
 	else
-		fprintf( fp, ">%s\n%s\n\n", name, seq ) ;
+		fprintf( fp, ">%s\n%s\n", name, seq ) ;
 }
 
 void *ProcessReads_Thread( void *pArg )

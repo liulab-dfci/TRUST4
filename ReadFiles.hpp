@@ -197,16 +197,24 @@ class ReadFiles
 				return 0 ;
 			
 			if ( *id != NULL )	
-				free( id ) ;
+				free( *id ) ;
 			if ( *seq != NULL )
-				free( seq ) ;
+				free( *seq ) ;
 			if ( *qual != NULL )
-				free( qual ) ;
+				free( *qual ) ;
 
-			*id = inSeq[ currentFpInd ]->name.s ;
-			*seq = inSeq[ currentFpInd ]->seq.s ;
+			*id = strdup( inSeq[ currentFpInd ]->name.s ) ;
+			*seq = strdup( inSeq[ currentFpInd ]->seq.s ) ;
+			/*if ( removeReturn )
+			{
+				int i ;
+				for ( i = strlen( *seq ) - 1 ; i >= 0 ; --i )
+					if ( (*seq)[i] != '\n' )
+						break ;
+				(*seq)[i + 1] = '\0' ;
+			}*/
 			if ( inSeq[ currentFpInd ]->qual.l )
-				*qual = inSeq[ currentFpInd]->qual.s ;
+				*qual = strdup( inSeq[ currentFpInd]->qual.s ) ;
 			else
 				*qual = NULL ;
 			
@@ -215,7 +223,7 @@ class ReadFiles
 
 		// Get a batch of reads, it terminates until the buffer is full or 
 		// the file ends.
-		int GetBatch( struct _Read *readBatch, int maxBatchSize, int &fileInd, bool trimReturn, bool stopWhenFileEnds  )
+		int GetBatch( struct _Read *readBatch, int maxBatchSize, int &fileInd, bool trimReturn, bool stopWhenFileEnds )
 		{
 			int batchSize = 0 ;
 			while ( batchSize < maxBatchSize ) 
