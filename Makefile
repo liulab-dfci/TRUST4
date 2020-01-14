@@ -5,7 +5,7 @@ LINKFLAGS = -lpthread -lz
 DEBUG=
 OBJECTS = main.o #BaseReads.o Alignment.o 
 
-all: trust4 bam-extractor annotator clone-evo
+all: trust4 bam-extractor fastq-extractor annotator clone-evo
 
 trust4: main.o
 	$(CXX) -o $@ $(LINKPATH) $(CXXFLAGS) $< $(LINKFLAGS)
@@ -17,6 +17,9 @@ bam-extractor: BamExtractor.o
 	fi ;
 	$(CXX) -o $@ $(LINKPATH) $(CXXFLAGS) $< $(LINKFLAGS) -lbam
 
+fastq-extractor: FastqExtractor.o
+	$(CXX) -o $@ $(LINKPATH) $(CXXFLAGS) $< $(LINKFLAGS)
+
 annotator: Annotator.o
 	$(CXX) -o $@ $(LINKPATH) $(CXXFLAGS) $< $(LINKFLAGS)
 
@@ -25,6 +28,7 @@ clone-evo: CloneEvolution.o
 	
 main.o: main.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerIndex.hpp SimpleVector.hpp defs.h KmerCode.hpp KmerCount.hpp
 BamExtractor.o: BamExtractor.cpp alignments.hpp defs.h SeqSet.hpp
+FastqExtractor.o: FastqExtractor.cpp ReadFiles.hpp defs.h SeqSet.hpp
 Annotator.o: Annotator.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerIndex.hpp SimpleVector.hpp defs.h KmerCode.hpp KmerCount.hpp
 #Alignment.o: Alignment.cpp Alignment.h SimpleVector.h defs.h StatsTests.h KmerTree.h ReadSet.h KmerIndex.h poa.h
 CloneEvolution.o: CloneEvolution.cpp defs.h
