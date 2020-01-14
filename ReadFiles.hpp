@@ -183,7 +183,7 @@ class ReadFiles
 			return 1 ;
 		}
 
-		int NextWithBuffer( char *id, char *seq, char *qual, bool removeReturn = true, bool stopWhenFileEnds = false ) 
+		int NextWithBuffer( char **id, char **seq, char **qual, bool removeReturn = true, bool stopWhenFileEnds = false ) 
 		{
 			//int len ;
 			//char buffer[2048] ;
@@ -196,19 +196,19 @@ class ReadFiles
 			if ( currentFpInd >= fpUsed )
 				return 0 ;
 			
-			if ( id != NULL )	
+			if ( *id != NULL )	
 				free( id ) ;
-			if ( seq != NULL )
+			if ( *seq != NULL )
 				free( seq ) ;
-			if ( qual != NULL )
+			if ( *qual != NULL )
 				free( qual ) ;
 
-			id = inSeq[ currentFpInd ]->name.s ;
-			seq = inSeq[ currentFpInd ]->seq.s ;
+			*id = inSeq[ currentFpInd ]->name.s ;
+			*seq = inSeq[ currentFpInd ]->seq.s ;
 			if ( inSeq[ currentFpInd ]->qual.l )
-				qual = inSeq[ currentFpInd]->qual.s ;
+				*qual = inSeq[ currentFpInd]->qual.s ;
 			else
-				qual = NULL ;
+				*qual = NULL ;
 			
 			return 1 ;
 		}
@@ -220,8 +220,8 @@ class ReadFiles
 			int batchSize = 0 ;
 			while ( batchSize < maxBatchSize ) 
 			{
-				int tmp = NextWithBuffer( readBatch[ batchSize].id, readBatch[batchSize].seq,
-							readBatch[batchSize].qual, trimReturn, stopWhenFileEnds ) ;
+				int tmp = NextWithBuffer( &readBatch[ batchSize].id, &readBatch[batchSize].seq,
+							&readBatch[batchSize].qual, trimReturn, stopWhenFileEnds ) ;
 				if ( tmp == -1 && batchSize > 0 )
 				{
 					--currentFpInd ;

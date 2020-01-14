@@ -18,7 +18,7 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"\t-o STRING: prefix to the output file\n"
 		"\t-t INT: number of threads (default: 1)\n" ;
 
-static const char *short_options = "f:u:1:2:o:t" ;
+static const char *short_options = "f:u:1:2:o:t:" ;
 static struct option long_options[] = {
 			{ (char *)0, 0, 0, 0} 
 			} ;
@@ -35,7 +35,8 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 struct _threadArg 
 {
 	struct _Read *readBatch, *readBatch2 ;
-
+	
+	int threadCnt ;
 	int batchSize ;
 	int batchUsed ;
 	char *buffer ;
@@ -103,9 +104,8 @@ void *ProcessReads_Thread( void *pArg )
 	struct _threadArg &arg = *((struct _threadArg *)pArg ) ;
 	for ( i = 0 ; i < arg.batchSize ; ++i )
 	{
-		if ( i % arg.tid != 0 )
+		if ( i % arg.threadCnt != arg.tid )
 			continue ;
-
 		int goodCandidate = 0 ;
 		if ( IsGoodCandidate( arg.readBatch[i].seq, arg.buffer, arg.refSet ) )
 			++goodCandidate ;
@@ -201,6 +201,11 @@ int main( int argc, char *argv[] )
 			break ;
 		len += strlen( reads.seq ) ;
 	}
+	if ( i == 0 )
+	{
+		fprintf( stderr, "Read file is empty.\n" ) ;
+		return EXIT_FAILURE ;
+	}
 	if ( len / (i * 5) > hitLenRequired )
 		hitLenRequired = len / (i * 5) ;
 	refSet.SetHitLenRequired( hitLenRequired ) ;
@@ -221,10 +226,6 @@ int main( int argc, char *argv[] )
 		fp2 = fopen( buffer, "w" ) ;
 	}
 	
-	pthread_t *threads ;
-	struct _threadArg *threadArgs ;
-	pthread_attr_t attr ;
-	void *pthreadStatus ;
 	if ( threadCnt == 1 )
 	{
 		while ( reads.Next() )
@@ -256,16 +257,21 @@ int main( int argc, char *argv[] )
 		int maxBatchSize = 512 * threadCnt ;
 		int batchSize ;
 		
-		struct _Read *readBatch = ( struct _Read *)malloc( sizeof( struct _Read ) * maxBatchSize ) ;
+		struct _Read *readBatch = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
 		struct _Read *readBatch2 = NULL ;
 		if ( hasMate )
-			readBatch2 = ( struct _Read *)malloc( sizeof( struct _Read ) * maxBatchSize ) ;
+			readBatch2 = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
 		int fileInd1, fileInd2 ;
 		
+		pthread_t *threads = (pthread_t *)malloc( sizeof( pthread_t ) * threadCnt ) ;
 		struct _threadArg *args = (struct _threadArg *)malloc( sizeof( struct _threadArg ) * threadCnt ) ;
+		pthread_attr_t attr ;
+		pthread_attr_init( &attr ) ;
+		pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
 
 		for ( i = 0 ; i < threadCnt ; ++i )
 		{
+			args[i].threadCnt = threadCnt ;
 			args[i].tid = i ;
 			args[i].readBatch = readBatch ;
 			args[i].readBatch2 = readBatch2 ;
@@ -298,7 +304,7 @@ int main( int argc, char *argv[] )
 			}
 
 			for ( i = 0 ; i < threadCnt ; ++i )
-				pthread_join( threads[i], &pthreadStatus ) ;
+				pthread_join( threads[i], NULL ) ;
 
 			for ( i = 0 ; i < batchSize ; ++i )
 			{
@@ -336,11 +342,14 @@ int main( int argc, char *argv[] )
 			mateReads.qual = NULL ;
 		}
 
+		free( threads ) ;
 		for ( i = 0 ; i < threadCnt ; ++i )
 			free( args[i].buffer ) ;
+		free( args ) ;
 		free( readBatch ) ;
 		if ( hasMate )
 			free( readBatch2 ) ;
+		pthread_attr_destroy( &attr ) ;
 	}
 	fclose( fp1 ) ;
 	if ( hasMate )
