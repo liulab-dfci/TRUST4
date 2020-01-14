@@ -11,7 +11,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
-    "\t-1 STRING -2 STRING: path to pair-end read files\n".
+    "\t-1 STRING -2 STRING: path to paired-end read files\n".
     "\t-u STRING: path to single-end read file\n".
     "\t-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
     "Optional:\n".
@@ -19,6 +19,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t-t INT: number of threads (default: 1)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
+    "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
     "\t\t0: start from beginning (candidate read extraction)\n".
     "\t\t1: start from assembly\n".
@@ -60,6 +61,7 @@ my $bamExtractorArgs = "" ;
 my $mainArgs = "" ;
 my $threadCnt = 1 ;
 my $stage = 0 ;
+my $noExtraction = 0 ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 
@@ -68,19 +70,16 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	if ( $ARGV[$i] eq "-1" )
 	{
 		push @firstMateFiles, $ARGV[$i + 1] ;
-		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "-2" )
 	{	
 		push @secondMateFiles, $ARGV[$i + 1] ;
-		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[ $i ] eq "-u" ) 
 	{
 		push @singleFiles, $ARGV[ $i + 1 ] ;
-		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "-b" )
@@ -119,6 +118,10 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$useJellyfish = 1 ;
 	}
+	elsif ( $ARGV[$i] eq "--noExtraction" )
+	{
+		$noExtraction = 1 ;
+	}
 	elsif ( $ARGV[$i] eq "--stage" )
 	{
 		$stage = $ARGV[$i + 1] ;
@@ -133,6 +136,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 if ( @bamFiles == 0 && @firstMateFiles == 0 && @singleFiles == 0 )
 {
 	die "Need to use -b/{-1,-2}/-u to specify input reads.\n" ;
+}
+
+if ( @bamFiles > 0 && $noExtraction == 1 )
+{
+	die "--noExtraction option can only be set when using -1 -2/-u as input.\n" ;
 }
 
 if ( $vdjcFasta eq "" )
@@ -165,28 +173,53 @@ if ( $prefix eq "" )
 }
 
 # Extract the file
-if ( @bamFiles > 0 )
+if ( $stage <= 0 )
 {
-	if ( $stage <= 0 )
+	if ( @bamFiles > 0 )
 	{
 		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $bamExtractorArgs" ) ;
+
 	}
+	elsif ( @firstMateFiles > 0 && $noExtraction == 0 )
+	{
+		system_call( "$WD/fastq-extrator -1 ".$firstMateFiles[0]." -2 ".$secondMateFiles[0].
+				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+	}
+	elsif ( @singleFiles > 0 && $noExtraction == 0 )
+	{
+		system_call( "$WD/fastq-extrator -u ".$singleFiles[0].
+				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+	}
+}
 
 # determine paired-end or single-end
+if ( $noExtraction == 0 )
+{
 	if ( -e $prefix."_toassemble_1.fq" )
 	{
-		push @firstMateFiles, $prefix."_toassemble_1.fq" ;
-		push @secondMateFiles, $prefix."_toassemble_2.fq" ;
+#push @firstMateFiles, $prefix."_toassemble_1.fq" ;
+#push @secondMateFiles, $prefix."_toassemble_2.fq" ;
 		$mainArgs .= " -1 ".$prefix."_toassemble_1.fq -2 ".$prefix."_toassemble_2.fq" ;
 	}
 	elsif ( -e $prefix."_toassemble.fq" )
 	{
-		push @singleFiles, "${prefix}_toassemble.fq" ;
+#push @singleFiles, "${prefix}_toassemble.fq" ;
 		$mainArgs .= " -u ${prefix}_toassemble.fq" ;
 	}
 	elsif ( $stage <= 1 )
 	{
 		die "Could not find files like ${prefix}_toassemble*.fq\n" ;
+	}
+}
+else
+{
+	if ( @firstMateFiles > 0 )
+	{
+		$mainArgs .= " -1 ".$firstMateFiles[0]." -2 ".$secondMateFiles[0] ;		
+	}
+	elsif ( @singleFiles > 0 )
+	{
+		$mainArgs .= " -u ".$singleFiles[0] ;
 	}
 }
 
