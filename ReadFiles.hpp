@@ -62,8 +62,7 @@ class ReadFiles
 		~ReadFiles()
 		{
 			int i ;
-			
-			if ( id != NULL )	
+			if ( id != NULL )
 				free( id ) ;
 			if ( seq != NULL )
 				free( seq ) ;
@@ -133,6 +132,13 @@ class ReadFiles
 				gzrewind( gzFp[i] ) ;
 				kseq_rewind( inSeq[i] ) ;
 			}
+			
+			if ( id != NULL )
+				free( id ) ;
+			if ( seq != NULL )
+				free( seq ) ;
+			if ( qual != NULL )
+				free( qual ) ;
 			id = seq = qual = NULL ;
 			currentFpInd = 0 ;
 		}

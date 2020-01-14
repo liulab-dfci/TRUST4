@@ -13,7 +13,7 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t-u STRING: path to single-end read file\n"
 		"\t\tor\n"
-		"\t-1 STRING -2 STRING: path to paired-end read files"
+		"\t-1 STRING -2 STRING: path to paired-end read files\n"
 		"Optional:\n"
 		"\t-o STRING: prefix to the output file\n"
 		"\t-t INT: number of threads (default: 1)\n" ;
@@ -204,6 +204,7 @@ int main( int argc, char *argv[] )
 	if ( len / (i * 5) > hitLenRequired )
 		hitLenRequired = len / (i * 5) ;
 	refSet.SetHitLenRequired( hitLenRequired ) ;
+	reads.Rewind() ;
 	
 	FILE *fp1 = NULL ;
 	FILE *fp2 = NULL ;
@@ -224,7 +225,6 @@ int main( int argc, char *argv[] )
 	struct _threadArg *threadArgs ;
 	pthread_attr_t attr ;
 	void *pthreadStatus ;
-
 	if ( threadCnt == 1 )
 	{
 		while ( reads.Next() )
@@ -241,13 +241,14 @@ int main( int argc, char *argv[] )
 				++goodCandidate ;
 			if ( !goodCandidate && hasMate && IsGoodCandidate( mateReads.seq, seqBuffer, &refSet ) )
 				++goodCandidate ;
-		
 			if ( goodCandidate )
 			{
 				OutputSeq( fp1, reads.id, reads.seq, reads.qual ) ;
 				if ( hasMate )
 					OutputSeq( fp2, reads.id, reads.seq, reads.qual ) ;
 			}
+			
+			
 		}
 	}
 	else
@@ -325,6 +326,16 @@ int main( int argc, char *argv[] )
 					free( readBatch2[i].qual ) ;
 			}
 		}
+		reads.id = NULL ;
+		reads.seq = NULL ;
+		reads.qual = NULL ;
+		if ( hasMate )
+		{
+			mateReads.id = NULL ;
+			mateReads.seq = NULL ;
+			mateReads.qual = NULL ;
+		}
+
 		for ( i = 0 ; i < threadCnt ; ++i )
 			free( args[i].buffer ) ;
 		free( readBatch ) ;
@@ -334,5 +345,7 @@ int main( int argc, char *argv[] )
 	fclose( fp1 ) ;
 	if ( hasMate )
 		fclose( fp2 ) ;
+	fclose( fpRef ) ; 
+	PrintLog( "Finish extracting reads." ) ;
 	return 0 ;
 }
