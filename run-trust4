@@ -182,12 +182,12 @@ if ( $stage <= 0 )
 	}
 	elsif ( @firstMateFiles > 0 && $noExtraction == 0 )
 	{
-		system_call( "$WD/fastq-extrator -1 ".$firstMateFiles[0]." -2 ".$secondMateFiles[0].
+		system_call( "$WD/fastq-extractor -1 ".$firstMateFiles[0]." -2 ".$secondMateFiles[0].
 				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
 	}
 	elsif ( @singleFiles > 0 && $noExtraction == 0 )
 	{
-		system_call( "$WD/fastq-extrator -u ".$singleFiles[0].
+		system_call( "$WD/fastq-extractor -u ".$singleFiles[0].
 				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
 	}
 }
