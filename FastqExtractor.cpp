@@ -246,7 +246,7 @@ int main( int argc, char *argv[] )
 			{
 				OutputSeq( fp1, reads.id, reads.seq, reads.qual ) ;
 				if ( hasMate )
-					OutputSeq( fp2, reads.id, reads.seq, reads.qual ) ;
+					OutputSeq( fp2, mateReads.id, mateReads.seq, mateReads.qual ) ;
 			}
 			
 			
@@ -308,7 +308,7 @@ int main( int argc, char *argv[] )
 
 			for ( i = 0 ; i < batchSize ; ++i )
 			{
-				if ( readBatch[i].id[0] == '0' )
+				if ( readBatch[i].id[0] == '\0' )
 					continue ;
 				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual ) ;
 				if ( readBatch2 != NULL )
@@ -317,7 +317,7 @@ int main( int argc, char *argv[] )
 		}
 		
 		// Release memory.
-		for ( i = 0 ; i < batchSize ; ++i )
+		for ( i = 0 ; i < maxBatchSize ; ++i )
 		{
 			int j ;
 			free( readBatch[i].id ) ;
