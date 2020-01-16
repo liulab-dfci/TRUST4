@@ -191,9 +191,9 @@ int main( int argc, char *argv[] )
 	
 	PrintLog( "Start to extract candidate reads from read files." ) ;
 	
-	int hitLenRequired = 31 ;
+	int hitLenRequired = 27 ;
 	if ( !hasMate )
-		hitLenRequired = 27 ;
+		hitLenRequired = 23 ;
 	int len = 0 ;
 	for ( i = 0 ; i < 1000 ; ++i )
 	{
