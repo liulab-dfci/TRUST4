@@ -20,10 +20,12 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"Optional:\n"
 		"\t-o STRING: prefix to the output file\n"
 		"\t-t INT: number of threads (default: 1)\n"
-		"\t-u: the flag or order of unaligned read-pair is not ordinary (default: not used)\n" ;
+		"\t-u: the flag or order of unaligned read-pair is not ordinary (default: not used)\n" 
+		"\t--barcode STRING: the barcode field in the bam file (default: not used)\n" ;
 
 static const char *short_options = "f:b:o:t:u" ;
 static struct option long_options[] = {
+			{ "barcode", required_argument, 0, 10000 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -74,6 +76,8 @@ struct _unmappedCandidate
 
 	char *qual1 ;
 	char *qual2 ;
+	
+	char *barcode ;
 } ; 
 
 // Pre-determined information
@@ -82,6 +86,7 @@ struct _threadInfo
 	int tid ;
 	
 	FILE *fp1, *fp2 ;
+	FILE *fpBc ;
 	SeqSet *refSet ;
 	char *seqBuffer ;
 	
@@ -167,7 +172,10 @@ void TrimName( std::string &name )
 
 void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
 {
-	fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
+	if ( qual != NULL )
+		fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
+	else
+		fprintf( fp, ">%s\n%s\n", name, seq ) ;
 }
 
 void *ProcessUnmappedReads_Thread( void *pArg )
@@ -224,6 +232,11 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 				free( info.outputQueue[i].mate2 ) ;
 				free( info.outputQueue[i].qual2 ) ;
 			}
+			if ( info.fpBc )
+			{
+				OutputSeq( info.fpBc, info.outputQueue[i].name, info.outputQueue[i].barcode, NULL ) ;
+				free( info.outputQueue[i].barcode ) ;
+			}
 			free( info.outputQueue[i].name ) ;
 		}
 		*info.oqCnt = 0 ;
@@ -245,6 +258,9 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 			free( arg.candidates[i].mate2 ) ;
 			free( arg.candidates[i].qual2 ) ;
 		}
+
+		if ( arg.candidates[i].barcode != NULL )
+			free( arg.candidates[i].barcode ) ;
 	}
 
 	pthread_mutex_lock( info.lockFreeThreads ) ;
@@ -296,7 +312,7 @@ void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr
 }
 
 // Customize your own parameters here.
-void InitCustomData( FILE *fp1, FILE *fp2, SeqSet *refSet, struct _threadArg *threadArgs, int threadCnt )
+void InitCustomData( FILE *fp1, FILE *fp2, FILE *fpBc, SeqSet *refSet, struct _threadArg *threadArgs, int threadCnt )
 {
 	int i ; 
 	struct _unmappedCandidate *outputQueue = new struct _unmappedCandidate[2048 * 5] ;
@@ -305,7 +321,8 @@ void InitCustomData( FILE *fp1, FILE *fp2, SeqSet *refSet, struct _threadArg *th
 	for ( i = 0 ; i < threadCnt ; ++i )
 	{
 		threadArgs[i].info.fp1 = fp1 ;			
-		threadArgs[i].info.fp2 = fp2 ;			
+		threadArgs[i].info.fp2 = fp2 ;	
+		threadArgs[i].info.fpBc = fpBc ;
 		threadArgs[i].info.refSet = refSet ;
 		threadArgs[i].info.seqBuffer = new char[100001] ;
 		threadArgs[i].info.outputQueue = outputQueue ;
@@ -381,6 +398,11 @@ void FinishWork( std::vector<struct _unmappedCandidate> work,
 			free( info.outputQueue[i].mate2 ) ;
 			free( info.outputQueue[i].qual2 ) ;
 		}
+		if ( info.fpBc )
+		{
+			OutputSeq( info.fpBc, info.outputQueue[i].name, info.outputQueue[i].barcode, NULL ) ;
+			free( info.outputQueue[i].barcode ) ;
+		}
 		free( info.outputQueue[i].name ) ;
 	}
 	// Release memory 
@@ -412,6 +434,7 @@ int main( int argc, char *argv[] )
 	option_index = 0 ;
 	FILE *fpRef = NULL ;
 	char prefix[1024] = "toassemble" ;
+	char bcField[1024] = "" ; // barcode field in bam file.
 	Alignments alignments ;
 	bool abnormalUnalignedFlag = false ;
 	int kmerLength = 9  ;
@@ -448,6 +471,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 't' )
 		{
 			threadCnt = atoi( optarg ) ;
+		}
+		else if ( c == 10000 ) // barcode
+		{
+			strcpy( bcField, optarg ) ;
 		}
 		else
 		{
@@ -509,6 +536,7 @@ int main( int argc, char *argv[] )
 	
 	FILE *fp1 = NULL ;
 	FILE *fp2 = NULL ;
+	FILE *fpBc = NULL ; // the file holding barcode.
 	if ( alignments.fragStdev == 0 )
 	{
 		sprintf( buffer, "%s.fq", prefix ) ;
@@ -521,7 +549,12 @@ int main( int argc, char *argv[] )
 		sprintf( buffer, "%s_2.fq", prefix ) ;
 		fp2 = fopen( buffer, "w" ) ;
 	}
-	
+	if ( bcField[0] )
+	{
+		sprintf( buffer, "%s_bc.fa", prefix ) ;
+		fpBc = fopen( buffer, "w" ) ;
+	}
+
 	pthread_t *threads ;
 	struct _threadArg *threadArgs ;
 	pthread_attr_t attr ;
@@ -529,7 +562,7 @@ int main( int argc, char *argv[] )
 	if ( threadCnt > 1 )
 	{
 		InitWork( &threads, &threadArgs, attr, threadCnt - 1 ) ;
-		InitCustomData( fp1, fp2, &refSet, threadArgs, threadCnt - 1 ) ;
+		InitCustomData( fp1, fp2, fpBc, &refSet, threadArgs, threadCnt - 1 ) ;
 	}
 	// assuming the input is sorted by coordinate.
 	while ( alignments.Next() )
@@ -592,6 +625,8 @@ int main( int argc, char *argv[] )
 							OutputSeq( fp1, name.c_str(), buffer, bufferQual ) ;
 							OutputSeq( fp2, name.c_str(), buffer2, bufferQual2 ) ;
 						}
+						if ( fpBc != NULL )
+							OutputSeq( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
 					}
 				}
 				else
@@ -612,6 +647,11 @@ int main( int argc, char *argv[] )
 						nw.mate2 = strdup( buffer2 ) ;
 						nw.qual2 = strdup( bufferQual2 ) ;
 					}
+
+					if ( bcField[0] )
+						nw.barcode = strdup( alignments.GetFieldZ( bcField ) ) ;
+					else
+						nw.barcode = NULL ;
 
 					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 2048, threadCnt - 1 ) ;
 				}
@@ -660,6 +700,8 @@ int main( int argc, char *argv[] )
 						if ( alignments.IsAligned() )
 							usedName[ name ] = 1 ;
 						OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
+						if ( fpBc != NULL )
+							OutputSeq( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
 					}
 				}
 				else
@@ -721,6 +763,8 @@ int main( int argc, char *argv[] )
 			alignments.GetQual( bufferQual ) ;
 			//alignments.GetReadSeq( buffer ) ;
 			OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
+			if ( fpBc != NULL )
+				OutputSeq( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
 		}
 	}
 
@@ -787,6 +831,8 @@ int main( int argc, char *argv[] )
 		{
 			OutputSeq( fp1, name.c_str(), it->second.mate1, it->second.qual1 ) ;
 			OutputSeq( fp2, name.c_str(), it->second.mate2, it->second.qual2 ) ;
+			if ( fpBc != NULL )
+				OutputSeq( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
 			free( it->second.mate1 ) ;
 			free( it->second.mate2 ) ;
 			free( it->second.qual1 ) ;
@@ -804,7 +850,8 @@ int main( int argc, char *argv[] )
 	fclose( fp1 ) ;
 	if ( fp2 != NULL )
 		fclose( fp2 ) ;
-
+	if ( fpBc != NULL )
+		fclose( fpBc ) ;
 	fclose( fpRef ) ;
 	PrintLog( "Finish extracting reads." ) ;
 	return 0 ;

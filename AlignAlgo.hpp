@@ -1014,7 +1014,7 @@ public:
 	}
 
 	static int IsMateOverlap( char *fr, int flen, char *sr, int slen, int minOverlap, int &offset, int &bestMatchCnt,
-		bool checkTandem = false )
+		bool checkTandem = true )
 	{
 		int i, j, k ;		
 		bestMatchCnt = -1 ;

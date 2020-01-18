@@ -25,7 +25,8 @@ struct _seqWrapper
 	int minLeftExtAnchor, minRightExtAnchor ; // only overlap with size larger than this can be counted as valid extension.
 
 	struct _triple info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1,2 and info[2].a for CDR3
-			// for novel, info[0] is used as identifier.
+					// In extending seqs with mate pair information, these are used to store rough V, J, C read coordinate.	
+	int barcode ; // transformed barcode. -1: no barcode 
 } ;
 
 struct _hit
@@ -94,7 +95,8 @@ struct _assignRead
 {
 	char *id ;
 	char *read ;
-	
+	int barcode ;
+
 	int info ; 
 	struct _overlap overlap ;
 } ;
@@ -1054,7 +1056,7 @@ private:
 		return true ;
 	}
 
-	int GetHitsFromRead( char *read, char *rcRead, int strand, SimpleVector<struct _hit> &hits, SimpleVector<bool> *puse )
+	int GetHitsFromRead( char *read, char *rcRead, int strand, int barcode, SimpleVector<struct _hit> &hits, SimpleVector<bool> *puse )
 	{
 		int i, j ;
 		int len = strlen( read ) ;
@@ -1092,7 +1094,7 @@ private:
 					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
 
 					int size = indexHit.Size() ;
-					if ( size >= 100 && puse == NULL && i != kmerLength - 1 && i != len - 1 )
+					if ( size >= 100 && puse == NULL && barcode == -1 && i != kmerLength - 1 && i != len - 1 )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -1114,6 +1116,9 @@ private:
 						}
 					}
 
+					if ( barcode != -1 )
+						repeats = 1 ;
+
 					for ( j = 0 ; j < size ; ++j )
 					{
 						struct _hit nh ;
@@ -1122,6 +1127,8 @@ private:
 						nh.strand = 1 ;
 						nh.repeats = repeats ;
 						if ( puse != NULL && !puse->Get( indexHit[j].idx ) )
+							continue ;
+						if ( barcode != -1 && seqs[ indexHit[j].idx ].barcode != barcode )
 							continue ;
 						hits.PushBack( nh ) ;
 					}
@@ -1151,7 +1158,7 @@ private:
 
 					int size = indexHit.Size() ;
 
-					if ( size >= 100 && puse == NULL && i != kmerLength - 1 && i != len - 1 )
+					if ( size >= 100 && puse == NULL && barcode == -1 && i != kmerLength - 1 && i != len - 1 )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -1173,6 +1180,9 @@ private:
 						}
 					}
 
+					if ( barcode != -1 )
+						repeats = 1 ;
+
 					for ( j = 0 ; j < size ; ++j )
 					{
 						struct _hit nh ;
@@ -1181,6 +1191,8 @@ private:
 						nh.strand = -1 ;
 						nh.repeats = repeats ;
 						if ( puse != NULL && !puse->Get( indexHit[j].idx ) )
+							continue ;
+						if ( barcode != -1 && seqs[ indexHit[j].idx ].barcode != barcode )
 							continue ;
 
 						hits.PushBack( nh ) ;
@@ -1202,7 +1214,7 @@ private:
 	// readType: 0(default): sqeuencing read. 1:seqs, no need filter.
 	// forExtension: further filter to ignore regions that could not result in sequence extension.
 	// Return: the number of overlaps.
-	int GetOverlapsFromRead( char *read, int strand, int readType, int forExtension, std::vector<struct _overlap> &overlaps, 
+	int GetOverlapsFromRead( char *read, int strand, int barcode, int readType, int forExtension, std::vector<struct _overlap> &overlaps, 
 		SimpleVector<bool> *puse = NULL )
 	{
 		int i, j, k ;
@@ -1212,7 +1224,7 @@ private:
 
 		SimpleVector<struct _hit> hits ;		    	
 		char *rcRead =  new char[len + 1] ;
-		GetHitsFromRead( read, rcRead, strand, hits, puse ) ;
+		GetHitsFromRead( read, rcRead, strand, barcode, hits, puse ) ;
 		delete[] rcRead ;
 		
 		//if ( seqs.size() != 620 )
@@ -1955,7 +1967,7 @@ private:
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
 
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, 1, 0, overlaps ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, seqs[i].barcode, 1, 0, overlaps ) ;
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
 				if ( overlaps[j].strand == -1 ) // Note that all the seqs are from 5'->3' on its strand.
@@ -2039,7 +2051,7 @@ private:
 
 			double backupSimilarity = novelSeqSimilarity ;
 			novelSeqSimilarity = repeatSimilarity ;
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, 1, 0, overlaps, &use ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, seqs[i].barcode, 1, 0, overlaps, &use ) ;
 			novelSeqSimilarity = backupSimilarity ;
 
 			//printf( "%d %d\n", i, overlapCnt ) ;
@@ -2249,7 +2261,7 @@ public:
 			struct _seqWrapper &sw = seqs[id] ;
 			int seqLen = strlen( fa.seq ) ;
 			sw.consensus = strdup( fa.seq ) ;	
-			
+					
 			
 			// Remove "." from IMGT annotation.
 			k = 0 ;
@@ -2322,7 +2334,8 @@ public:
 			}
 
 
-			sw.consensusLen = strlen( sw.consensus );	
+			sw.consensusLen = strlen( sw.consensus );
+			sw.barcode = -1 ;
 			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id ) ;
 		}
 	}
@@ -2333,7 +2346,7 @@ public:
 		fa.AddReadFile( filename, false ) ;
 		
 		while ( fa.Next() )
-			InputNovelRead( fa.id, fa.seq, 1 ) ;
+			InputNovelRead( fa.id, fa.seq, 1, -1 ) ;
 	}
 
 	int InputRefSeq( char *id, char *read )
@@ -2359,18 +2372,19 @@ public:
 		}
 		KmerCode kmerCode( kmerLength ) ;
 		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
-	
+		
+		sw.barcode = -1 ;
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 		return seqIdx ;
 	}	
 	
-	int InputNovelRead( const char *id, char *read, int strand )
+	int InputNovelRead( const char *id, char *read, int strand, int barcode )
 	{
 		struct _seqWrapper ns ;
 		ns.name = strdup( id ) ;
 		ns.isRef = false ;
-
+		
 		int seqIdx = seqs.size() ;
 		seqs.push_back( ns ) ;
 
@@ -2392,6 +2406,7 @@ public:
 		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
 	
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
+		sw.barcode = barcode ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, strand ) ;
 
 
@@ -2416,7 +2431,7 @@ public:
 		sw.posWeight = posWeight ;
 		KmerCode kmerCode( kmerLength ) ;
 		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
-	
+		sw.barcode = -1 ;	
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 
@@ -2440,7 +2455,8 @@ public:
 			struct _seqWrapper ns ;
 			ns.name = strdup( in.seqs[i].name ) ;
 			ns.isRef = in.seqs[i].isRef ;
-
+			ns.barcode = in.seqs[i].barcode ;
+			
 			int id = seqs.size() ;
 			ns.consensus = strdup( in.seqs[i].consensus ) ;
 			ns.consensusLen = in.seqs[i].consensusLen ;
@@ -2461,7 +2477,7 @@ public:
 			return false ;
 
 		SimpleVector<struct _hit> hits ;	
-		GetHitsFromRead( read, rcRead, 0, hits, NULL  ) ;
+		GetHitsFromRead( read, rcRead, 0, -1, hits, NULL  ) ;
 
 		int hitCnt = hits.Size() ;
 		if ( hitCnt == 0 )
@@ -2612,7 +2628,7 @@ public:
 	// If it is a candidate, but is quite different from the one we stored, we create a new poa for it.
 	// Return: the index id in the set. 
 	//	   -1: not add. -2: only overlapped with novel seq and could not be extended.
-	int AddRead( char *read, char *geneName, int &strand, int minKmerCount, double similarityThreshold )
+	int AddRead( char *read, char *geneName, int &strand, int barcode, int minKmerCount, double similarityThreshold )
 	{
 		//printf( "%s\n", read ) ;
 		int i, j, k ;
@@ -2623,7 +2639,7 @@ public:
 		std::vector<struct _overlap> overlaps ;
 		int overlapCnt ;
 		
-		overlapCnt = GetOverlapsFromRead( read, strand, 0, 1, overlaps ) ;
+		overlapCnt = GetOverlapsFromRead( read, strand, barcode, 0, 1, overlaps ) ;
 				
 		if ( overlapCnt <= 0 )
 			return -1 ;
@@ -3752,13 +3768,13 @@ public:
 	}
 	
 	// Find the seq id this read belongs to.
-	int AssignRead( char *read, int strand, struct _overlap &assign )
+	int AssignRead( char *read, int strand, int barcode, struct _overlap &assign )
 	{
 		int i ;
 
 		std::vector<struct _overlap> overlaps ;
 		
-		int overlapCnt = GetOverlapsFromRead( read, strand, 0, 0, overlaps ) ;
+		int overlapCnt = GetOverlapsFromRead( read, strand, barcode, 0, 0, overlaps ) ;
 		//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
 		//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
 		assign.seqIdx = -1 ;
@@ -4984,7 +5000,7 @@ public:
 			contigBuffer[ contigLen ] = '\0' ;
 			contigOverlaps[k].clear() ;
 
-			int contigOverlapCnt = GetOverlapsFromRead( contigBuffer, 0, detailLevel == 0 ? 0 : 1, 0, contigOverlaps[k] ) ;		
+			int contigOverlapCnt = GetOverlapsFromRead( contigBuffer, 0, -1, detailLevel == 0 ? 0 : 1, 0, contigOverlaps[k] ) ;		
 			for ( i = 0 ; i < contigOverlapCnt ; ++i )
 			{
 				contigOverlaps[k][i].readStart += contigs[k].a ;
@@ -7513,7 +7529,7 @@ public:
 		for ( i = 0 ; i < readCnt ; ++i )
 		{
 			std::vector<struct _overlap> overlaps ;
-			int overlapCnt = GetOverlapsFromRead( reads[i].seq, 1, 1, 0, overlaps ) ;
+			int overlapCnt = GetOverlapsFromRead( reads[i].seq, 1, -1, 1, 0, overlaps ) ;
 			if ( overlapCnt == 0 )
 				continue ;
 
@@ -8962,6 +8978,7 @@ public:
 			ns.isRef = false ;
 			ns.consensus = newConsensus ;
 			ns.consensusLen = newConsensusLen ;
+			ns.barcode = seqs[i].barcode ;
 			
 			ns.name = strdup( seqs[i].name ) ;
 			ns.posWeight.ExpandTo( newConsensusLen ) ;
@@ -9211,7 +9228,7 @@ public:
 		novelSeqSimilarity = backupNovelSeqSimilarity ;
 	}
 
-	void Output( FILE *fp )
+	void Output( FILE *fp, std::vector<std::string> *barcodeIntToStr = NULL )
 	{
 		int i, j, k ;
 		int size = seqs.size() ;
@@ -9219,8 +9236,12 @@ public:
 		{
 			if ( seqs[i].isRef || seqs[i].consensus == NULL )
 				continue ;
-
-			fprintf( fp, ">assemble%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
+			
+			if ( barcodeIntToStr == NULL || seqs[i].barcode == -1 || seqs[i].barcode >= barcodeIntToStr->size() )
+				fprintf( fp, ">assemble%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
+			else
+				fprintf( fp, ">%s_%d %s\n%s\n", barcodeIntToStr->at( seqs[i].barcode ).c_str(), i, seqs[i].name, 
+							seqs[i].consensus ) ;
 			
 			for ( k = 0 ; k < 4 ; ++k )
 			{
@@ -9280,6 +9301,15 @@ public:
 		int i ;
 		for ( i = 0 ; i < seqs[ seqIdx ].consensusLen ; ++i )
 			ret += seqs[seqIdx].posWeight[i].Sum() ;
+		return ret ;
+	}
+
+	int GetConsensusWeightSumRange( int seqIdx, int start, int end )
+	{
+		int ret = 0 ;
+		int i ;
+		for ( i = start ; i <= end ; ++i )
+			ret += seqs[seqIdx].posWeight[i].count[ nucToNum[seqs[seqIdx].consensus[i] - 'A' ] ] ;
 		return ret ;
 	}
 	

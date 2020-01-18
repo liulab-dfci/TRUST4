@@ -290,7 +290,8 @@ void *AssignReads_Thread( void *pArg )
 	for ( i = start ; i < end ; ++i )
 	{
 		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;
+			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 
+				assembledReads[i].barcode, assign ) ;
 		assembledReads[i].overlap = assign ;	
 	}
 	pthread_exit( NULL ) ;
@@ -455,7 +456,7 @@ int main( int argc, char *argv[] )
 			seqSet.InputNovelSeq( buffer + 1, seq, posWeight ) ;
 		}
 		else
-			seqSet.InputNovelRead( buffer + 1, seq, 1 ) ;
+			seqSet.InputNovelRead( buffer + 1, seq, 1, -1 ) ;
 	}
 	fclose( fpAssembly ) ;
 
@@ -540,6 +541,7 @@ int main( int argc, char *argv[] )
 			nr.id = strdup( buffer + 1 ) ; // skip the > sign
 			nr.read = strdup( seq ) ;
 			nr.overlap.strand = strand ;
+			nr.barcode = -1 ;
 			assembledReads.push_back( nr ) ;
 		}
 		assembledReadCnt = assembledReads.size() ;
@@ -560,7 +562,8 @@ int main( int argc, char *argv[] )
 			for ( i = 0 ; i < assembledReadCnt ; ++i )
 			{
 				if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) ) 
-					seqSet.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;	
+					seqSet.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 
+						assembledReads[i].barcode, assign ) ;	
 				assembledReads[i].overlap = assign ;	
 				if ( ( i + 1 ) % 100000 == 0 )
 				{
@@ -850,6 +853,70 @@ int main( int argc, char *argv[] )
 
 		fclose( fpOutput ) ;
 		fclose( fpReads ) ; 
+	}
+	else if ( ignoreWeight == 0 )
+	{
+		// Directly use consensus to output cdr3 information. 
+		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;
+		FILE *fpOutput = fopen( buffer, "w" ) ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( annotations[i].cdr[2].seqIdx == -1 )
+				continue ;
+
+			if ( !includePartial && annotations[i].cdr[2].similarity == 0 )
+				continue ;
+
+			fprintf( fpOutput, "%s\t0\t", seqSet.GetSeqName( i ) ) ;
+			// The gene ids
+			for ( k = 0 ; k < 4 ; ++k )
+			{
+				//if ( k == 1 )
+				//	continue ;
+				if ( annotations[i].geneOverlap[k].seqIdx == -1 )
+					fprintf( fpOutput, "*\t" ) ;	
+				else
+				{
+					fprintf( fpOutput, "%s", 
+							refSet.GetSeqName( annotations[i].geneOverlap[k].seqIdx ) ) ;
+					std::vector<int> secondaryOverlapIdx ;
+					int size = refSet.GetEqualSecondaryGeneOverlap( annotations[i].geneOverlap[k],
+							k, &annotations[i].secondaryGeneOverlaps, secondaryOverlapIdx ) ;
+					int l ;
+					for ( l = 0 ; l < size ; ++l )
+					{
+						int seqIdx = annotations[i].secondaryGeneOverlaps[ secondaryOverlapIdx[l] ].seqIdx ;
+						fprintf( fpOutput, ",%s", refSet.GetSeqName( seqIdx ) ) ; 
+					}
+					fprintf( fpOutput, "\t" ) ;
+				}
+			}
+			// Output CDR1,2, 3
+			for ( k = 0 ; k < 3 ; ++k )
+			{
+				if ( annotations[i].cdr[k].seqIdx == -1 )
+					fprintf( fpOutput, "*\t" ) ;
+				else
+				{
+					int len = annotations[i].cdr[k].readEnd - annotations[i].cdr[k].readStart + 1 ;
+					memcpy( buffer, seqSet.GetSeqConsensus( i ) + annotations[i].cdr[k].readStart, len ) ;
+					buffer[len] = '\0' ;
+					fprintf( fpOutput, "%s\t", buffer ) ;
+				}
+
+				if ( k == 2 )
+				{
+					// The beginning of for-loop i makes sure buffer has the cdr3 sequence.
+					int cov = seqSet.GetConsensusWeightSumRange( i, annotations[i].cdr[2].readStart, 
+							annotations[i].cdr[2].readEnd ) ;
+					double avgCov = cov / ( annotations[i].cdr[2].readEnd - annotations[i].cdr[2].readStart + 1 ) ;
+					fprintf( fpOutput, "%.2lf\t%.2lf\t%.2lf\n", annotations[i].cdr[2].similarity, avgCov,
+						refSet.GetCDR3Similarity( buffer, annotations[i].geneOverlap, 
+						annotations[i].cdr ) * 100.0 ) ;
+				}
+			}
+		}
+		fclose( fpOutput ) ;
 	}
 	
 	delete[] annotations ;

@@ -25,7 +25,8 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-o STRING: prefix of the output file (default: trust)\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
-		"\t--noTrim: do not trim the reads for assembly (default: trim)\n" ;
+		"\t--noTrim: do not trim the reads for assembly (default: trim)\n"
+		"\t--barcode STRING: the path to the barcode file (default: not used)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -40,6 +41,7 @@ static const char *short_options = "f:u:1:2:b:o:c:t:" ;
 static struct option long_options[] = {
 			{ "debug-ns", required_argument, 0, 10000 },
 			{ "noTrim", no_argument, 0, 10001 },
+			{ "barcode", required_argument, 0, 10002 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -57,6 +59,8 @@ struct _sortRead
 
 	int mateIdx ; // the index of its mate pair.
 	int info ; // some random information, such as it's index in orginal array.
+
+	int barcode ;
 
 	struct _overlap geneOverlap[4] ; // Rough annotation of the read
 
@@ -173,7 +177,8 @@ void *AssignReads_Thread( void *pArg )
 	for ( i = start ; i < end ; ++i )
 	{
 		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;
+			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 
+				assembledReads[i].barcode, assign ) ;
 		assembledReads[i].overlap = assign ;	
 	}
 	pthread_exit( NULL ) ;
@@ -200,11 +205,13 @@ int main( int argc, char *argv[] )
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
+	ReadFiles barcodeFile ;
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
 	int firstReadLen = -1 ;
 	bool flagNoTrim = false ;
 	bool hasMate = false ;
+	bool hasBarcode = false ;
 	int constantGeneEnd = 200 ;
 	int threadCnt = 1 ;
 
@@ -256,6 +263,11 @@ int main( int argc, char *argv[] )
 		{
 			flagNoTrim =true ;
 		}
+		else if ( c == 10002 ) // barcode 
+		{
+			barcodeFile.AddReadFile( optarg, false ) ;
+			hasBarcode = true ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -276,6 +288,9 @@ int main( int argc, char *argv[] )
 	refSet.SetHitLenRequired( 17 ) ;
 
 	std::vector< struct _sortRead > sortedReads ;
+	std::map<std::string, int> barcodeStrToInt ;
+	std::vector<std::string> barcodeIntToStr ;
+
 	i = 0 ;
 	while ( reads.Next() )
 	{
@@ -287,6 +302,21 @@ int main( int argc, char *argv[] )
 			continue ;
 		}*/
 
+		int barcode = -1 ;
+		if ( hasBarcode )
+		{
+			barcodeFile.Next() ;
+			std::string s( barcodeFile.seq ) ;
+			if ( barcodeStrToInt.find( s ) != barcodeStrToInt.end() )
+				barcode = barcodeStrToInt[s] ;
+			else
+			{
+				barcode = barcodeIntToStr.size() ;
+				barcodeStrToInt[s] = barcode ;
+				barcodeIntToStr.push_back( s ) ;
+			}
+		}
+
 		struct _sortRead nr ;
 		int rWeight = 1 ;
 		nr.read = strdup( reads.seq ) ;
@@ -294,7 +324,8 @@ int main( int argc, char *argv[] )
 		if ( reads.qual != NULL )
 			nr.qual = strdup( reads.qual ) ;
 		else
-			nr.qual = NULL ; 
+			nr.qual = NULL ;
+		nr.barcode = barcode ;
 
 		++i ;
 
@@ -314,6 +345,7 @@ int main( int argc, char *argv[] )
 		{
 			mateR.read = strdup( mateReads.seq ) ;
 			mateR.id = strdup( mateReads.id ) ;
+			mateR.barcode = barcode ;
 			if ( mateReads.qual != NULL )
 				mateR.qual = strdup( mateReads.qual ) ;
 			else
@@ -473,6 +505,7 @@ int main( int argc, char *argv[] )
 			if ( rWeight == 2 )
 			{
 				struct _sortRead wr ;
+				wr = nr ;
 				wr.read = strdup( nr.read ) ;
 				if ( nr.qual != NULL )
 					wr.qual = strdup( nr.qual ) ;
@@ -897,7 +930,8 @@ if ( firstReadLen > 200 )
 #endif
 		int addRet = -1 ;
 		
-		if ( i == 0 || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) )
+		if ( i == 0 || strcmp( sortedReads[i].read, sortedReads[i - 1].read ) 
+			|| sortedReads[i].barcode != sortedReads[i - 1].barcode )
 		{
 			//printf( "new stuff\n" ) ;
 			//buffer[0] = '\0' ;
@@ -996,7 +1030,8 @@ if ( firstReadLen > 200 )
 				//	&& geneOverlap[0].readEnd < geneOverlap[2].readStart )
 				//	similarityThreshold = 1.0 ;
 
-				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, sortedReads[i].minCnt, similarityThreshold ) ;
+				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, sortedReads[i].barcode, 
+						sortedReads[i].minCnt, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
@@ -1039,7 +1074,7 @@ if ( firstReadLen > 200 )
 					if ( !filter )
 					{
 						addRet = seqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
-							sortedReads[i].read, geneOverlap[j].strand ) ;
+							sortedReads[i].read, geneOverlap[j].strand, sortedReads[i].barcode ) ;
 
 					}
 					else if ( goodCandidate[i] )
@@ -1048,7 +1083,8 @@ if ( firstReadLen > 200 )
 						//   from CDR3.
 						if ( seqSet.HasMotif( sortedReads[i].read, -sortedReads[ sortedReads[i].mateIdx ].strand ) )
 							addRet = seqSet.InputNovelRead( "Novel", sortedReads[i].read, 
-									-sortedReads[ sortedReads[i].mateIdx ].strand ) ;
+									-sortedReads[ sortedReads[i].mateIdx ].strand,
+									sortedReads[i].barcode ) ;
 					}
 					//printf( "hello %d %d. %d %d %d %d\n", i, addRet, geneOverlap[0].seqIdx,
 					//		geneOverlap[1].seqIdx, geneOverlap[2].seqIdx, geneOverlap[3].seqIdx ) ;
@@ -1169,7 +1205,7 @@ if ( firstReadLen > 200 )
 		}
 		
 		int strand = 0 ;
-		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, strand, 
+		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, strand, sortedReads[ rescueReadIdx[i] ].barcode, 
 			1, similarityThreshold ) ;
 		sortedReads[ rescueReadIdx[i] ].strand = strand ;
 
@@ -1221,6 +1257,7 @@ if ( firstReadLen > 200 )
 		struct _assignRead nr ;
 		nr.id = sortedReads[ assembledReadIdx[i] ].id ;
 		nr.read = sortedReads[ assembledReadIdx[i] ].read ;
+		nr.barcode = sortedReads[ assembledReadIdx[i] ].barcode ;
 		nr.info = assembledReadIdx[i] ;
 		nr.overlap.seqIdx = -1 ;
 		nr.overlap.strand = sortedReads[ assembledReadIdx[i] ].strand ;
@@ -1271,7 +1308,8 @@ if ( firstReadLen > 200 )
 		for ( i = 0 ; i < assembledReadCnt ; ++i )
 		{
 			if ( i == 0 || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
-				extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, assign ) ;
+				extendedSeq.AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 
+						assembledReads[i].barcode, assign ) ;
 			assembledReads[i].overlap = assign ;	
 			if ( ( i + 1 ) % 100000 == 0 )
 			{
@@ -1433,7 +1471,7 @@ if ( firstReadLen > 200 )
 		//printf( "%s\n", lowFreqReads[i].read ) ;
 		//fflush( stdout ) ;
 		//printf( ">r%d\n%s\n", i, lowFreqReads[i].read ) ;
-		extendedSeq.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, assign ) ;
+		extendedSeq.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, lowFreqReads[i].barcode, assign ) ;
 		if ( assign.seqIdx != -1 )
 		{
 			if ( assign.similarity < 1.0 )
@@ -1445,13 +1483,14 @@ if ( firstReadLen > 200 )
 			int strand ;
 			if ( lowFreqReads[i].minCnt < 2 )
 			{
-				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, assign ) ;
+				lowFreqSeqSet.AssignRead( lowFreqReads[i].read, lowFreqReads[i].strand, 
+						lowFreqReads[i].barcode, assign ) ;
 				if ( assign.seqIdx != -1 )
 				{
 					lowFreqSeqSet.AddAssignedRead( lowFreqReads[i].read, assign ) ;
 				}
 			}
-			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, strand, 1, 0.97 ) < 0 )
+			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, strand, lowFreqReads[i].barcode, 1, 0.97 ) < 0 )
 			{
 				struct _overlap geneOverlap[4] ;
 				//buffer[0] = '\0' ;
@@ -1471,7 +1510,7 @@ if ( firstReadLen > 200 )
 				{
 					j = lastJ ;
 					lowFreqSeqSet.InputNovelRead( refSet.GetSeqName( geneOverlap[j].seqIdx ), 
-							lowFreqReads[i].read, geneOverlap[j].strand ) ;
+							lowFreqReads[i].read, geneOverlap[j].strand, lowFreqReads[i].barcode ) ;
 				}
 
 			}
@@ -1497,7 +1536,10 @@ if ( firstReadLen > 200 )
 	else
 		fp = stdout ;
 	
-	extendedSeq.Output( fp ) ;
+	if ( hasBarcode )
+		extendedSeq.Output( fp, &barcodeIntToStr ) ;
+	else
+		extendedSeq.Output( fp, NULL ) ;
 	fflush( fp ) ;
 	
 	if ( outputPrefix[0] != '-' )
