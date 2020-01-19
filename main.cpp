@@ -26,7 +26,8 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
 		"\t--noTrim: do not trim the reads for assembly (default: trim)\n"
-		"\t--barcode STRING: the path to the barcode file (default: not used)\n" ;
+		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
+		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -42,6 +43,7 @@ static struct option long_options[] = {
 			{ "debug-ns", required_argument, 0, 10000 },
 			{ "noTrim", no_argument, 0, 10001 },
 			{ "barcode", required_argument, 0, 10002 },
+			{ "keepNoBarcode", no_argument, 0, 10003 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -213,6 +215,7 @@ int main( int argc, char *argv[] )
 	bool hasMate = false ;
 	bool hasBarcode = false ;
 	int constantGeneEnd = 200 ;
+	bool keepMissingBarcode = false ;
 	int threadCnt = 1 ;
 
 	while ( 1 )
@@ -268,6 +271,10 @@ int main( int argc, char *argv[] )
 			barcodeFile.AddReadFile( optarg, false ) ;
 			hasBarcode = true ;
 		}
+		else if ( c == 10003 ) // keepNoBarcode
+		{
+			keepMissingBarcode = true ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -306,6 +313,14 @@ int main( int argc, char *argv[] )
 		if ( hasBarcode )
 		{
 			barcodeFile.Next() ;
+			
+			if ( !strcmp( barcodeFile.seq, "missing_barcode" ) && !keepMissingBarcode )
+			{
+				if ( hasMate )
+					mateReads.Next() ;
+				continue ;
+			}
+
 			std::string s( barcodeFile.seq ) ;
 			if ( barcodeStrToInt.find( s ) != barcodeStrToInt.end() )
 				barcode = barcodeStrToInt[s] ;
@@ -914,6 +929,9 @@ if ( firstReadLen > 200 )
 		seqSet.SetHitLenRequired( l ) ;
 	}
 
+	if ( hasBarcode )
+		seqSet.SetHitLenRequired( 17 ) ;
+
 	if ( firstReadLen > 200 )
 		changeKmerLengthThreshold /= 2 ;
 
@@ -1154,7 +1172,7 @@ if ( firstReadLen > 200 )
 		printf( "done\n" ) ;
 #endif
 
-		if ( seqSet.Size() > changeKmerLengthThreshold && indexKmerLength < 16 )
+		if ( seqSet.Size() > changeKmerLengthThreshold && indexKmerLength < 16 && !hasBarcode )
 		{
 			changeKmerLengthThreshold *= 4 ;
 			indexKmerLength += 2 ;

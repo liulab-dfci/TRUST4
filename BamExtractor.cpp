@@ -178,6 +178,15 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
 		fprintf( fp, ">%s\n%s\n", name, seq ) ;
 }
 
+// Maybe barcode read quality could be useful in future.
+void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual )
+{
+	if ( barcode )
+		fprintf( fp, ">%s\n%s\n", name, barcode ) ;
+	else
+		fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
+}
+
 void *ProcessUnmappedReads_Thread( void *pArg )
 {
 	int i ;
@@ -234,8 +243,9 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 			}
 			if ( info.fpBc )
 			{
-				OutputSeq( info.fpBc, info.outputQueue[i].name, info.outputQueue[i].barcode, NULL ) ;
-				free( info.outputQueue[i].barcode ) ;
+				OutputBarcode( info.fpBc, info.outputQueue[i].name, info.outputQueue[i].barcode, NULL ) ;
+				if ( info.outputQueue[i].barcode )
+					free( info.outputQueue[i].barcode ) ;
 			}
 			free( info.outputQueue[i].name ) ;
 		}
@@ -400,8 +410,9 @@ void FinishWork( std::vector<struct _unmappedCandidate> work,
 		}
 		if ( info.fpBc )
 		{
-			OutputSeq( info.fpBc, info.outputQueue[i].name, info.outputQueue[i].barcode, NULL ) ;
-			free( info.outputQueue[i].barcode ) ;
+			OutputBarcode( info.fpBc, info.outputQueue[i].name, info.outputQueue[i].barcode, NULL ) ;
+			if ( info.outputQueue[i].barcode )
+				free( info.outputQueue[i].barcode ) ;
 		}
 		free( info.outputQueue[i].name ) ;
 	}
@@ -626,7 +637,7 @@ int main( int argc, char *argv[] )
 							OutputSeq( fp2, name.c_str(), buffer2, bufferQual2 ) ;
 						}
 						if ( fpBc != NULL )
-							OutputSeq( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
+							OutputBarcode( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
 					}
 				}
 				else
@@ -648,7 +659,7 @@ int main( int argc, char *argv[] )
 						nw.qual2 = strdup( bufferQual2 ) ;
 					}
 
-					if ( bcField[0] )
+					if ( bcField[0] && alignments.GetFieldZ( bcField ) )
 						nw.barcode = strdup( alignments.GetFieldZ( bcField ) ) ;
 					else
 						nw.barcode = NULL ;
@@ -701,7 +712,7 @@ int main( int argc, char *argv[] )
 							usedName[ name ] = 1 ;
 						OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 						if ( fpBc != NULL )
-							OutputSeq( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
+							OutputBarcode( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
 					}
 				}
 				else
@@ -712,6 +723,10 @@ int main( int argc, char *argv[] )
 					nw.qual1 = strdup( bufferQual ) ;
 					nw.mate2 = NULL ; 
 					nw.qual2 = NULL ; 
+					if ( bcField[0] && alignments.GetFieldZ( bcField ) )
+						nw.barcode = strdup( alignments.GetFieldZ( bcField ) ) ;
+					else
+						nw.barcode = NULL ;
 					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 2048, threadCnt - 1 ) ;
 				}
 			}
@@ -764,7 +779,7 @@ int main( int argc, char *argv[] )
 			//alignments.GetReadSeq( buffer ) ;
 			OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 			if ( fpBc != NULL )
-				OutputSeq( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
+				OutputBarcode( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
 		}
 	}
 
@@ -832,7 +847,7 @@ int main( int argc, char *argv[] )
 			OutputSeq( fp1, name.c_str(), it->second.mate1, it->second.qual1 ) ;
 			OutputSeq( fp2, name.c_str(), it->second.mate2, it->second.qual2 ) ;
 			if ( fpBc != NULL )
-				OutputSeq( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
+				OutputBarcode( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
 			free( it->second.mate1 ) ;
 			free( it->second.mate2 ) ;
 			free( it->second.qual1 ) ;
