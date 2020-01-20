@@ -793,7 +793,10 @@ int main( int argc, char *argv[] )
 	{
 		fclose( fp1 ) ;
 		fclose( fpRef ) ;
+		if ( fpBc != NULL )
+			fclose( fpBc ) ;
 		alignments.Close() ;
+		PrintLog( "Finish extracting reads." ) ;
 		return 0 ;
 	}
 	// Case of pair-end data set.

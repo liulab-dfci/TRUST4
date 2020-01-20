@@ -924,7 +924,8 @@ private:
 
 	// Extend the overlap to include the overhang parts and filter the overlaps if the overhang does not match well.
 	// return: whether this is a valid extension or not
-	int ExtendOverlap( char *r, int len, struct _seqWrapper &seq, char *align, struct _overlap &overlap, struct _overlap &extendedOverlap )
+	int ExtendOverlap( char *r, int len, struct _seqWrapper &seq, double mismatchThresholdFactor, 
+		char *align, struct _overlap &overlap, struct _overlap &extendedOverlap )
 	{
 		// Check whether the overhang part is compatible with each other or not.
 		// Extension to 5'-end ( left end )
@@ -933,7 +934,6 @@ private:
 		int ret = 1 ;
 		int i, k ;
 		int goodLeftOverhangSize = 0 ;
-
 		//AlignAlgo::GlobalAlignment( seq.consensus + overlap.seqStart - leftOverhangSize,
 		AlignAlgo::GlobalAlignment_PosWeight( seq.posWeight.BeginAddress() + overlap.seqStart - leftOverhangSize, 
 				leftOverhangSize, 
@@ -990,6 +990,7 @@ private:
 			++mismatchThreshold ;
 		if ( rightOverhangSize >= 2 )
 			++mismatchThreshold ;
+		mismatchThreshold *= mismatchThresholdFactor ;
 		if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
 			ret = 0 ;
 
@@ -1977,7 +1978,7 @@ private:
 					continue ;
 				struct _overlap extendedOverlap ;
 
-				if ( ExtendOverlap( seqs[i].consensus, seqs[i].consensusLen, seqs[ overlaps[j].seqIdx ], 
+				if ( ExtendOverlap( seqs[i].consensus, seqs[i].consensusLen, seqs[ overlaps[j].seqIdx ], 1.0,  
 					align, overlaps[j], extendedOverlap ) == 1 ) 
 				{
 					if ( extendedOverlap.readEnd - extendedOverlap.readStart + 1 >= overlapLength && 
@@ -2799,7 +2800,7 @@ public:
 				//if ( !strcmp( read, "TTACTGTAATATACGATATTTTGACTGGTTATTAAGAGGCGACCCAAGAATCAATACTACTTTGACTACTGGGGCCAGGGAACCCTGGTCACCGTCTCCT" ) && i == 1 )
 				//	fprintf( stderr, "hi\n" ) ;
 				// Only extend the novel seqs.
-				if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
+				if ( ExtendOverlap( r, len, seq, barcode == -1 ? 1.0 : 2.0, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 				{
 					if ( extendedOverlaps[k].similarity < similarityThreshold )
 					{
@@ -2947,7 +2948,7 @@ public:
 					if ( seq.isRef )
 						continue ;
 				
-					if ( ExtendOverlap( r, len, seq, align, overlaps[i], extendedOverlaps[k] ) == 1 )
+					if ( ExtendOverlap( r, len, seq, barcode == -1 ? 1.0 : 2.0, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 					{
 						j = i ;
 						++k ;
@@ -3810,7 +3811,7 @@ public:
 		{
 			//printf( "%d %d: %d-%d %d-%d %lf\n", i, overlaps[i].seqIdx, overlaps[i].readStart, overlaps[i].readEnd,
 			//		overlaps[i].seqStart, overlaps[i].seqEnd, overlaps[i].similarity) ;
-			if ( ExtendOverlap( r, len, seqs[ overlaps[i].seqIdx ], align, 
+			if ( ExtendOverlap( r, len, seqs[ overlaps[i].seqIdx ], barcode == -1 ? 1.0 : 2.0, align, 
 						overlaps[i], extendedOverlap ) == 1 )
 			{
 				/*if ( extendCnt == 0 )
@@ -7269,8 +7270,8 @@ public:
 		if ( geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].readEnd < cdr[2].readEnd )
 			return 0 ;
 		
-		if ( seqs[seqIdx].name[2] == 'H' || seqs[seqIdx].name[2] != 'B' 
-			|| seqs[seqIdx].name[2] != 'D' )
+		if ( seqs[seqIdx].name[2] == 'H' || seqs[seqIdx].name[2] == 'B' 
+			|| seqs[seqIdx].name[2] == 'D' )
 		{
 			// Contains D gene
 			if ( geneOverlap[1].seqIdx == -1 )
@@ -7545,7 +7546,7 @@ public:
 			char *align = new char[ 2 * len + 2 ] ;	
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
-				if ( ExtendOverlap( r, len, seqs[ overlaps[j].seqIdx ], align, 
+				if ( ExtendOverlap( r, len, seqs[ overlaps[j].seqIdx ], 1.0, align, 
 					overlaps[j], extendedOverlap ) == 1 )
 				{
 					int seqIdx = extendedOverlap.seqIdx ;
@@ -8221,6 +8222,7 @@ public:
 		//   singleton assembly where the other mate has no perfect alignment.
 		// Since these reads will not be applied on more sophisticated extension, it is fine 
 		//   to make it an independent component.
+		// We are merging reads at beginning, so there is no need for this procedure now.
 		std::sort( reads.begin(), reads.end(), CompSortAssignedReadById ) ;
 		//ExtendSeqFromMissingOverlapMate( reads ) ;
 		

@@ -129,7 +129,6 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$hasBarcode = 1 ;
 		$bamExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
-		$mainArgs .= " --barcode" ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--stage" )
@@ -231,6 +230,11 @@ else
 	{
 		$mainArgs .= " -u ".$singleFiles[0] ;
 	}
+}
+
+if ( $hasBarcode == 1 )
+{
+	$mainArgs .= " --barcode ${prefix}_toassemble_bc.fa" ;
 }
 
 # Run the assembly 

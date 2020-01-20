@@ -847,43 +847,43 @@ int main( int argc, char *argv[] )
 		sortedReads[i].len -= trimBase ;
 	}
 
-// Remove the reads that are too short if this is a long read data set.
-if ( firstReadLen > 200 )
-{
-	for ( i = 0 ; i < readCnt ; ++i )
-		if ( sortedReads[i].read != NULL && sortedReads[i].len < firstReadLen / 3 )
-		{
-			free( sortedReads[i].id ) ;
-			free( sortedReads[i].read ) ;
-			if ( sortedReads[i].qual != NULL )
-				free( sortedReads[i].qual ) ;
-			sortedReads[i].read = NULL ;
-			continue ;
-		}
-
-	seqSet.SetIsLongSeqSet( true ) ;
-}
-
-// Remove the sequences whose J gene is not associate with C gene.
-/*for ( i = 0 ; i < readCnt ; ++i )
-  {
-  struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
-  if ( sortedReads[i].read == NULL )
-  continue ;
-
-  if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx == -1 )
-  {
-  if ( geneOverlap[2].similarity > 0.9 && 
-  sortedReads[i].len - geneOverlap[2].readEnd > 50 ) // With 50 base but could not identify C gene
-  {
+	// Remove the reads that are too short if this is a long read data set.
+	if ( firstReadLen > 200 )
+	{
+		for ( i = 0 ; i < readCnt ; ++i )
+			if ( sortedReads[i].read != NULL && sortedReads[i].len < firstReadLen / 3 )
+			{
 				free( sortedReads[i].id ) ;
 				free( sortedReads[i].read ) ;
 				if ( sortedReads[i].qual != NULL )
 					free( sortedReads[i].qual ) ;
 				sortedReads[i].read = NULL ;
+				continue ;
 			}
-		}
-	}*/
+
+		seqSet.SetIsLongSeqSet( true ) ;
+	}
+
+	// Remove the sequences whose J gene is not associate with C gene.
+	/*for ( i = 0 ; i < readCnt ; ++i )
+	  {
+	  struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
+	  if ( sortedReads[i].read == NULL )
+	  continue ;
+
+	  if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && geneOverlap[3].seqIdx == -1 )
+	  {
+	  if ( geneOverlap[2].similarity > 0.9 && 
+	  sortedReads[i].len - geneOverlap[2].readEnd > 50 ) // With 50 base but could not identify C gene
+	  {
+	  free( sortedReads[i].id ) ;
+	  free( sortedReads[i].read ) ;
+	  if ( sortedReads[i].qual != NULL )
+	  free( sortedReads[i].qual ) ;
+	  sortedReads[i].read = NULL ;
+	  }
+	  }
+	  }*/
 
 	k = 0 ;
 	for ( i = 0 ; i < readCnt ; ++i )
@@ -1040,9 +1040,13 @@ if ( firstReadLen > 200 )
 					//	similarityThreshold = 0.9 ;
 					similarityThreshold = 0.95 ;
 				}
-				
+
 				if ( name[0] == 'T' && similarityThreshold < 0.95 ) // TCR
 					similarityThreshold = 0.95 ;
+				
+				// When using barcode, we could be more casual.
+				if ( hasBarcode )
+					similarityThreshold = 0.9 ;
 
 				//if ( similarityThreshold > 0.9 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
 				//	&& geneOverlap[0].readEnd < geneOverlap[2].readStart )
@@ -1260,7 +1264,10 @@ if ( firstReadLen > 200 )
 	else
 		fp = stdout ;
 	
-	seqSet.Output( fp ) ;
+	if ( hasBarcode )
+		seqSet.Output( fp, &barcodeIntToStr ) ;
+	else
+		seqSet.Output( fp, NULL ) ;
 	fflush( fp ) ;
 	
 	if ( outputPrefix[0] != '-' )
