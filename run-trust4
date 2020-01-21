@@ -61,6 +61,7 @@ my $vdjcRef = "" ;
 my $bamExtractorArgs = "" ;
 my $mainArgs = "" ;
 my $annotatorArgs = "" ;
+my $simpleRepArgs = "" ;
 my $threadCnt = 1 ;
 my $stage = 0 ;
 my $noExtraction = 0 ;
@@ -129,6 +130,7 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$hasBarcode = 1 ;
 		$bamExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
+		$simpleRepArgs .= " --barcodeCnt --noPartial" ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--stage" )
@@ -263,7 +265,7 @@ if ( $stage <= 2 )
 # Generate the report table
 if ( $stage <= 3 )
 {
-	system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out > ${prefix}_report.tsv" ) ;
+	system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs > ${prefix}_report.tsv" ) ;
 }
 
 print STDERR "[".localtime()."] TRUST4 finishes.\n" ;

@@ -6,7 +6,9 @@ use warnings ;
 die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n". 
 	"OPTIONS:\n".
 	"\t--decimalCnt: the count column uses decimal instead of truncated integer. (default: not used)\n".
+	"\t--barcodeCnt: the count column is the number of barcode instead of read support. (default: not used)\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
+	"\t--noPartial: do not including partial CDR3 in report. (default: include partial)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n"
 	if ( @ARGV == 0 ) ;
 
@@ -176,6 +178,8 @@ my $annotFile = "" ;
 my $reportJunctionInfo = 0 ;
 my $tcrErrorFilter = 0.05 ;
 my $roundDownCount = 1 ;
+my $useBarcodeCnt = 0 ;
+my $reportPartial = 1 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--junction" )
@@ -192,6 +196,14 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--decimalCnt" )
 	{
 		$roundDownCount = 0 ;
+	}
+	elsif ( $ARGV[$i] eq "--barcodeCnt" )
+	{
+		$useBarcodeCnt = 1 ;
+	}
+	elsif ( $ARGV[$i] eq "--noPartial" )
+	{
+		$reportPartial = 0 ;
 	}
 	else
 	{
@@ -312,6 +324,7 @@ close FP1 ;
 open FP1, $ARGV[0] ;
 my @totalCnt = (0, 0, 0) ;
 my %cdr3AssemblyId ; # Record which assembly is representative for the cdr3
+my %cdr3Barcode ; # record whether a "chain_cdr3_barcode" has showed up before or not 
 while ( <FP1> )
 {
 	chomp ;
@@ -326,11 +339,29 @@ while ( <FP1> )
 	my $key = join( "\t", ( $vgene, $dgene, $jgene, $cgene, $cols[8] ) ) ;
 	my $type = GetChainType( $vgene, $jgene, $cgene ) ;
 	
+	next if ( $reportPartial == 0 && $cols[9] == 0 ) ;
+	
 	if ($type == 2) # TCR
 	{
 		if ($cols[10] < $assemblyMostReads{$assemblyId} * $tcrErrorFilter ) 
 		{
 			next ;
+		}
+	}
+
+	if ( $useBarcodeCnt )
+	{
+		my @cols2 = split/_/, $assemblyId ;
+		my $barcode = join( "_", @cols2[0..scalar(@cols2)-2] ) ;
+		my $tmp = $type."_".$cols[8]."_".$barcode ;
+		if ( defined $cdr3Barcode{$tmp} )
+		{
+			next ;
+		}
+		else
+		{
+			$cdr3Barcode{$tmp} = 1 ;
+			$cols[10] = 1 ;
 		}
 	}
 
