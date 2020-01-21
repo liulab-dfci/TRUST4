@@ -266,6 +266,10 @@ if ( $stage <= 2 )
 if ( $stage <= 3 )
 {
 	system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs > ${prefix}_report.tsv" ) ;
+	if ( $hasBarcode == 1 )
+	{
+		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out --noPartial > ${prefix}_barcode_report.tsv" ) ;
+	}
 }
 
 print STDERR "[".localtime()."] TRUST4 finishes.\n" ;
