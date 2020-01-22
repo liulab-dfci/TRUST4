@@ -15,11 +15,20 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"\t\tor\n"
 		"\t-1 STRING -2 STRING: path to paired-end read files\n"
 		"Optional:\n"
-		"\t-o STRING: prefix to the output file\n"
-		"\t-t INT: number of threads (default: 1)\n" ;
+		"\t-o STRING: prefix to the output file (default: toassemble)\n"
+		"\t-t INT: number of threads (default: 1)\n" 
+		"\t--barcode STRING: path to the raw barcode file (default: not used)\n"
+		"\t--barcodeStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
+		"\t--barcodeEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
+		"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used )\n"
+		;
 
 static const char *short_options = "f:u:1:2:o:t:" ;
 static struct option long_options[] = {
+			{ "barcode", required_argument, 0, 10000},
+			{ "barcodeStart", required_argument, 0, 10001},
+			{ "barcodeEnd", required_argument, 0, 10002},
+			{ "barcodeRevComp", no_argument, 0, 10003},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -98,6 +107,36 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
 		fprintf( fp, ">%s\n%s\n", name, seq ) ;
 }
 
+// Maybe barcode read quality could be useful in future.
+void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual, 
+	int start, int end, bool revcomp, SeqSet &seqSet )
+{
+	if ( barcode )
+	{
+		if ( start == 0 && end == -1 && revcomp == false )
+			fprintf( fp, ">%s\n%s\n", name, barcode ) ;
+		else
+		{
+			int i ;
+			int s = start ;
+			int e = ( end == -1 ? strlen( barcode ) - 1 : end ) ;
+
+			if ( revcomp == false )
+			{
+				for ( i = s ; i <= e ; ++i )
+					buffer[i - s] = barcode[i] ;
+				buffer[i - s] = '\0' ;
+			}
+			else
+				seqSet.ReverseComplement( buffer, barcode + s, e - s + 1 ) ;
+			
+			fprintf( fp, ">%s\n%s\n", name, buffer ) ;
+		}
+	}
+	else
+		fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
+}
+
 void *ProcessReads_Thread( void *pArg )
 {
 	int i ;	
@@ -139,8 +178,13 @@ int main( int argc, char *argv[] )
 	
 	ReadFiles reads ;
 	ReadFiles mateReads ;
+	ReadFiles barcodeFile ;
 	bool hasMate = false ;
-	
+	bool hasBarcode = false ;
+	int barcodeStart = 0 ;
+	int barcodeEnd = -1 ;
+	bool barcodeRevComp = false ;
+
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -174,6 +218,23 @@ int main( int argc, char *argv[] )
 		else if ( c == 't' )
 		{
 			threadCnt = atoi( optarg ) ;
+		}
+		else if ( c == 10000 ) // barcode
+		{
+			hasBarcode = true ;
+			barcodeFile.AddReadFile( optarg, false ) ;
+		}
+		else if ( c == 10001 ) // barcodeStart
+		{	
+			barcodeStart = atoi( optarg ) ;
+		}
+		else if ( c == 10002 ) // barcodeEnd
+		{
+			barcodeEnd = atoi( optarg ) ;
+		}
+		else if ( c == 10003 ) // barcodeRevComp
+		{
+			barcodeRevComp = true ;
 		}
 		else
 		{
@@ -213,6 +274,7 @@ int main( int argc, char *argv[] )
 	
 	FILE *fp1 = NULL ;
 	FILE *fp2 = NULL ;
+	FILE *fpBc = NULL ;
 	if ( !hasMate )
 	{
 		sprintf( buffer, "%s.fq", prefix ) ;
@@ -225,6 +287,12 @@ int main( int argc, char *argv[] )
 		sprintf( buffer, "%s_2.fq", prefix ) ;
 		fp2 = fopen( buffer, "w" ) ;
 	}
+
+	if ( hasBarcode )
+	{
+		sprintf( buffer, "%s_bc.fa", prefix ) ;	
+		fpBc = fopen( buffer, "w" ) ;
+	}
 	
 	if ( threadCnt == 1 )
 	{
@@ -233,6 +301,12 @@ int main( int argc, char *argv[] )
 			if ( hasMate && !mateReads.Next() )
 			{
 				fprintf( stderr, "The two mate-pair read files have different number of reads.\n" ) ;
+				exit( 1 ) ;
+			}
+
+			if ( hasBarcode && !barcodeFile.Next() )
+			{
+				fprintf( stderr, "Read file and barcode have different number of reads.\n" ) ;
 				exit( 1 ) ;
 			}
 
@@ -247,6 +321,9 @@ int main( int argc, char *argv[] )
 				OutputSeq( fp1, reads.id, reads.seq, reads.qual ) ;
 				if ( hasMate )
 					OutputSeq( fp2, mateReads.id, mateReads.seq, mateReads.qual ) ;
+				if ( hasBarcode )
+					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
+						barcodeStart, barcodeEnd, barcodeRevComp, refSet ) ;
 			}
 			
 			
@@ -259,9 +336,12 @@ int main( int argc, char *argv[] )
 		
 		struct _Read *readBatch = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
 		struct _Read *readBatch2 = NULL ;
+		struct _Read *barcodeBatch = NULL ;
 		if ( hasMate )
 			readBatch2 = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
-		int fileInd1, fileInd2 ;
+		if ( hasBarcode )
+			barcodeBatch = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
+		int fileInd1, fileInd2, fileIndBc ;
 		
 		pthread_t *threads = (pthread_t *)malloc( sizeof( pthread_t ) * threadCnt ) ;
 		struct _threadArg *args = (struct _threadArg *)malloc( sizeof( struct _threadArg ) * threadCnt ) ;
@@ -292,6 +372,16 @@ int main( int argc, char *argv[] )
 					exit ( 1 ) ;
 				}
 			}
+			
+			if ( hasBarcode )
+			{
+				int tmp = barcodeFile.GetBatch( barcodeBatch, maxBatchSize, fileIndBc, true, true ) ;
+				if ( tmp != batchSize )
+				{
+					fprintf( stderr, "Read file and barcode have different number of reads.\n" ) ;
+					exit ( 1 ) ;
+				}
+			}
 
 			if ( batchSize == 0 )
 				break ; 
@@ -313,6 +403,9 @@ int main( int argc, char *argv[] )
 				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual ) ;
 				if ( readBatch2 != NULL )
 					OutputSeq( fp2, readBatch2[i].id, readBatch2[i].seq, readBatch2[i].qual ) ;
+				if ( hasBarcode )
+					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
+						barcodeStart, barcodeEnd, barcodeRevComp, refSet ) ;
 			}
 		}
 		
@@ -331,6 +424,14 @@ int main( int argc, char *argv[] )
 				if ( readBatch2[i].qual )
 					free( readBatch2[i].qual ) ;
 			}
+
+			if ( barcodeBatch != NULL )
+			{
+				free( barcodeBatch[i].id ) ;
+				free( barcodeBatch[i].seq ) ;
+				if ( barcodeBatch[i].qual )
+					free( barcodeBatch[i].qual ) ;
+			}
 		}
 		reads.id = NULL ;
 		reads.seq = NULL ;
@@ -341,6 +442,12 @@ int main( int argc, char *argv[] )
 			mateReads.seq = NULL ;
 			mateReads.qual = NULL ;
 		}
+		if ( hasBarcode )
+		{
+			barcodeFile.id = NULL ;
+			barcodeFile.seq = NULL ;
+			barcodeFile.qual = NULL ;
+		}
 
 		free( threads ) ;
 		for ( i = 0 ; i < threadCnt ; ++i )
@@ -349,11 +456,15 @@ int main( int argc, char *argv[] )
 		free( readBatch ) ;
 		if ( hasMate )
 			free( readBatch2 ) ;
+		if ( hasBarcode )
+			free( barcodeBatch ) ;
 		pthread_attr_destroy( &attr ) ;
 	}
 	fclose( fp1 ) ;
 	if ( hasMate )
 		fclose( fp2 ) ;
+	if ( hasBarcode )
+		fclose( fpBc ) ;
 	fclose( fpRef ) ; 
 	PrintLog( "Finish extracting reads." ) ;
 	return 0 ;

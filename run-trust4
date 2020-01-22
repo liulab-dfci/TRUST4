@@ -19,6 +19,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t-t INT: number of threads (default: 1)\n".
     "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)\n".
+    "\t--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
@@ -59,6 +60,7 @@ my $prefix = "" ;
 my $vdjcFasta = "" ;
 my $vdjcRef = "" ;
 my $bamExtractorArgs = "" ;
+my $fastqExtractorArgs = "" ;
 my $mainArgs = "" ;
 my $annotatorArgs = "" ;
 my $simpleRepArgs = "" ;
@@ -130,8 +132,19 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$hasBarcode = 1 ;
 		$bamExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
+		$fastqExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
 		$simpleRepArgs .= " --barcodeCnt --noPartial" ;
 		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--barcodeRange" )
+	{
+		$fastqExtractorArgs .= " --barcodeStart ".$ARGV[$i + 1]." --barcodeEnd ".$ARGV[$i + 2] ;
+		if ( $ARGV[$i + 3] eq "-" ) 
+		{
+			$fastqExtractorArgs .= " --barcodeRevComp" ;
+		}
+
+		$i += 3 ;
 	}
 	elsif ( $ARGV[$i] eq "--stage" )
 	{
@@ -194,12 +207,12 @@ if ( $stage <= 0 )
 	elsif ( @firstMateFiles > 0 && $noExtraction == 0 )
 	{
 		system_call( "$WD/fastq-extractor -1 ".$firstMateFiles[0]." -2 ".$secondMateFiles[0].
-				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
 	}
 	elsif ( @singleFiles > 0 && $noExtraction == 0 )
 	{
 		system_call( "$WD/fastq-extractor -u ".$singleFiles[0].
-				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble" ) ;
+				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
 	}
 }
 

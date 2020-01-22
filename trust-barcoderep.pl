@@ -318,14 +318,14 @@ foreach my $barcode (@barcodeList )
 		my $key2 ;
 		if ( $maxTag <= 4 )
 		{
-			$key1 = $barcode."_3" ;
-			$key2 = $barcode."_4" ;
+			$key1 = $barcode."_4" ;
+			$key2 = $barcode."_3" ;
 			$cellType = "abT" ;
 		}
 		elsif ( $maxTag <= 6 )
 		{
-			$key1 = $barcode."_5" ;
-			$key2 = $barcode."_6" ;
+			$key1 = $barcode."_6" ;
+			$key2 = $barcode."_5" ;
 			$cellType = "gdT" ;
 		}
 		$chain1 = $barcodeChainInfo{ $key1 } if ( defined $barcodeChainInfo{ $key1 } ) ;
