@@ -124,12 +124,12 @@ def LargerCluster(cdr3List, similarity):
 		i += 1		
 	
 	# Output the result
-	# First output the composition of larger cluster
-	for i in range(len(largerClusterToId)):
-		print("#\tcluster" + str(i), end = "")
-		for name in largerClusterToClusterName[i]:
-			print("\t" + name, end = "")
-		print("\n", end = "")
+	# Output the composition of larger cluster
+	#for i in range(len(largerClusterToId)):
+	#	print("#\tcluster" + str(i), end = "")
+	#	for name in largerClusterToClusterName[i]:
+	#		print("\t" + name, end = "")
+	#	print("\n", end = "")
 	
 	# Output the new cdr3 format with new larger cluster Id.
 	for i in range(len(largerClusterToId)):
@@ -172,6 +172,8 @@ if (__name__ == "__main__"):
 		for g in [2, 4]: # Must have V, J genes.
 			if ( cols[g] == "*"):
 				skip = True 
+		if (float(cols[9]) == 0):
+			skip = True
 		if ( skip ):
 			continue 
 
