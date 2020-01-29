@@ -50,7 +50,7 @@ def CompatibleSequence(a, b, similarity):
 	if (len(a) != len(b)):
 		return False ;
 	diffCnt = 0 
-	diffMax = len(a) * similarity
+	diffMax = len(a) - int(len(a) * similarity)
 	for i in range(len(a)):
 		if (a[i] != b[i]):
 			diffCnt += 1
