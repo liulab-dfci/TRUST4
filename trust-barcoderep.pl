@@ -5,6 +5,7 @@ use warnings ;
 
 die "Usage: ./trust-barcoderep.pl xxx_cdr3.out [OPTIONS] > trust_barcode_report.tsv\n". 
 	"OPTIONS:\n".
+	"\t-a xxx_annot.fa: TRUST4's annotation file. (default: not used)\n".
 	"\t--noPartial: do not including partial CDR3 in report. (default: include partial)\n"
 	if ( @ARGV == 0 ) ;
 
@@ -98,40 +99,69 @@ sub GetChainType
 	return -1 ;
 }
 
-sub GetDetailChainType
+sub GetDetailChainTypeFromGeneName
 {
-	foreach my $g (@_)
+	my $g = $_[0] ;
+	if ( $g =~ /^IGH/ )
 	{
-		if ( $g =~ /^IGH/ )
-		{
-			return 0 ;
-		}
-		elsif ( $g =~ /^IGK/ )
-		{
-			return 1 ;
-		}
-		elsif ( $g =~ /^IGL/ )
-		{
-			return 2 ;
-		}
-		elsif ( $g =~ /^TRA/ )
-		{
-			return 3 ;
-		}
-		elsif ( $g =~ /^TRB/ )
-		{
-			return 4 ;
-		}
-		elsif ( $g =~ /^TRG/ )
-		{
-			return 5 ;
-		}
-		elsif ( $g =~ /^TRD/ )
-		{
-			return 6 ;
-		}
+		return 0 ;
+	}
+	elsif ( $g =~ /^IGK/ )
+	{
+		return 1 ;
+	}
+	elsif ( $g =~ /^IGL/ )
+	{
+		return 2 ;
+	}
+	elsif ( $g =~ /^TRA/ )
+	{
+		return 3 ;
+	}
+	elsif ( $g =~ /^TRB/ )
+	{
+		return 4 ;
+	}
+	elsif ( $g =~ /^TRG/ )
+	{
+		return 5 ;
+	}
+	elsif ( $g =~ /^TRD/ )
+	{
+		return 6 ;
 	}
 	
+	return -1 ;
+}
+
+sub GetDetailChainType
+{
+	my $i ;
+	for ( $i = 1 ; $i <= 2 ; ++$i )
+	{
+		my $type = GetDetailChainTypeFromGeneName( $_[$i] ) ;
+		return $type if ( $type != -1 ) ;
+	}
+	# In the case of only V gene is available.
+	my $type = GetDetailChainTypeFromGeneName( $_[0] ) ;
+	return $type ;
+}
+
+sub GetCellType
+{
+	if ( $_[0] <= 2 )
+	{
+		return 0 ; # B
+	}
+	elsif ( $_[0] <= 4 )
+	{
+		return 1 ; # abT
+	}
+	elsif ( $_[0] <= 6 ) 
+	{
+		return 2 ; # gdT
+	}
+	return -1 ;
 }
 
 # Use input V, J, C gene to report back the C gene if it is missing.
@@ -155,7 +185,13 @@ sub InferConstantGene
 		return $ret ;
 	}
 	
-	for ( $i = 0 ; $i <= 1 ; ++$i )
+	# For TRA and TRD gene, we don't infer its constant gene.
+	if ($_[0] =~ /^TR[AD]/ || $_[1] eq "*")
+	{
+		return $ret ;
+	}
+
+	for ( $i = 1 ; $i >= 0 ; --$i )
 	{
 		next if ( $_[$i] eq "*" ) ;
 		if ( $_[$i] =~ /^IGH/ )
@@ -169,13 +205,44 @@ sub InferConstantGene
 	return $ret ;
 }
 
+my %aaPriority = ("out_of_frame"=>1, "partial"=>0) ;
+# Test whether a is better than b.
+sub BetterAA
+{
+	my $a = $_[0] ;
+	my $b = $_[1] ;
+	
+	if (defined $aaPriority{$a} && defined $aaPriority{$b})
+	{
+		return $aaPriority{$a} - $aaPriority{$b} ;
+	}
+	elsif (defined $aaPriority{$a})
+	{
+		return -1 ;
+	}
+	elsif (defined $aaPriority{$b})
+	{
+		return 1 ;
+	}
+	else
+	{
+		return 0 ;
+	}
+}
+
 my $i ;
 my $reportPartial = 1 ;
+my $annotFile = "" ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--noPartial" )
 	{
 		$reportPartial = 0 ;
+	}
+	elsif ( $ARGV[$i] eq "-a" )
+	{
+		$annotFile = $ARGV[$i + 1] ;
+		++$i ;
 	}
 	else
 	{
@@ -183,12 +250,70 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	}
 }
 
+# Store whether there is good assemblies that haven't got CDR3 from the annottation file.
+my %barcodeChainInAnnot ; 
+if ( $annotFile ne "" )
+{
+	open FP1, $annotFile ;
+	while ( <FP1> )
+	{
+		next if ( !/^>/ ) ;
+		my @cols = split /\s/, $_ ;
+
+		my @vCoord ;
+		my @dCoord ;
+		my @jCoord ;
+		my @cdr3Coord ;
+
+		if ( $cols[3] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):([0-9\.]+)/ )
+		{
+			#print($cols[3], "\t", $1, "\t", $6, "\n") ;
+			@vCoord = ($1, $2, $3, $4, $5, $6) ;
+		}
+		else
+		{
+			#die "Wrong format $header\n" ;
+			@vCoord = (-1, -1, -1, -1, -1, 0)
+		}
+		
+		if ( $cols[5] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):([0-9\.]+)/ )
+		{
+			@jCoord = ($1, $2, $3, $4, $5, $6) ;
+		}
+		else
+		{
+			#die "Wrong format $header\n" ;
+			@jCoord = (-1, -1, -1, -1, -1, 0)
+		}
+		
+		my $chainType = -1 ;
+		if ( $vCoord[2] - $vCoord[1] >= 50 && $vCoord[5] >= 0.95 )
+		{
+			$chainType = GetDetailChainTypeFromGeneName( substr($cols[3], 0, 3) ) ; 		
+		}
+		elsif ($jCoord[2] - $jCoord[1] >= $jCoord[0] * 0.66 && $jCoord[5] >= 0.95)
+		{
+			$chainType = GetDetailChainTypeFromGeneName( substr($cols[5], 0, 3) ) ; 		
+		}
+
+		if ( $chainType != -1 )
+		{
+			my @cols2 = split/_/, substr($cols[0], 1) ;
+			my $barcode = join( "_", @cols2[0..scalar(@cols2)-2] ) ;
+			$barcodeChainInAnnot{ $barcode."_".$chainType } = $chainType ;
+		}
+		
+	}
+	close FP1 ;
+}
 
 # collect the read count for each chain from assembly id.
 open FP1, $ARGV[0] ;
 my %barcodeChainAbund ; 
+my %barcodeChainRepresentAbund ;
 my %barcodeChainInfo ;
 my %barcodeShownup ;
+my %barcodeChainAa ;
 my @barcodeList ;
 
 # Read in the report, store the information for each barcode.
@@ -203,7 +328,7 @@ while ( <FP1> )
 	my $dgene = (split /,/, $cols[3])[0] ;
 	my $jgene = (split /,/, $cols[4])[0] ;
 	my $cgene = (split /,/, $cols[5])[0] ;
-	$cgene = InferConstantGene( $vgene, $jgene, $cgene ) ;
+	#$cgene = InferConstantGene( $vgene, $jgene, $cgene ) ;
 
 	my @cols2 = split/_/, $assemblyId ;
 	my $barcode = join( "_", @cols2[0..scalar(@cols2)-2] ) ;
@@ -246,17 +371,27 @@ while ( <FP1> )
 
 	if ( defined $barcodeChainAbund{ $key } )
 	{
-		if ( $cols[10] > $barcodeChainAbund{ $key } )
+		if ( BetterAA($aa, $barcodeChainAa{$key}) > 0 || 
+			( $cols[10] > $barcodeChainRepresentAbund{ $key } && BetterAA($aa, $barcodeChainAa{$key}) == 0 ) )
 		{
-			$barcodeChainAbund{ $key } = $cols[10] ;
-			$barcodeChainInfo{ $key } = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa) ) ;
+			$barcodeChainRepresentAbund{$key} = $cols[10] ;
+			$barcodeChainAa{$key} = $aa ;
+			$barcodeChainInfo{ $key } = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[11] ) ) ;
 		}
+		$barcodeChainAbund{ $key } += $cols[10] ;
 	}
 	else
 	{
 		$barcodeChainAbund{ $key } = $cols[10] ;
-		$barcodeChainInfo{ $key } = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa) ) ;
+		$barcodeChainRepresentAbund{$key} = $cols[10] ;
+		$barcodeChainAa{$key} = $aa ;
+		$barcodeChainInfo{ $key } = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[11]) ) ;
 	}
+	
+	#if ($barcode eq "GTACTTTGTACCAGTT-1")
+	#{
+	#	print($barcode, " ", $key, " ", $barcodeChainAbund{$key}, " ", $barcodeChainAa{$key}, "\n")
+	#}
 }
 close FP1 ;
 
@@ -276,12 +411,26 @@ foreach my $barcode (@barcodeList )
 	for ( $i = 0 ; $i < 7 ; ++$i )
 	{
 		my $key = $barcode."_".$i ;
+		# gdT should have more stringent criterion.
+		last if ($i >= 5 && $maxTag != -1 ) ;
+
 		if ( defined $barcodeChainAbund{ $key } && $barcodeChainAbund{ $key } > $max )
 		{
 			$max = $barcodeChainAbund{ $key } ;
 			$maxTag = $i ;
 		}
 	}
+	
+	if ( $maxTag >= 5 && $annotFile ne "" )
+	{
+		# use annotation file to further file gdT
+		for ( $i = 0 ; $i < 5 ; ++$i )
+		{
+			last if ( defined $barcodeChainInAnnot{$barcode."_".$i} ) ;
+		}
+		next if ( $i < 5 ) ;
+	}
+
 	if ( $maxTag <= 2 )
 	{
 		$mainType = 0 ;

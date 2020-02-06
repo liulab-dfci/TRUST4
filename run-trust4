@@ -281,7 +281,7 @@ if ( $stage <= 3 )
 	system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs > ${prefix}_report.tsv" ) ;
 	if ( $hasBarcode == 1 )
 	{
-		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out --noPartial > ${prefix}_barcode_report.tsv" ) ;
+		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out -a ${prefix}_annot.fa --noPartial > ${prefix}_barcode_report.tsv" ) ;
 	}
 }
 
