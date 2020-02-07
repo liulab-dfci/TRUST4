@@ -21,11 +21,13 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"\t-o STRING: prefix to the output file\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-u: the flag or order of unaligned read-pair is not ordinary (default: not used)\n" 
-		"\t--barcode STRING: the barcode field in the bam file (default: not used)\n" ;
+		"\t--barcode STRING: the barcode field in the bam file (default: not used)\n"
+		"\t--UMI STRING: the UMI field in the bam file (default: not used)\n" ;
 
 static const char *short_options = "f:b:o:t:u" ;
 static struct option long_options[] = {
 			{ "barcode", required_argument, 0, 10000 },
+			{ "UMI", required_argument, 0, 10001 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -78,6 +80,7 @@ struct _unmappedCandidate
 	char *qual2 ;
 	
 	char *barcode ;
+	char *UMI ;
 } ; 
 
 // Pre-determined information
@@ -86,7 +89,7 @@ struct _threadInfo
 	int tid ;
 	
 	FILE *fp1, *fp2 ;
-	FILE *fpBc ;
+	FILE *fpBc, *fpUMI ;
 	SeqSet *refSet ;
 	char *seqBuffer ;
 	
@@ -247,6 +250,13 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 				if ( info.outputQueue[i].barcode )
 					free( info.outputQueue[i].barcode ) ;
 			}
+
+			if ( info.fpUMI )
+			{
+				OutputBarcode( info.fpUMI, info.outputQueue[i].name, info.outputQueue[i].UMI, NULL ) ;
+				if ( info.outputQueue[i].UMI )
+					free( info.outputQueue[i].UMI ) ;
+			}
 			free( info.outputQueue[i].name ) ;
 		}
 		*info.oqCnt = 0 ;
@@ -271,6 +281,8 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 
 		if ( arg.candidates[i].barcode != NULL )
 			free( arg.candidates[i].barcode ) ;
+		if ( arg.candidates[i].UMI != NULL )
+			free( arg.candidates[i].UMI ) ;
 	}
 
 	pthread_mutex_lock( info.lockFreeThreads ) ;
@@ -322,7 +334,7 @@ void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr
 }
 
 // Customize your own parameters here.
-void InitCustomData( FILE *fp1, FILE *fp2, FILE *fpBc, SeqSet *refSet, struct _threadArg *threadArgs, int threadCnt )
+void InitCustomData( FILE *fp1, FILE *fp2, FILE *fpBc, FILE *fpUMI, SeqSet *refSet, struct _threadArg *threadArgs, int threadCnt )
 {
 	int i ; 
 	struct _unmappedCandidate *outputQueue = new struct _unmappedCandidate[2048 * 5] ;
@@ -333,6 +345,7 @@ void InitCustomData( FILE *fp1, FILE *fp2, FILE *fpBc, SeqSet *refSet, struct _t
 		threadArgs[i].info.fp1 = fp1 ;			
 		threadArgs[i].info.fp2 = fp2 ;	
 		threadArgs[i].info.fpBc = fpBc ;
+		threadArgs[i].info.fpUMI = fpUMI ;
 		threadArgs[i].info.refSet = refSet ;
 		threadArgs[i].info.seqBuffer = new char[100001] ;
 		threadArgs[i].info.outputQueue = outputQueue ;
@@ -414,6 +427,12 @@ void FinishWork( std::vector<struct _unmappedCandidate> work,
 			if ( info.outputQueue[i].barcode )
 				free( info.outputQueue[i].barcode ) ;
 		}
+		if ( info.fpUMI )
+		{
+			OutputBarcode( info.fpUMI, info.outputQueue[i].name, info.outputQueue[i].UMI, NULL ) ;
+			if ( info.outputQueue[i].UMI )
+				free( info.outputQueue[i].UMI ) ;
+		}
 		free( info.outputQueue[i].name ) ;
 	}
 	// Release memory 
@@ -446,6 +465,7 @@ int main( int argc, char *argv[] )
 	FILE *fpRef = NULL ;
 	char prefix[1024] = "toassemble" ;
 	char bcField[1024] = "" ; // barcode field in bam file.
+	char umiField[1024] = "" ; // UMI field
 	Alignments alignments ;
 	bool abnormalUnalignedFlag = false ;
 	int kmerLength = 9  ;
@@ -486,6 +506,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10000 ) // barcode
 		{
 			strcpy( bcField, optarg ) ;
+		}
+		else if ( c == 10001 ) // UMI
+		{
+			strcpy( umiField, optarg ) ;
 		}
 		else
 		{
@@ -548,6 +572,7 @@ int main( int argc, char *argv[] )
 	FILE *fp1 = NULL ;
 	FILE *fp2 = NULL ;
 	FILE *fpBc = NULL ; // the file holding barcode.
+	FILE *fpUMI = NULL ; // the file holding UMI
 	if ( alignments.fragStdev == 0 )
 	{
 		sprintf( buffer, "%s.fq", prefix ) ;
@@ -565,6 +590,11 @@ int main( int argc, char *argv[] )
 		sprintf( buffer, "%s_bc.fa", prefix ) ;
 		fpBc = fopen( buffer, "w" ) ;
 	}
+	if ( umiField[0] )
+	{
+		sprintf( buffer, "%s_umi.fa", prefix ) ;
+		fpUMI = fopen( buffer, "w" ) ;
+	}
 
 	pthread_t *threads ;
 	struct _threadArg *threadArgs ;
@@ -573,7 +603,7 @@ int main( int argc, char *argv[] )
 	if ( threadCnt > 1 )
 	{
 		InitWork( &threads, &threadArgs, attr, threadCnt - 1 ) ;
-		InitCustomData( fp1, fp2, fpBc, &refSet, threadArgs, threadCnt - 1 ) ;
+		InitCustomData( fp1, fp2, fpBc, fpUMI, &refSet, threadArgs, threadCnt - 1 ) ;
 	}
 	// assuming the input is sorted by coordinate.
 	while ( alignments.Next() )
@@ -638,6 +668,8 @@ int main( int argc, char *argv[] )
 						}
 						if ( fpBc != NULL )
 							OutputBarcode( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
+						if ( fpUMI != NULL )
+							OutputBarcode( fpUMI, name.c_str(), alignments.GetFieldZ( umiField ), NULL ) ;
 					}
 				}
 				else
@@ -663,6 +695,11 @@ int main( int argc, char *argv[] )
 						nw.barcode = strdup( alignments.GetFieldZ( bcField ) ) ;
 					else
 						nw.barcode = NULL ;
+					
+					if ( umiField[0] && alignments.GetFieldZ( umiField ) )
+						nw.UMI = strdup( alignments.GetFieldZ( umiField ) ) ;
+					else
+						nw.UMI = NULL ;
 
 					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 2048, threadCnt - 1 ) ;
 				}
@@ -713,6 +750,8 @@ int main( int argc, char *argv[] )
 						OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 						if ( fpBc != NULL )
 							OutputBarcode( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
+						if ( fpUMI != NULL )
+							OutputBarcode( fpUMI, alignments.GetReadId(), alignments.GetFieldZ( umiField ), NULL ) ;
 					}
 				}
 				else
@@ -727,6 +766,10 @@ int main( int argc, char *argv[] )
 						nw.barcode = strdup( alignments.GetFieldZ( bcField ) ) ;
 					else
 						nw.barcode = NULL ;
+					if ( umiField[0] && alignments.GetFieldZ( umiField ) )
+						nw.UMI = strdup( alignments.GetFieldZ( umiField ) ) ;
+					else
+						nw.UMI = NULL ;
 					AddWorkQueue( nw, threadsWorkQueue, threadArgs, threads, attr, 2048, threadCnt - 1 ) ;
 				}
 			}
@@ -780,6 +823,8 @@ int main( int argc, char *argv[] )
 			OutputSeq( fp1, alignments.GetReadId(), buffer, bufferQual ) ;
 			if ( fpBc != NULL )
 				OutputBarcode( fpBc, alignments.GetReadId(), alignments.GetFieldZ( bcField ), NULL ) ;
+			if ( fpUMI != NULL )
+				OutputBarcode( fpUMI, alignments.GetReadId(), alignments.GetFieldZ( umiField ), NULL ) ;
 		}
 	}
 
@@ -795,6 +840,8 @@ int main( int argc, char *argv[] )
 		fclose( fpRef ) ;
 		if ( fpBc != NULL )
 			fclose( fpBc ) ;
+		if ( fpUMI != NULL )
+			fclose( fpUMI ) ;
 		alignments.Close() ;
 		PrintLog( "Finish extracting reads." ) ;
 		return 0 ;
@@ -851,6 +898,8 @@ int main( int argc, char *argv[] )
 			OutputSeq( fp2, name.c_str(), it->second.mate2, it->second.qual2 ) ;
 			if ( fpBc != NULL )
 				OutputBarcode( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
+			if ( fpUMI != NULL )
+				OutputBarcode( fpUMI, name.c_str(), alignments.GetFieldZ( umiField ), NULL ) ;
 			free( it->second.mate1 ) ;
 			free( it->second.mate2 ) ;
 			free( it->second.qual1 ) ;
@@ -870,6 +919,8 @@ int main( int argc, char *argv[] )
 		fclose( fp2 ) ;
 	if ( fpBc != NULL )
 		fclose( fpBc ) ;
+	if ( fpUMI != NULL )
+		fclose( fpUMI ) ;
 	fclose( fpRef ) ;
 	PrintLog( "Finish extracting reads." ) ;
 	return 0 ;

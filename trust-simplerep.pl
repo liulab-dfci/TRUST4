@@ -159,7 +159,13 @@ sub InferConstantGene
 		return $ret ;
 	}
 	
-	for ( $i = 0 ; $i <= 1 ; ++$i )
+	# For TRA and TRD gene, we don't infer its constant gene.
+	if ($_[0] =~ /^TR[AD]/ || $_[1] eq "*")
+	{
+		return $ret ;
+	}
+
+	for ( $i = 1 ; $i >= 0 ; --$i )
 	{
 		next if ( $_[$i] eq "*" ) ;
 		if ( $_[$i] =~ /^IGH/ )
@@ -341,13 +347,16 @@ while ( <FP1> )
 	my $key = join( "\t", ( $vgene, $dgene, $jgene, $cgene, $cols[8] ) ) ;
 	my $type = GetChainType( $vgene, $jgene, $cgene ) ;
 	
-	if ($type == 2) # TCR
+	if ($type == 2) # TCR, ignore the low abundance 
 	{
 		if ($cols[10] < $assemblyMostReads{$assemblyId} * $tcrErrorFilter ) 
 		{
 			next ;
 		}
 	}
+	
+	# Ignore the CDR3 that is too long, could be from mis-annotation.
+	next if (length($cols[8]) >= 180 ) ;
 
 	if ( $useBarcodeCnt )
 	{

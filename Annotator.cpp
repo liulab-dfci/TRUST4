@@ -909,7 +909,7 @@ int main( int argc, char *argv[] )
 					// The beginning of for-loop i makes sure buffer has the cdr3 sequence.
 					int cov = seqSet.GetConsensusWeightSumRange( i, annotations[i].cdr[2].readStart, 
 							annotations[i].cdr[2].readEnd ) ;
-					double avgCov = cov / ( annotations[i].cdr[2].readEnd - annotations[i].cdr[2].readStart + 1 ) ;
+					double avgCov = (double)cov / ( annotations[i].cdr[2].readEnd - annotations[i].cdr[2].readStart + 1 ) ;
 					fprintf( fpOutput, "%.2lf\t%.2lf\t%.2lf\n", annotations[i].cdr[2].similarity, avgCov,
 						refSet.GetCDR3Similarity( buffer, annotations[i].geneOverlap, 
 						annotations[i].cdr ) * 100.0 ) ;

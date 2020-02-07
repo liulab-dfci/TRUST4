@@ -83,9 +83,9 @@ int Prim( int **dist, int n,  struct _adj *adj, int &adjUsed, int offset, std::v
 	int minIsotype = -1 ;
 	int currLevelStart = 0 ;
 	for ( i = 0 ; i < n ; ++i )
-		if ( cdr3s[i].isotype != -1 )
+		if ( cdr3s[offset + i].isotype != -1 )
 		{
-			minIsotype = cdr3s[i].isotype ;
+			minIsotype = cdr3s[offset + i].isotype ;
 			currLevelStart = i ;
 			break ;
 		}
@@ -93,7 +93,7 @@ int Prim( int **dist, int n,  struct _adj *adj, int &adjUsed, int offset, std::v
 	double max = -2 ;
 	int maxTag = -1 ;
 	int currLevel = minIsotype ;
-
+	//fprintf( stderr, "%d %d %d %d %s\n", n, minIsotype, currLevelStart, cdr3s[offset].isotype, cdr3s[offset].seq ) ;
 	for ( i = 0 ; i < n ; ++i )
 	{
 		if ( !IsCompatibleLevel( currLevel, cdr3s[i + offset].isotype ) )
@@ -106,7 +106,6 @@ int Prim( int **dist, int n,  struct _adj *adj, int &adjUsed, int offset, std::v
 			maxTag = i ;
 		}
 	}
-
 	minDist[maxTag].a = 0 ;
 	minDist[maxTag].b = 0 ;
 	for ( i = 0 ; i < n ; ++i )
@@ -331,9 +330,7 @@ int main( int argc, char *argv[] )
 		int igType = GetIgType( vGene, jGene, cGene ) ;
 		if ( igType == 0 )
 			continue ;
-		
 		struct _cdr3 nc ;
-		nc.seq = strdup( seq ) ;
 		int clusterId ;
 		std::string clusterName( clusterIdBuffer ) ;
 		if ( clusterNameToId.find( clusterName ) != clusterNameToId.end() )
@@ -354,7 +351,6 @@ int main( int argc, char *argv[] )
 			nc.isotype = 0 ;
 		else
 			nc.isotype = isotypeRank[std::string(cGene)] ;
-		
 		for ( i = 0 ; seq[i] ; ++i )
 			if ( seq[i] == 'N' )
 				break ;
@@ -363,6 +359,8 @@ int main( int argc, char *argv[] )
 
 		if ( nc.abund < minAbund )
 			continue ;
+		
+		nc.seq = strdup( seq ) ;
 		cdr3s.push_back( nc ) ;
 	}
 	
@@ -412,12 +410,13 @@ int main( int argc, char *argv[] )
 		bool *visited = new bool[n] ;
 		memset( visited, false, sizeof( bool ) * n ) ;
 		int minMaxRootLeafDist = LongestRootLeafDistMST( bestRoot, adj, n, visited, dist ) ;
+		int bestRootIsotype = cdr3s[i + bestRoot].isotype ;
 		// Adjust the best root.
 		for ( k = 0 ; k < n ; ++k )
 		{
 			if ( cdr3s[i + k].similarity < cdr3s[i + bestRoot].similarity )
 				continue ;
-			if ( !IsCompatibleLevel( cdr3s[bestRoot + k].isotype, cdr3s[i + k].isotype ) )
+			if ( !IsCompatibleLevel( bestRootIsotype, cdr3s[i + k].isotype ) )
 				continue ;
 			if ( k == bestRoot )
 				continue ;

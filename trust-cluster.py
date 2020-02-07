@@ -149,10 +149,10 @@ if (__name__ == "__main__"):
 	if (len(sys.argv) <= 1):
 		print("usage: a.py trust_cdr3.out [OPTIONS]\n" + 
 			"OPTIONS:\n" 
-			"\t-s FLOAT: similarity of two CDR3s (default: 0.9)") 	
+			"\t-s FLOAT: similarity of two CDR3s (default: 0.95)") 	
 		exit(1)
 	cdr3List = []
-	similarity = 0.9 ;
+	similarity = 0.95 ;
 	i = 2
 	while (i < len(sys.argv)):
 		if (sys.argv[i] == "-s"):
