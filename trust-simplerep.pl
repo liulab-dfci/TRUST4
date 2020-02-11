@@ -10,6 +10,7 @@ die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
 	"\t--noPartial: do not including partial CDR3 in report. (default: include partial)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n"
+	"\t--filterBcrError FLOAT: filter BCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0)\n"
 	if ( @ARGV == 0 ) ;
 
 my %cdr3 ;  
@@ -183,6 +184,7 @@ my $i ;
 my $annotFile = "" ;
 my $reportJunctionInfo = 0 ;
 my $tcrErrorFilter = 0.05 ;
+my $bcrErrorFilter = 0 ;
 my $roundDownCount = 1 ;
 my $useBarcodeCnt = 0 ;
 my $reportPartial = 1 ;
@@ -197,6 +199,11 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--filterTcrError" )
 	{
 		$tcrErrorFilter = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--filterBcrError" )
+	{
+		$bcrErrorFilter = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--decimalCnt" )
@@ -350,6 +357,13 @@ while ( <FP1> )
 	if ($type == 2) # TCR, ignore the low abundance 
 	{
 		if ($cols[10] < $assemblyMostReads{$assemblyId} * $tcrErrorFilter ) 
+		{
+			next ;
+		}
+	}
+	elsif ( $type < 2 ) # BCR
+	{
+		if ($cols[10] < $assemblyMostReads{$assemblyId} * $bcrErrorFilter ) 
 		{
 			next ;
 		}

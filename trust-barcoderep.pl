@@ -205,29 +205,19 @@ sub InferConstantGene
 	return $ret ;
 }
 
-my %aaPriority = ("out_of_frame"=>1, "partial"=>0) ;
+sub GetAaType 
+{
+	# 0- partial, 1- non-produtive, 2 - productive. The higher number the better
+	my $a = $_[0] ;
+	return 0 if ( $a eq "partial" ) ;
+	return 1 if ( $a eq "out_of_frame" || $a =~ /_/ ) ;
+	return 2 ;
+}
+
 # Test whether a is better than b.
 sub BetterAA
 {
-	my $a = $_[0] ;
-	my $b = $_[1] ;
-	
-	if (defined $aaPriority{$a} && defined $aaPriority{$b})
-	{
-		return $aaPriority{$a} - $aaPriority{$b} ;
-	}
-	elsif (defined $aaPriority{$a})
-	{
-		return -1 ;
-	}
-	elsif (defined $aaPriority{$b})
-	{
-		return 1 ;
-	}
-	else
-	{
-		return 0 ;
-	}
+	return GetAaType( $_[0] ) - GetAaType($_[1] ) ;
 }
 
 my $i ;
@@ -480,5 +470,6 @@ foreach my $barcode (@barcodeList )
 		$chain1 = $barcodeChainInfo{ $key1 } if ( defined $barcodeChainInfo{ $key1 } ) ;
 		$chain2 = $barcodeChainInfo{ $key2 } if ( defined $barcodeChainInfo{ $key2 } ) ;
 	}
+	
 	print( join( "\t", ($barcode, $cellType, $chain1, $chain2 ) ), "\n" ) ;
 }

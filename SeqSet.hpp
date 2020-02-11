@@ -7336,7 +7336,10 @@ public:
 		}
 
 		delete[] align ;
-		return (double)matchCnt / len ;
+		if ( len == 0 )
+			return 0 ;
+		else
+			return (double)matchCnt / len ;
 	}
 
 	int GetEqualSecondaryGeneOverlap( struct _overlap &primaryOverlap, int geneType, std::vector<struct _overlap> *secondaryGeneOverlaps, 
