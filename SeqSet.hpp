@@ -5854,7 +5854,6 @@ public:
 							extendS = i + dest - j + 5 ; 
 						}
 					}
-
 				}
 			}
 			
@@ -6825,11 +6824,18 @@ public:
 						geneOverlap[0].seqIdx != -1 && ( !strongLocateS || leftCnt < 3 ) &&
 						( GetContigIdx( geneOverlap[0].readEnd, contigs ) == GetContigIdx(s, contigs)) && 
 						( ( seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
-							&& geneOverlap[0].seqEnd + ( s - geneOverlap[0].readEnd + 1 ) + 31 < 
+							&& geneOverlap[0].seqEnd + ( s - geneOverlap[0].readEnd ) + 5 < 
 								seqs[ geneOverlap[0].seqIdx ].info[2].a ) 
 						|| ( seqs[ geneOverlap[0].seqIdx ].info[2].a != -1 
-							&& geneOverlap[0].seqEnd + ( s - geneOverlap[0].readEnd + 1 ) + 51 < 
+							&& geneOverlap[0].seqEnd + ( s - geneOverlap[0].readEnd ) + 51 < 
 								seqs[ geneOverlap[0].seqIdx ].consensusLen ) ) )
+					cdr3Score = 0 ;
+				else if ( cdr3Score < 99 &&
+						geneOverlap[2].seqIdx != -1 && ( !strongLocateE || rightCnt < 3 ) &&
+						( GetContigIdx( geneOverlap[2].readStart, contigs ) == GetContigIdx(e, contigs)) && 
+						( seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 
+							&& geneOverlap[2].seqStart + ( (e - 2) - geneOverlap[2].readStart ) - 5 > 
+								seqs[ geneOverlap[2].seqIdx ].info[2].a ) ) 
 					cdr3Score = 0 ;
 				else if ( geneOverlap[0].seqIdx == -1 && geneOverlap[2].seqIdx != -1 && s >= geneOverlap[2].readStart )
 					cdr3Score = 0 ;
@@ -7434,8 +7440,8 @@ public:
 		{
 			for ( i = 0 ; i < 4 ; ++i )
 			{
-				if ( i == 1 )
-					continue ;
+				//if ( i == 1 )
+				//	continue ;
 
 				char *align = GetGeneOverlapAlignment( read, geneOverlap[i] ) ;
 				if ( align != NULL )
