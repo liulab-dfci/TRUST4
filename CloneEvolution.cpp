@@ -317,11 +317,17 @@ int main( int argc, char *argv[] )
 	{
 		char clusterIdBuffer[1024]  ;
 		char vGene[1024], jGene[1024], cGene[1024] ;
+		char similarityBuffer[1024] ;
 		double score, abund, similarity ;
-		sscanf( buffer, "%s %d %s %s %s %s %s %s %s %lf %lf %lf", clusterIdBuffer, &k, 
+		sscanf( buffer, "%s %d %s %s %s %s %s %s %s %lf %lf %s", clusterIdBuffer, &k, 
 			vGene, buffer2, jGene, cGene,
 			buffer2, buffer2, seq,
-			&score, &abund, &similarity ) ;
+			&score, &abund, similarityBuffer ) ;
+
+		if ( strstr( similarityBuffer, "nan" ) )
+			similarity = 0 ;
+		else
+			sscanf( similarityBuffer, "%lf", &similarity ) ;
 
 		if ( score == 0 )
 			continue ;
