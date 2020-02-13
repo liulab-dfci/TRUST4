@@ -6,7 +6,8 @@ use warnings ;
 die "Usage: ./trust-barcoderep.pl xxx_cdr3.out [OPTIONS] > trust_barcode_report.tsv\n". 
 	"OPTIONS:\n".
 	"\t-a xxx_annot.fa: TRUST4's annotation file. (default: not used)\n".
-	"\t--noPartial: do not including partial CDR3 in report. (default: include partial)\n"
+	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
+	"\t--secondary: output secondary chains. (default: no)\n"
 	if ( @ARGV == 0 ) ;
 
 my %cdr3 ;  
@@ -221,13 +222,13 @@ sub BetterAA
 }
 
 my $i ;
-my $reportPartial = 1 ;
+my $reportPartial = 0 ;
 my $annotFile = "" ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
-	if ( $ARGV[$i] eq "--noPartial" )
+	if ( $ARGV[$i] eq "--reportPartial" )
 	{
-		$reportPartial = 0 ;
+		$reportPartial = 1 ;
 	}
 	elsif ( $ARGV[$i] eq "-a" )
 	{
@@ -301,7 +302,8 @@ if ( $annotFile ne "" )
 open FP1, $ARGV[0] ;
 my %barcodeChainAbund ; 
 my %barcodeChainRepresentAbund ;
-my %barcodeChainInfo ;
+my %barcodeChainRepresent ;
+my %barcodeChainOther ;
 my %barcodeShownup ;
 my %barcodeChainAa ;
 my @barcodeList ;
@@ -358,24 +360,42 @@ while ( <FP1> )
 			}
 		}
 	}
+	
+	my $info = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[11] ) ) ;
+	if ( defined $barcodeChainAbund{$key} )
+	{
+		$barcodeChainAbund{$key} += $cols[10] ;
+	}
+	else
+	{
+		$barcodeChainAbund{$key} = $cols[10] ;
+	}
+	# out_of_frame or partial can only be on others part.
+	if ( GetAaType($aa) < 2) 
+	{
+		@{$barcodeChainOther{$key}} = () if (!defined $barcodeChainOther{$key}) ;
+		push @{$barcodeChainOther{$key}}, $info ;
+		next ;
+	}
 
-	if ( defined $barcodeChainAbund{ $key } )
+	if ( defined $barcodeChainRepresent{ $key } )
 	{
 		if ( BetterAA($aa, $barcodeChainAa{$key}) > 0 || 
 			( $cols[10] > $barcodeChainRepresentAbund{ $key } && BetterAA($aa, $barcodeChainAa{$key}) == 0 ) )
 		{
+			@{$barcodeChainOther{$key}} = () if (!defined $barcodeChainOther{$key}) ;
+			push @{$barcodeChainOther{$key}}, $barcodeChainRepresent{$key} ; # the original representative becomes secondary.
+			
 			$barcodeChainRepresentAbund{$key} = $cols[10] ;
 			$barcodeChainAa{$key} = $aa ;
-			$barcodeChainInfo{ $key } = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[11] ) ) ;
+			$barcodeChainRepresent{ $key } = $info ; 
 		}
-		$barcodeChainAbund{ $key } += $cols[10] ;
 	}
 	else
 	{
-		$barcodeChainAbund{ $key } = $cols[10] ;
 		$barcodeChainRepresentAbund{$key} = $cols[10] ;
 		$barcodeChainAa{$key} = $aa ;
-		$barcodeChainInfo{ $key } = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[11]) ) ;
+		$barcodeChainRepresent{ $key } = $info ; 
 	}
 	
 	#if ($barcode eq "GTACTTTGTACCAGTT-1")
@@ -386,7 +406,7 @@ while ( <FP1> )
 close FP1 ;
 
 # Output what we collected.
-print( "#barcode\tcell_type\tchain1\tchain2\n" ) ;
+print( "#barcode\tcell_type\tchain1\tchain2\tsecondary_chain1\tsecondary_chain2\n" ) ;
 
 foreach my $barcode (@barcodeList )
 {
@@ -398,6 +418,8 @@ foreach my $barcode (@barcodeList )
 	my $maxTag = -1 ;
 	my $chain1 = "*" ;
 	my $chain2 = "*" ;
+	my $secondaryChain1 = "*" ;
+	my $secondaryChain2 = "*" ;
 	for ( $i = 0 ; $i < 7 ; ++$i )
 	{
 		my $key = $barcode."_".$i ;
@@ -427,27 +449,33 @@ foreach my $barcode (@barcodeList )
 		my $keyH = $barcode."_0" ;
 		my $keyK = $barcode."_1" ;
 		my $keyL = $barcode."_2" ;
-		$chain1 = $barcodeChainInfo{ $keyH } if ( defined $barcodeChainInfo{ $keyH } ) ;
+		$chain1 = $barcodeChainRepresent{ $keyH } if ( defined $barcodeChainRepresent{ $keyH } ) ;
+		$secondaryChain1 = join( ";", @{$barcodeChainOther{$keyH}}) if (defined $barcodeChainOther{$keyH} );
 
-		if ( defined $barcodeChainInfo{ $keyK } && defined $barcodeChainInfo{ $keyL } )
+		if ( defined $barcodeChainRepresent{ $keyK } && defined $barcodeChainRepresent{ $keyL } )
 		{
 			if ( $barcodeChainAbund{ $keyK } >= $barcodeChainAbund{ $keyL } )
 			{
-				$chain2 = $barcodeChainInfo{ $keyK } ;
+				$chain2 = $barcodeChainRepresent{ $keyK } ;
+				$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyK}}) if (defined $barcodeChainOther{$keyK} );
 			}
 			else
 			{
-				$chain2 = $barcodeChainInfo{ $keyL } ;
+				$chain2 = $barcodeChainRepresent{ $keyL } ;
+				$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyL}}) if (defined $barcodeChainOther{$keyL} );
 			}
 		}
-		elsif ( defined $barcodeChainInfo{ $keyK } )
+		elsif ( defined $barcodeChainRepresent{ $keyK } )
 		{
-			$chain2 = $barcodeChainInfo{ $keyK } ;
+			$chain2 = $barcodeChainRepresent{ $keyK } ;
+			$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyK}}) if (defined $barcodeChainOther{$keyK} );
 		}
-		elsif ( defined $barcodeChainInfo{ $keyL } )
+		elsif ( defined $barcodeChainRepresent{ $keyL } )
 		{
-			$chain2 = $barcodeChainInfo{ $keyL } ;
+			$chain2 = $barcodeChainRepresent{ $keyL } ;
+			$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyL}}) if (defined $barcodeChainOther{$keyL} );
 		}
+		
 
 		$cellType = "B" ;
 	}
@@ -467,9 +495,11 @@ foreach my $barcode (@barcodeList )
 			$key2 = $barcode."_5" ;
 			$cellType = "gdT" ;
 		}
-		$chain1 = $barcodeChainInfo{ $key1 } if ( defined $barcodeChainInfo{ $key1 } ) ;
-		$chain2 = $barcodeChainInfo{ $key2 } if ( defined $barcodeChainInfo{ $key2 } ) ;
+		$chain1 = $barcodeChainRepresent{ $key1 } if ( defined $barcodeChainRepresent{ $key1 } ) ;
+		$chain2 = $barcodeChainRepresent{ $key2 } if ( defined $barcodeChainRepresent{ $key2 } ) ;
+		$secondaryChain1 = join( ";", @{$barcodeChainOther{$key1}}) if (defined $barcodeChainOther{$key1} );
+		$secondaryChain2 = join( ";", @{$barcodeChainOther{$key2}}) if (defined $barcodeChainOther{$key2} );
 	}
-	
-	print( join( "\t", ($barcode, $cellType, $chain1, $chain2 ) ), "\n" ) ;
+	next if ( $chain1 eq "*" && $chain2 eq "*" ) ;
+	print( join( "\t", ($barcode, $cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2 ) ), "\n" ) ;
 }
