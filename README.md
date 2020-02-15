@@ -50,7 +50,7 @@ Each header of trust_annot.fa is split into fields:
 
 	consensus_id consensus_length average_coverage annotations
 
-"annotaions" also has several field, corresponding to annotation of V,D,J,C, CDR1, CDR2 and CDR3 respectively. For the annotation of the genes, it follows the pattern 
+"annotations" also has several field, corresponding to annotation of V,D,J,C, CDR1, CDR2 and CDR3 respectively. For the annotation of the genes, it follows the pattern 
 
 	gene_name(reference_gene_length):(consensus_start-consensus_end):(reference_start-reference_length):similarity
 	
