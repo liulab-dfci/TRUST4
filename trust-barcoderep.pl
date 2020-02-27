@@ -173,6 +173,7 @@ sub InferConstantGene
 	
 	if ($_[2] ne "*")
 	{
+		$ret = (split /\*/, $ret)[0] ; # Remove the allele id from c gene
 		for ( $i = 0 ; $i <= 1 ; ++$i )
 		{
 			next if ( $_[$i] eq "*" ) ;

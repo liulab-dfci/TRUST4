@@ -5017,13 +5017,13 @@ public:
 
 
 		// Extend overlaps that can cross contigs
-		bool *seqUsed = new bool[ seqs.size() ] ;
+		int *seqUsed = new int[ seqs.size() ] ;
 		if ( detailLevel >= 1 )
 		{
 			std::vector< std::vector<struct _overlap> > extendedOverlaps = contigOverlaps ; 
 			for ( k = 0 ; k < contigCnt ; ++k )	
 			{
-				memset( seqUsed, false, sizeof( bool ) * seqs.size() ) ;
+				memset( seqUsed, -1, sizeof( int ) * seqs.size() ) ;
 				int cnt = contigOverlaps[k].size() ;
 				std::vector<struct _overlap> &ovs = extendedOverlaps[k] ;
 				//for ( i = 0 ; i < cnt ; ++i )
@@ -5031,7 +5031,7 @@ public:
 
 				for ( i = 0 ; i < cnt ; ++i )
 				{
-					if ( seqUsed[ ovs[i].seqIdx ] )
+					if ( seqUsed[ ovs[i].seqIdx ] != -1 )
 						continue ;
 					
 					int effectiveLen = ovs[i].readEnd - ovs[i].readStart + 1 
@@ -5098,7 +5098,7 @@ public:
 					}
 					ovs[i].similarity = (double)ovs[i].matchCnt / effectiveLen ;
 				//	printf( "%s: %lf\n", seqs[ ovs[i].seqIdx ].name, ovs[i].similarity ) ;
-					seqUsed[ ovs[i].seqIdx ] = true ;
+					seqUsed[ ovs[i].seqIdx ] = i ;
 				}
 			}
 
@@ -5112,7 +5112,7 @@ public:
 		}
 		std::sort( overlaps.begin(), overlaps.end() ) ;
 		k = 0 ;
-		memset( seqUsed, false, sizeof( bool ) * seqs.size() ) ;	
+		memset( seqUsed, -1, sizeof( int ) * seqs.size() ) ;	
 		overlapCnt = overlaps.size() ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
@@ -5121,11 +5121,35 @@ public:
 				continue ;
 
 			// Remove those overlaps that was secondary as well.
-			if ( !seqUsed[ overlaps[i].seqIdx ] && overlaps[i].similarity >= 0.8 )
+			if ( seqUsed[ overlaps[i].seqIdx ] == -1 && overlaps[i].similarity >= 0.8 )
 			{
-				seqUsed[ overlaps[i].seqIdx ] = true ;
+				seqUsed[ overlaps[i].seqIdx ] = k ; // Store the index where this is copied to
 				overlaps[k] = overlaps[i] ;
 				++k ;
+			}
+			else if ( seqUsed[overlaps[i].seqIdx] != -1 && GetGeneType( seqs[overlaps[i].seqIdx].name) == 2)
+			{
+				struct _overlap &baseline = overlaps[ seqUsed[overlaps[i].seqIdx] ] ;
+				if ( overlaps[i].matchCnt == baseline.matchCnt && overlaps[i].similarity == baseline.similarity )
+				{
+					// For equally good hit, we need to break the tie.
+					// For simplicity, we only do this for J gene, since it is short.
+					for ( j = 0 ; j < k ; ++j )
+					{
+						if (GetGeneType( seqs[overlaps[j].seqIdx].name ) == 3)
+							break ;
+					}
+					if ( j < k )
+					{
+						if (overlaps[i].readEnd <= overlaps[j].readStart + 3 )
+						{
+							if ( baseline.readEnd > overlaps[j].readStart + 3
+								|| (ABS(overlaps[i].readEnd - overlaps[j].readStart) <
+									ABS(baseline.readEnd - overlaps[j].readStart)))
+								baseline = overlaps[i] ;
+						}
+					}
+				}
 			}
 		}
 		overlaps.resize( k ) ;
