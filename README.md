@@ -104,7 +104,7 @@ When given barcode, TRUST4 only assembles the reads with the same barcode togeth
 
 If your input is raw sequence, you can use "--barcodeRange" to tell TRUST4 how to extract barcode information.
 
-In the output, the abundance in the report will use the number of barcodes for the CDR3 instead of read count. TRUST4 will also generate the file TRUST_barcode_report.tsv. In this file, TRUST4 will pick the most abundance pair of chains as the representative for the barcode(cell). The format is:
+In the output, the abundance in the report will use the number of barcodes for the CDR3 instead of read count. TRUST4 will also generate the file trust_barcode_report.tsv. In this file, TRUST4 will pick the most abundance pair of chains as the representative for the barcode(cell). The format is:
 
 	barcode	cell_type	IGH/TRB/TRD_information	IGK/IGL/TRA/TRG_information	secondary_chain1_information	secondary_chain2_information
 
