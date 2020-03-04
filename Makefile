@@ -34,4 +34,4 @@ Annotator.o: Annotator.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerInd
 CloneEvolution.o: CloneEvolution.cpp defs.h
 
 clean:
-	rm -f *.o *.gch trust4 bam-extractor annotator
+	rm -f *.o *.gch trust4 bam-extractor annotator fastq-extractor clone-evo

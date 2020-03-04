@@ -31,11 +31,17 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 	Usage: ./run-trust4 [OPTIONS]
 		Required:
 			-b STRING: path to bam file
+			-1 STRING -2 STRING: path to paired-end read files
+			-u STRING: path to single-end read file
 			-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes
 		Optional:
 			--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used). (recommended) 
 			-o STRING: prefix of output files. (default: inferred from file prefix)
 			-t INT: number of threads (default: 1)
+			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
+			--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)
+			--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)
+			--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)
 			--stage INT: start TRUST4 on specified stage (default: 0)
 				0: start from beginning (candidate read extraction)
 				1: start from assembly
@@ -45,6 +51,8 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 ### Input/Output
 
 The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
+
+An alternative input to TRUST4 is the raw RNA-seq files in fasta/fastq format (-1/-2 for paired; -u for single-end). You still need the files like -f, --ref from above. In this case, you can directly use IMGT's seuqence file for -f. 
 
 TRUST4 outputs several files. trust_raw.out, trust_final.out are the contigs and corresponding nucleotide weight. trust_annot.fa is in fasta format for the annotation of the consensus assembly. trust_cdr3.out reports the CDR1,2,3 and gene information for each consensus assemblies. And trust_report.tsv is a report file focusing on CDR3 and is compatible with other repertoire analysis tool such as VDJTools. 
 
@@ -66,7 +74,7 @@ The coordinate is 0-based.
 
 The output trust_cdr3.out is a tsv file. The fields are:
 
-	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count
+	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count CDR3_germline_similarity
 
 The output trust_report.tsv is a tsv file. The fileds are:
 	
@@ -84,11 +92,25 @@ To generate the file specified by "-f", you need the reference genome of the spe
 
 to generate the input for "-f". The "bcr_tcr_gene_name.txt" is provided as "human_vdjc.list" in the repository.
 
-Normally, the file specified by "--ref" is downloaded from IMGT website and then supplemented by sequence of constant genes, For example, for human, you can use command
+Normally, the file specified by "--ref" is downloaded from IMGT website, For example, for human, you can use command
 
-	perl BuildImgtAnnot.pl bcrtcr.fa Cgene.list Homo_sapien > IMGT+C.fa
+	perl BuildImgtAnnot.pl Homo_sapien > IMGT+C.fa
 
-to generate the input for "--ref". The bcrtcr.fa is the file generated in previous step (for -f). Cgene.list is provided in the repository. The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
+The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
+
+* Single-cell data, e.g. 10X Genomics data:
+
+When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
+
+If your input is raw sequence, you can use "--barcodeRange" to tell TRUST4 how to extract barcode information.
+
+In the output, the abundance in the report will use the number of barcodes for the CDR3 instead of read count. TRUST4 will also generate the file TRUST_barcode_report.tsv. In this file, TRUST4 will pick the most abundance pair of chains as the representative for the barcode(cell). The format is:
+
+	barcode	cell_type	IGH/TRB/TRD_information	IGK/IGL/TRA/TRG_information	secondary_chain1_information	secondary_chain2_information
+
+For the chain information it is in CSV format:
+	
+	V_gene[,D_gene],J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,CDR3_germline_similarity
 
 * Simple report
 
