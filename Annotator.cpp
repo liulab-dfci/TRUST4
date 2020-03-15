@@ -20,6 +20,8 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
 		//"\t--partial: including partial CDR3s in the report (default: false)\n"
+		"\t--barcode: there is barcode information in -a and -r files (default: not set)\n"
+		"\t--UMI: there is UMI information in -r file (default: not set)\n"
 		"\t--geneAlignment: output the gene alignment (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n";
@@ -32,6 +34,7 @@ char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2,
 char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10241] = "" ;
+char bufferHeader[10241] = "" ;
 char weightBuffer[100241] = "" ;
 char seq[10241] = "" ;
 
@@ -43,6 +46,8 @@ static struct option long_options[] = {
 			{ "notIMGT", no_argument, 0, 10003 },
 			{ "noImpute", no_argument, 0, 10004 },
 			{ "geneAlignment", no_argument, 0, 10005 },
+			{ "barcode", no_argument, 0, 10006 },
+			{ "UMI", no_argument, 0, 10007 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -92,6 +97,14 @@ void PrintLog( const char *fmt, ... )
 	char stime[500] ;
 	strftime( stime, sizeof( stime ), "%c", localT ) ;
 	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+}
+
+char* GetFieldPtr(char *s, const char *field)
+{
+	char *ret = strstr( s, field ) ;
+	if (ret == NULL)
+		return ret ;
+	return ret += strlen(field) ;
 }
 
 bool CompSortAssignedReadsByAssign( const struct _assignRead &a, const struct _assignRead &b )
@@ -324,6 +337,9 @@ int main( int argc, char *argv[] )
 	bool isIMGT = true ;
 	bool impute = true ;
 	bool outputGeneAlignment = false ;
+	bool hasBarcode = false ;
+	bool hasUmi = false ;
+	std::map<std::string, int> barcodeStrToInt ;
 
 	while ( 1 )
 	{
@@ -376,6 +392,14 @@ int main( int argc, char *argv[] )
 		else if ( c == 10005 ) // --geneAlignment
 		{
 			outputGeneAlignment = true ;
+		}
+		else if ( c == 10006 ) // --barcode
+		{
+			hasBarcode = true ;
+		}
+		else if ( c == 10007 ) // --umi
+		{
+			hasUmi = true ;
 		}
 		else
 		{
@@ -459,6 +483,9 @@ int main( int argc, char *argv[] )
 			seqSet.InputNovelRead( buffer + 1, seq, 1, -1 ) ;
 	}
 	fclose( fpAssembly ) ;
+		
+	if ( hasBarcode )
+		seqSet.SetBarcodeFromSeqName( barcodeStrToInt ) ;
 
 	int seqCnt = seqSet.Size() ;
 	struct _annotate *annotations = new struct _annotate[ seqCnt ] ;
@@ -533,15 +560,46 @@ int main( int argc, char *argv[] )
 		std::vector<struct _assignRead> assembledReads ;
 		int assembledReadCnt ;
 		
-		while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
+		//while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
+		while ( fgets( bufferHeader, sizeof( bufferHeader ), fpReads ) != NULL )
 		{
-			fscanf( fpReads, "%s", seq ) ; 
+			sscanf( bufferHeader, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) ;
+			//fscanf( fpReads, "%s", seq ) ; 
+			fgets( seq, sizeof(seq), fpReads ) ;
+			seq[strlen(seq) - 1] = '\0' ;
 			
 			struct _assignRead nr ;
+			nr.barcode = -1 ;
+			nr.umi = -1 ;
+
+			if ( hasBarcode )
+			{
+				char *p = GetFieldPtr( bufferHeader, " barcode:" ) ;	
+				char barcodeBuffer[1024] ;
+				if (p == NULL)
+				{
+					fprintf( stderr, "%s has not barcode field", bufferHeader) ;
+					exit(1) ;
+				}
+				for ( i = 0 ; *p && *p != ' ' && *p != '\n' ; ++i, ++p )
+					barcodeBuffer[i] = *p ;
+				barcodeBuffer[i] = '\0' ;
+				std::string s(barcodeBuffer) ;
+				if ( barcodeStrToInt.find( s ) == barcodeStrToInt.end() )
+					continue ;
+				nr.barcode = barcodeStrToInt[s] ;
+			}
+
+			if ( hasUmi )
+			{
+				char *p = GetFieldPtr( bufferHeader, " umi:" ) ;
+				if ( p != NULL )
+					nr.umi = atoi(p) ;
+			}
+
 			nr.id = strdup( buffer + 1 ) ; // skip the > sign
 			nr.read = strdup( seq ) ;
 			nr.overlap.strand = strand ;
-			nr.barcode = -1 ;
 			assembledReads.push_back( nr ) ;
 		}
 		assembledReadCnt = assembledReads.size() ;
@@ -598,6 +656,8 @@ int main( int argc, char *argv[] )
 			delete[] threads ;
 			delete[] args ;
 		}
+
+
 		for ( i = 0 ; i < assembledReadCnt ; ++i )
 		{
 			assign = assembledReads[i].overlap ;
@@ -616,6 +676,8 @@ int main( int argc, char *argv[] )
 				nr.id = assembledReads[i].id ; 
 				nr.read = strdup( assembledReads[i].read ) ;
 				nr.overlap = assign ;
+				nr.umi = assembledReads[i].umi ;
+
 				if ( assign.strand == -1 )
 				{
 					seqSet.ReverseComplement( nr.read, assembledReads[i].read, strlen( nr.read ) ) ;
@@ -625,7 +687,7 @@ int main( int argc, char *argv[] )
 			}
 			
 			// Process the CDR3 region
-			if ( annotations[assign.seqIdx].cdr[2].seqIdx != -1 
+			if ( !hasBarcode && annotations[assign.seqIdx].cdr[2].seqIdx != -1 
 					&& assign.seqStart <= annotations[ assign.seqIdx ].cdr[2].readStart 
 					&& assign.seqEnd >=  annotations[ assign.seqIdx ].cdr[2].readEnd )
 			{
@@ -702,13 +764,22 @@ int main( int argc, char *argv[] )
 			
 			std::vector<struct _CDR3info> &info = cdr3Infos[ cdr3Reads[i].overlap.seqIdx ] ;
 			int size = info.size() ;
-			if ( size == 1 )
+			if ( size == 1 ) // barcode option also forces to get in this branch. 
 			{
 				int cnt = 0 ;
+				std::map<int, int> umiUsed ;
+				
 				for ( k = i ; k < j ; ++k )
 				{
 					if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
 						++k ;
+					
+					if ( hasUmi )
+					{
+						if ( umiUsed.find( cdr3Reads[k].umi ) != umiUsed.end() )
+							continue ;
+						umiUsed[ cdr3Reads[k].umi ] = 1 ;
+					}
 					++cnt ;
 				}
 				info[0].count = cnt ;

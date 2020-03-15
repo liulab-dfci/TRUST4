@@ -27,6 +27,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-c STRING: the path to the kmer count file\n"
 		"\t--noTrim: do not trim the reads for assembly (default: trim)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
+		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
 		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" ;
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -44,6 +45,7 @@ static struct option long_options[] = {
 			{ "noTrim", no_argument, 0, 10001 },
 			{ "barcode", required_argument, 0, 10002 },
 			{ "keepNoBarcode", no_argument, 0, 10003 },
+			{ "UMI", required_argument, 0, 10004},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -62,7 +64,8 @@ struct _sortRead
 	int mateIdx ; // the index of its mate pair.
 	int info ; // some random information, such as it's index in orginal array.
 
-	int barcode ;
+	int barcode ; // this is for cell id
+	int umi ; // this is for mrna id.
 
 	struct _overlap geneOverlap[4] ; // Rough annotation of the read
 
@@ -207,13 +210,14 @@ int main( int argc, char *argv[] )
 
 	ReadFiles reads ;
 	ReadFiles mateReads ;
-	ReadFiles barcodeFile ;
+	ReadFiles barcodeFile, umiFile ;
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
 	int firstReadLen = -1 ;
 	bool flagNoTrim = false ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
+	bool hasUmi = false ;
 	int constantGeneEnd = 200 ;
 	bool keepMissingBarcode = false ;
 	int threadCnt = 1 ;
@@ -275,6 +279,11 @@ int main( int argc, char *argv[] )
 		{
 			keepMissingBarcode = true ;
 		}
+		else if ( c == 10004 ) // umi
+		{
+			umiFile.AddReadFile( optarg, false ) ;
+			hasUmi = true ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -296,6 +305,7 @@ int main( int argc, char *argv[] )
 
 	std::vector< struct _sortRead > sortedReads ;
 	std::map<std::string, int> barcodeStrToInt ;
+	std::map<std::string, int> umiStrToInt ;
 	std::vector<std::string> barcodeIntToStr ;
 
 	i = 0 ;
@@ -310,6 +320,7 @@ int main( int argc, char *argv[] )
 		}*/
 
 		int barcode = -1 ;
+		int umi = -1 ;
 		if ( hasBarcode )
 		{
 			barcodeFile.Next() ;
@@ -332,6 +343,19 @@ int main( int argc, char *argv[] )
 			}
 		}
 
+		if ( hasUmi )
+		{
+			umiFile.Next() ;
+			std::string s(umiFile.seq) ;
+			if ( umiStrToInt.find(s) != umiStrToInt.end())
+				umi = umiStrToInt[s] ;
+			else
+			{
+				umi = umiStrToInt.size() ;
+				umiStrToInt[s] = umi ;
+			}
+		}
+
 		struct _sortRead nr ;
 		int rWeight = 1 ;
 		nr.read = strdup( reads.seq ) ;
@@ -341,6 +365,7 @@ int main( int argc, char *argv[] )
 		else
 			nr.qual = NULL ;
 		nr.barcode = barcode ;
+		nr.umi = umi ;
 
 		++i ;
 
@@ -361,6 +386,7 @@ int main( int argc, char *argv[] )
 			mateR.read = strdup( mateReads.seq ) ;
 			mateR.id = strdup( mateReads.id ) ;
 			mateR.barcode = barcode ;
+			mateR.umi = umi ;
 			if ( mateReads.qual != NULL )
 				mateR.qual = strdup( mateReads.qual ) ;
 			else
@@ -1283,6 +1309,7 @@ int main( int argc, char *argv[] )
 		nr.id = sortedReads[ assembledReadIdx[i] ].id ;
 		nr.read = sortedReads[ assembledReadIdx[i] ].read ;
 		nr.barcode = sortedReads[ assembledReadIdx[i] ].barcode ;
+		nr.umi = sortedReads[ assembledReadIdx[i] ].umi ;
 		nr.info = assembledReadIdx[i] ;
 		nr.overlap.seqIdx = -1 ;
 		nr.overlap.strand = sortedReads[ assembledReadIdx[i] ].strand ;
@@ -1294,9 +1321,21 @@ int main( int argc, char *argv[] )
 	fp = fopen( buffer, "w" ) ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
 	{
-		fprintf( fp, ">%s %d %d %d\n%s\n", assembledReads[i].id, assembledReads[i].overlap.strand,
+		buffer[0] = '\0' ;
+		if ( hasBarcode )
+		{
+			char *p = buffer + strlen( buffer ) ;
+			sprintf( p, " barcode:%s", barcodeIntToStr[ assembledReads[i].barcode ].c_str() ) ;
+		}
+		if ( hasUmi )
+		{
+			char *p = buffer + strlen( buffer ) ;
+			sprintf( p, " umi:%d", assembledReads[i].umi ) ;
+		}
+
+		fprintf( fp, ">%s %d %d %d%s\n%s\n", assembledReads[i].id, assembledReads[i].overlap.strand,
 			sortedReads[ assembledReadIdx[i] ].minCnt, 
-			sortedReads[ assembledReadIdx[i] ].medianCnt,
+			sortedReads[ assembledReadIdx[i] ].medianCnt, buffer,
 			assembledReads[i].read ) ;
 	}
 	fclose( fp ) ;
