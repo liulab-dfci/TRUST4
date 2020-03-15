@@ -96,6 +96,7 @@ struct _assignRead
 	char *id ;
 	char *read ;
 	int barcode ;
+	int umi ;
 
 	int info ; 
 	struct _overlap overlap ;
@@ -9351,6 +9352,34 @@ public:
 	void SetIsLongSeqSet( bool in )
 	{
 		isLongSeqSet = in ;
+	}
+
+	void SetBarcodeFromSeqName(std::map<std::string, int> &barcodeStrToInt)
+	{
+		int seqCnt = seqs.size() ;
+		int i, j ;
+		char *buffer = new char[10001] ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			int len = strlen( seqs[i].name ) ;
+			for ( j = len - 1 ; j >= 0 && seqs[i].name[j] != '_' ; --j )	
+				;
+			strcpy( buffer, seqs[i].name ) ;	
+			if ( j >= 0 )
+				buffer[j] = '\0' ;
+
+			std::string s(buffer) ;
+			int barcode = -1 ;
+			if ( barcodeStrToInt.find( s ) != barcodeStrToInt.end() )
+				barcode = barcodeStrToInt[s] ;
+			else
+			{
+				barcode = barcodeStrToInt.size() ;
+				barcodeStrToInt[s] = barcode ;
+			}
+			seqs[i].barcode = barcode ;
+		}
+		delete[] buffer ;
 	}
 } ;
 

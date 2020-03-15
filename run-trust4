@@ -18,8 +18,10 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used)\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t-t INT: number of threads (default: 1)\n".
-    "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)\n".
+    "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (default: not used)\n".
     "\t--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
+    #"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
+    #"\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a umi is the true umi (default: 0 -1 +)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
@@ -68,6 +70,7 @@ my $threadCnt = 1 ;
 my $stage = 0 ;
 my $noExtraction = 0 ;
 my $hasBarcode = 0 ;
+my $hasUmi = 0 ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 
@@ -134,6 +137,7 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$bamExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
 		$fastqExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
 		$simpleRepArgs .= " --barcodeCnt --noPartial" ;
+		$annotatorArgs .= "--barcode" ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--barcodeRange" )
@@ -145,6 +149,13 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		}
 
 		$i += 3 ;
+	}
+	elsif ( $ARGV[$i] eq "--UMI" )
+	{
+		$hasUmi = 1 ;
+		$bamExtractorArgs .= " --UMI ".$ARGV[$i + 1] ;
+		$annotatorArgs .= " --UMI" ;
+		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--stage" )
 	{
@@ -250,6 +261,11 @@ else
 if ( $hasBarcode == 1 )
 {
 	$mainArgs .= " --barcode ${prefix}_toassemble_bc.fa" ;
+}
+
+if ( $hasUmi == 1 )
+{
+	$mainArgs .= " --UMI ${prefix}_toassemble_umi.fa" ;
 }
 
 # Run the assembly 
