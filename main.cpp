@@ -79,6 +79,8 @@ struct _sortRead
 			return avgCnt > b.avgCnt ;
 		else if ( len != b.len )
 			return len > b.len ;
+		else if (barcode != b.barcode)
+			return barcode < b.barcode ;
 		else 
 			return strcmp( read, b.read ) < 0 ;
 	}
