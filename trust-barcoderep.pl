@@ -277,13 +277,22 @@ if ( $annotFile ne "" )
 			#die "Wrong format $header\n" ;
 			@jCoord = (-1, -1, -1, -1, -1, 0)
 		}
+
+		my $cdr3Score = 0 ;
+		if ( $cols[9] =~ /:(.+?)=/ )
+		{
+			$cdr3Score = $1 ;		
+		}
 		
 		my $chainType = -1 ;
-		if ( $vCoord[2] - $vCoord[1] >= 50 && $vCoord[5] >= 0.95 )
+		
+		if ( ( $vCoord[2] - $vCoord[1] >= 50 && $vCoord[5] >= 0.95 )
+			|| ($cdr3Score > 0 && $vCoord[0] != -1 ) )
 		{
 			$chainType = GetDetailChainTypeFromGeneName( substr($cols[3], 0, 3) ) ; 		
 		}
-		elsif ($jCoord[2] - $jCoord[1] >= $jCoord[0] * 0.66 && $jCoord[5] >= 0.95)
+		elsif ($jCoord[2] - $jCoord[1] >= $jCoord[0] * 0.66 && $jCoord[5] >= 0.95
+			|| ($cdr3Score > 0 && $jCoord[0] != -1 ) )
 		{
 			$chainType = GetDetailChainTypeFromGeneName( substr($cols[5], 0, 3) ) ; 		
 		}
@@ -292,9 +301,13 @@ if ( $annotFile ne "" )
 		{
 			my @cols2 = split/_/, substr($cols[0], 1) ;
 			my $barcode = join( "_", @cols2[0..scalar(@cols2)-2] ) ;
-			$barcodeChainInAnnot{ $barcode."_".$chainType } = $chainType ;
+			my $key = $barcode."_".$chainType ;
+			if ( !defined $barcodeChainInAnnot{$key} )
+			{
+				$barcodeChainInAnnot{$key} = 0 ;
+			}
+			$barcodeChainInAnnot{ $key } += $cols[2] ;
 		}
-		
 	}
 	close FP1 ;
 }
@@ -405,6 +418,18 @@ while ( <FP1> )
 	#}
 }
 close FP1 ;
+
+# Update barcode chain abundance with annotation. This should not affect the representative.
+if ( $annotFile ne "" )
+{
+	for my $key (keys %barcodeChainAbund)
+	{
+		if ( defined $barcodeChainInAnnot{$key} )
+		{
+			$barcodeChainAbund{$key} =  $barcodeChainInAnnot{$key} ;
+		}
+	}
+}
 
 # Output what we collected.
 print( "#barcode\tcell_type\tchain1\tchain2\tsecondary_chain1\tsecondary_chain2\n" ) ;

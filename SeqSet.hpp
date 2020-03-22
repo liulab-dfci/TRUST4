@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <vector>
 #include <queue>
+#include <string>
 
 #include "SimpleVector.hpp"
 #include "KmerIndex.hpp"
