@@ -34,8 +34,22 @@ struct _cdr3
 			return isotype < b.isotype ;
 		else if ( similarity != b.similarity )
 			return similarity > b.similarity ;
+		else
+		{
+			int tmp = strcmp(seq, b.seq) ;
+			if ( tmp != 0 )
+				return tmp < 0 ;
+			else
+				return abund > b.abund ;
+		}
+	}
 
-		return false ;
+	bool operator==(const struct _cdr3 &b) const
+	{
+		if (clusterId == b.clusterId && isotype == b.isotype && !strcmp(seq, b.seq))
+			return true ;
+		else
+			return false ;
 	}
 } ;
 
@@ -69,6 +83,21 @@ bool IsCompatibleLevel( int level, int isotype )
 		return true ;
 	return level == isotype ;
 }
+
+
+// Test whether t is on the path from "from" to the root
+bool IsOnPath( int t, int from, struct _pair *minDist )
+{
+	int p = from ;
+	while ( p != -1 )
+	{
+		if ( p == t )
+			return true ;
+		p = minDist[p].b ;
+	}
+	return false ;
+}
+
 
 // Prim algorithm for minimum spanning tree
 // The algorithm is adjust to put the earlier isotypes aroudn the same levels.
@@ -107,7 +136,7 @@ int Prim( int **dist, int n,  struct _adj *adj, int &adjUsed, int offset, std::v
 		}
 	}
 	minDist[maxTag].a = 0 ;
-	minDist[maxTag].b = 0 ;
+	minDist[maxTag].b = -1 ;
 	for ( i = 0 ; i < n ; ++i )
 	{
 		if ( i == maxTag )
@@ -176,7 +205,9 @@ int Prim( int **dist, int n,  struct _adj *adj, int &adjUsed, int offset, std::v
 					minDist[j].b = minTag ;
 				}
 				else if ( dist[minTag][j] == minDist[j].a 
-					&& cdr3s[minTag + offset].abund > cdr3s[ minDist[j].b + offset ].abund )
+					&& cdr3s[minTag + offset].abund > cdr3s[ minDist[j].b + offset ].abund 
+					//&& cdr3s[ minDist[j].b + offset].isotype >= cdr3s[minTag + offset].isotype )
+					&& !IsOnPath( minDist[j].b, minTag, minDist ) )
 				{
 					minDist[j].b = minTag ;
 				}
@@ -369,11 +400,28 @@ int main( int argc, char *argv[] )
 		nc.seq = strdup( seq ) ;
 		cdr3s.push_back( nc ) ;
 	}
-	
+
 	std::sort( cdr3s.begin(), cdr3s.end() ) ;
 
+	// Remove repeated cdr3s
+	std::vector<struct _cdr3> allCdr3s = cdr3s ;
+	cdr3s.clear() ;
+	
+	int cdr3Cnt = allCdr3s.size() ;
+	for ( i = 0 ; i < cdr3Cnt ; )
+	{
+		for ( j = i + 1 ; j < cdr3Cnt ; ++j )
+			if ( !(allCdr3s[j] == allCdr3s[i]) )
+				break ;
+		//if ( i > 0 )
+		//	printf( "%lf %d\n", allCdr3s[i].abund, strcmp(allCdr3s[i].seq, allCdr3s[i - 1].seq)) ;
+		cdr3s.push_back( allCdr3s[i] ) ;	
+		i = j ;
+	}
+	//printf( "%d %d\n", cdr3Cnt, cdr3s.size() ) ;
+
 	// Process cluster by cluster. Assume the input is already sorted by cluster
-	int cdr3Cnt = cdr3s.size() ;
+	cdr3Cnt = cdr3s.size() ;
 	for ( i = 0 ; i < cdr3Cnt ; )
 	{
 		for ( j = i + 1 ; j < cdr3Cnt ; ++j )
@@ -456,7 +504,8 @@ int main( int argc, char *argv[] )
 	}
 	fclose( fp ) ;
 	
+	cdr3Cnt = allCdr3s.size() ;
 	for ( i = 0 ; i < cdr3Cnt ; ++i )
-		free( cdr3s[i].seq ) ;
+		free( allCdr3s[i].seq ) ;
 	return 0 ;
 }
