@@ -110,7 +110,7 @@ In the output, the abundance in the report will use the number of barcodes for t
 
 For the chain information it is in CSV format:
 	
-	V_gene[,D_gene],J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,CDR3_germline_similarity
+	V_gene[,D_gene],J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity
 
 * Simple report
 
