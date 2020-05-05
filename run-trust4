@@ -15,9 +15,10 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t-u STRING: path to single-end read file\n".
     "\t-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
     "Optional:\n".
-    "\t--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used)\n".
+    "\t--ref STRING: path to detailed V/D/J/C gene reference file from IMGT database. (default: not used but recommended)\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t-t INT: number of threads (default: 1)\n".
+    #"\t-h: print help message and exit.\n"
     "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (default: not used)\n".
     "\t--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
     #"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
@@ -136,7 +137,7 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$hasBarcode = 1 ;
 		$bamExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
 		$fastqExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
-		$simpleRepArgs .= " --barcodeCnt --noPartial" ;
+		$simpleRepArgs .= " --barcodeCnt" ;
 		$annotatorArgs .= "--barcode" ;
 		++$i ;
 	}

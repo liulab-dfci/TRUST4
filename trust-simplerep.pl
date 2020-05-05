@@ -8,7 +8,7 @@ die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n".
 	"\t--decimalCnt: the count column uses decimal instead of truncated integer. (default: not used)\n".
 	"\t--barcodeCnt: the count column is the number of barcode instead of read support. (default: not used)\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
-	"\t--noPartial: do not including partial CDR3 in report. (default: include partial)\n".
+	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n".
 	"\t--filterBcrError FLOAT: filter BCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0)\n"
 	if ( @ARGV == 0 ) ;
@@ -93,7 +93,7 @@ sub GetChainType
 		}
 		elsif ( $g =~ /^IG/ )
 		{
-			return 0 ;
+			return 1 ;
 		}
 		elsif ( $g =~ /^TR/ )
 		{
@@ -188,7 +188,7 @@ my $tcrErrorFilter = 0.05 ;
 my $bcrErrorFilter = 0 ;
 my $roundDownCount = 1 ;
 my $useBarcodeCnt = 0 ;
-my $reportPartial = 1 ;
+my $reportPartial = 0 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--junction" )
@@ -215,9 +215,9 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	{
 		$useBarcodeCnt = 1 ;
 	}
-	elsif ( $ARGV[$i] eq "--noPartial" )
+	elsif ( $ARGV[$i] eq "--reportPartial" )
 	{
-		$reportPartial = 0 ;
+		$reportPartial = 1 ;
 	}
 	else
 	{
@@ -353,21 +353,22 @@ while ( <FP1> )
 	
 	$cgene = InferConstantGene( $vgene, $jgene, $cgene ) ;
 	my $key = join( "\t", ( $vgene, $dgene, $jgene, $cgene, $cols[8] ) ) ;
-	my $type = GetChainType( $vgene, $jgene, $cgene ) ;
+	my $type = GetDetailChainType( $vgene, $jgene, $cgene ) ;
 	
-	if ($type == 2) # TCR, ignore the low abundance 
+	if ($type > 2) # TCR, ignore the low abundance 
 	{
 		if ($cols[10] < $assemblyMostReads{$assemblyId} * $tcrErrorFilter ) 
 		{
 			next ;
 		}
 	}
-	elsif ( $type < 2 ) # BCR
+	elsif ( $type <= 2 ) # BCR
 	{
 		if ($cols[10] < $assemblyMostReads{$assemblyId} * $bcrErrorFilter ) 
 		{
 			next ;
 		}
+		$type = 1 if ($type == 2) ; # Merge IGL to IGK.
 	}
 	
 	# Ignore the CDR3 that is too long, could be from mis-annotation.
@@ -448,7 +449,8 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 		}
 	}
 	my $freq = 0 ;
-	my $type = GetChainType( $info[0], $info[2], $info[3] ) ;
+	my $type = GetDetailChainType( $info[0], $info[2], $info[3] ) ;
+	$type = 1 if ($type == 2) ;
 	$freq = $val[1] / $totalCnt[ $type ] if ( $type != -1 ) ;
 	if ($roundDownCount == 1 )
 	{

@@ -375,7 +375,7 @@ while ( <FP1> )
 		}
 	}
 	
-	my $info = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[11] ) ) ;
+	my $info = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[0], $cols[11] ) ) ;
 	if ( defined $barcodeChainAbund{$key} )
 	{
 		$barcodeChainAbund{$key} += $cols[10] ;
