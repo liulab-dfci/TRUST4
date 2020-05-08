@@ -145,7 +145,7 @@ sub GetDetailChainType
 	return $type ;
 }
 
-sub GetCellType
+sub GetChainCellType
 {
 	if ( $_[0] <= 2 )
 	{
@@ -330,7 +330,7 @@ while ( <FP1> )
 {
 	chomp ;
 	my @cols = split ;
-	next if ( $reportPartial == 0 && $cols[9] == 0 ) ;
+	#next if ( $reportPartial == 0 && $cols[9] == 0 ) ;
 
 	my $assemblyId = $cols[0] ;
 	my $vgene = (split /,/, $cols[2])[0] ;
@@ -392,7 +392,7 @@ while ( <FP1> )
 			$type = 1 ;
 		}
 		my $k = $barcode."_".$type ;
-		$barcodeChainPartial{$k} = () if (!defined $barcodeChainPartial{$k}) ;
+		@{$barcodeChainPartial{$k}} = () if (!defined $barcodeChainPartial{$k}) ;
 		push @{$barcodeChainPartial{$k}}, $info ;
 		next if ($reportPartial == 0) ;
 	}
@@ -453,7 +453,6 @@ if ( $annotFile ne "" )
 }
 
 # Generate the output content.
-print( "#barcode\tcell_type\tchain1\tchain2\tsecondary_chain1\tsecondary_chain2\n" ) ;
 my %barcodeOutput ;
 foreach my $barcode (@barcodeList )
 {
@@ -552,12 +551,11 @@ foreach my $barcode (@barcodeList )
 	@{$barcodeOutput{$barcode}} = ($cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2) ;
 }
 
-sub IsACompatibleToB()
+sub IsACompatibleToB
 {
 	my @colsA = split(/,/, $_[0]) ;
 	my @colsB = split(/,/, $_[1]) ;
 	my $partial = $_[2] ;
-	
 	if (GetCellType($colsA[0], $colsA[2], $colsA[3]) != GetCellType($colsB[0], $colsB[2], $colsB[3]))
 	{
 		return 0 ;
@@ -600,62 +598,64 @@ if ($impute == 1)
 			{
 				my $cdr3 = (split /,/, $cols[$i + 1])[4] ;
 				my $key = $cdr3."_".$i ;
-				@{$cdr3ToBarcode{$key}} = () if (!defined $cdr3ToBarcode{$key} )
+				@{$cdr3ToBarcodes{$key}} = () if (!defined $cdr3ToBarcodes{$key} ) ;
 				push @{$cdr3ToBarcodes{$key}}, $barcode ;
 			}
 		}
 	}
 
-	for my $barcode (keys %barcodeOutput)
+	foreach my $barcode (keys %barcodeOutput)
 	{
 		my @cols = @{$barcodeOutput{$barcode}} ;
 		next if ($cols[1] eq "*" && $cols[2] eq "*") ;
 		next if ($cols[1] ne "*" && $cols[2] ne "*") ;
-		next if ($cols[0] eq "B") ;
-
+		#next if ($cols[0] eq "B") ;
 		my $missingChain = 0 ;
 		$missingChain = 1 if ($cols[2] eq "*") ;
 		# For imputation, it must have partial CDR3 on the missing chain
 		# 	and the chain with CDR3 must show up in some other barcodes.
-		next if ( scalar(@{$barcodeChainPartial{ $barcode."_".$missingChain}} ) == 0 ) ;
-		my $cdr3 = split(/,/, $cols[2-$missingChain])[4] ;
+		next if ( !defined $barcodeChainPartial{ $barcode."_".$missingChain} ) ;
+		my $cdr3 = (split(/,/, $cols[2-$missingChain]))[4] ;
 		my $candidateOtherBarcode = "" ;
 		my $multipleOthers = 0 ;
-		foreach $otherBarcode (@{$cdr3ToBarcode{$cdr3."_".(1-$missingChain)}})
+		foreach my $otherBarcode (@{$cdr3ToBarcodes{$cdr3."_".(1-$missingChain)}})
 		{
 			my @otherCols = @{$barcodeOutput{$otherBarcode}} ;
-			next if ($otherCols[$missingChain + 1] == "*") ;
-			next if (IsACompatibleToB($cols[2 - $missingChain], $otherCols[2 - $missingChain], 0)) ;
-			for my $partialInfo ($barcodeChainPartial[$barcode."_".$missingChain])
+			next if ($otherCols[$missingChain + 1] eq "*") ;
+			next if (!IsACompatibleToB($cols[2 - $missingChain], $otherCols[2 - $missingChain], 0)) ;
+			foreach my $partialInfo (@{$barcodeChainPartial{$barcode."_".$missingChain}})
 			{
 				if (IsACompatibleToB($partialInfo, $otherCols[$missingChain + 1], 1))
 				{
 					if ($candidateOtherBarcode ne "")
 					{
-						if (!IsACompatibleToB(${$barcodeOutput{$candidateOtherBarcode}}[$missingChain + 1],
+						if (IsACompatibleToB(${$barcodeOutput{$candidateOtherBarcode}}[$missingChain + 1],
 							$otherCols[$missingChain + 1], 0))
 						{
 							$multipleOthers = 1 ;
 						}
 					}
+					$candidateOtherBarcode = $otherBarcode ;
 					last ;
 				}
 			}
 			last if ($multipleOthers == 1) ;
 		}
+		next if ($candidateOtherBarcode eq "") ;
 
 		# Put in the imputed results.
 		my $s = ${$barcodeOutput{$candidateOtherBarcode}}[$missingChain + 1] ;
 		# Change the orginated assembly id to "impute".
 		@cols = split /,/, $s ;
-		$cols[7] = "impute" ;
+		$cols[7] = "impute_from_$candidateOtherBarcode" ;
 		$s = join(",", @cols) ;
 		${$barcodeOutput{$barcode}}[$missingChain + 1] = $s ;
 	}
 }
 
 # Output the results
-for my $barcode (keys %barcodeOutput)
+print( "#barcode\tcell_type\tchain1\tchain2\tsecondary_chain1\tsecondary_chain2\n" ) ;
+foreach my $barcode (keys %barcodeOutput)
 {
-	print( join( "\t", @{$barcodeOutput{$barcode}}) ), "\n" ) ;
+	print( $barcode, "\t", join( "\t", @{$barcodeOutput{$barcode}}) , "\n" ) ;
 }
