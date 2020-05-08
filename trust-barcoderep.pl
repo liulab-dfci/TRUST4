@@ -383,7 +383,7 @@ while ( <FP1> )
 	if ( $aa eq "partial" )
 	{
 		my $type = GetDetailChainType( $vgene, $jgene, $cgene ) ;
-		if ($type == 0 || $type == 3 || $type ==5)
+		if ($type == 0 || $type == 4 || $type ==6)
 		{
 			$type = 0 ;
 		}
@@ -609,7 +609,8 @@ if ($impute == 1)
 		my @cols = @{$barcodeOutput{$barcode}} ;
 		next if ($cols[1] eq "*" && $cols[2] eq "*") ;
 		next if ($cols[1] ne "*" && $cols[2] ne "*") ;
-		#next if ($cols[0] eq "B") ;
+		next if ($cols[0] eq "B") ; # only impute for tcr
+
 		my $missingChain = 0 ;
 		$missingChain = 1 if ($cols[2] eq "*") ;
 		# For imputation, it must have partial CDR3 on the missing chain
