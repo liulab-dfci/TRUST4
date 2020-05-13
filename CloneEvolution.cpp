@@ -464,7 +464,13 @@ int main( int argc, char *argv[] )
 		bool *visited = new bool[n] ;
 		memset( visited, false, sizeof( bool ) * n ) ;
 		int minMaxRootLeafDist = LongestRootLeafDistMST( bestRoot, adj, n, visited, dist ) ;
-		int bestRootIsotype = cdr3s[i + bestRoot].isotype ;
+		//int bestRootIsotype = cdr3s[i + bestRoot].isotype ; This assignment is wrong when the root is -1.
+		int bestRootIsotype = isotypeRank.size() ;
+		for (k = 0 ; k < n ; ++k)
+		{
+			if (cdr3s[i + k].isotype > -1 && cdr3s[i + k].isotype < bestRootIsotype )	
+				bestRootIsotype = cdr3s[i + k].isotype ;
+		}
 		// Adjust the best root.
 		for ( k = 0 ; k < n ; ++k )
 		{
