@@ -145,12 +145,12 @@ sub InferConstantGene
 	my $ret = $_[2] ;
 	my $i ;
 	
-	if ($_[2] ne "*")
+	if ($_[2] ne ".")
 	{
 		$ret = (split /\*/, $ret)[0] ; # Remove the allele id from c gene
 		for ( $i = 0 ; $i <= 1 ; ++$i )
 		{
-			next if ( $_[$i] eq "*" ) ;
+			next if ( $_[$i] eq "." ) ;
 			if ( !($_[$i] =~ /^IGH/) )
 			{
 				$ret = substr($ret, 0, 4 );
@@ -162,14 +162,14 @@ sub InferConstantGene
 	}
 		
 	# For TRA and TRD gene, we don't infer its constant gene.
-	if ($_[0] =~ /^TR[AD]/ || $_[1] eq "*")
+	if ($_[0] =~ /^TR[AD]/ || $_[1] eq ".")
 	{
 		return $ret ;
 	}
 
 	for ( $i = 1 ; $i >= 0 ; --$i )
 	{
-		next if ( $_[$i] eq "*" ) ;
+		next if ( $_[$i] eq "." ) ;
 		if ( $_[$i] =~ /^IGH/ )
 		{
 			return $ret ;
@@ -346,6 +346,15 @@ while ( <FP1> )
 	next if ( $reportPartial == 0 && $cols[9] == 0 ) ;
 	
 	my $assemblyId = $cols[0] ;
+	
+	for (my $i = 2 ; $i <= 5 ; ++$i )
+	{
+		if ($cols[$i] eq "*")
+		{
+			$cols[$i] = "." ;
+		}
+	}
+
 	my $vgene = (split /,/, $cols[2])[0] ;
 	my $dgene = (split /,/, $cols[3])[0] ;
 	my $jgene = (split /,/, $cols[4])[0] ;
@@ -393,9 +402,9 @@ while ( <FP1> )
 	if ( defined $cdr3{ $key } )
 	{
 		my $val = \@{ $cdr3{ $key } } ;
-		if ( $cols[9] > $val->[0] ) 
+		if ( $cols[10] > $val->[0] ) 
 		{
-			$val->[0] = $cols[9];
+			$val->[0] = $cols[10];
 			$val->[2] = $assemblyId ;
 		}
 		$val->[1] += $cols[10] ;
@@ -409,7 +418,7 @@ while ( <FP1> )
 close FP1 ;
 
 # Output what we collected.
-print( "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC" ) ;
+print( "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid" ) ;
 if ( $reportJunctionInfo == 1 )
 {
 	print( "\tjunction" )
@@ -456,11 +465,13 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 	{
 		my $cnt = int($val[1]) ;
 		next if ($cnt == 0) ;
-		printf( "%d\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $cnt, $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+		printf( "%d\t%e\t%s\t%s\t%s\t%s\t%s\t%s\t%s", $cnt, $freq, $info[4], $aa, 
+					$info[0], $info[1], $info[2], $info[3], $val[2] ) ;
 	}
 	else
 	{
-		printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, $info[0], $info[1], $info[2], $info[3] ) ;
+		printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, 
+					$info[0], $info[1], $info[2], $info[3], $val[2] ) ;
 	}
 	if ( $reportJunctionInfo == 1 )
 	{
