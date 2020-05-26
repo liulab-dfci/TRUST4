@@ -32,8 +32,8 @@ struct _cdr3
 			return clusterId < b.clusterId ;
 		else if ( isotype != b.isotype )
 			return isotype < b.isotype ;
-		else if ( similarity != b.similarity )
-			return similarity > b.similarity ;
+		//else if ( similarity != b.similarity )
+		//	return similarity > b.similarity ;
 		else
 		{
 			int tmp = strcmp(seq, b.seq) ;
@@ -354,7 +354,7 @@ int main( int argc, char *argv[] )
 			vGene, buffer2, jGene, cGene,
 			buffer2, buffer2, seq,
 			&score, &abund, similarityBuffer ) ;
-
+		
 		if ( strstr( similarityBuffer, "nan" ) )
 			similarity = 0 ;
 		else
@@ -414,7 +414,7 @@ int main( int argc, char *argv[] )
 			if ( !(allCdr3s[j] == allCdr3s[i]) )
 				break ;
 		//if ( i > 0 )
-		//	printf( "%lf %d\n", allCdr3s[i].abund, strcmp(allCdr3s[i].seq, allCdr3s[i - 1].seq)) ;
+		//	printf( "%lf %d %d\n", allCdr3s[i].abund, strcmp(allCdr3s[i].seq, allCdr3s[i - 1].seq), allCdr3s[i].isotype) ;
 		cdr3s.push_back( allCdr3s[i] ) ;	
 		i = j ;
 	}
