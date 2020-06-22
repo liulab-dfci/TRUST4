@@ -23,6 +23,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "\t--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
     #"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
     #"\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a umi is the true umi (default: 0 -1 +)\n".
+    "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
@@ -127,6 +128,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--jellyfish" )
 	{
 		$useJellyfish = 1 ;
+	}
+	elsif ( $ARGV[$i] eq "--mateIdSuffixLen" )
+	{
+		$bamExtractorArgs .= "--mateIdSuffixLen ".$ARGV[$i + 1] ;
+		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--noExtraction" )
 	{

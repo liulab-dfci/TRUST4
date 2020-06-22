@@ -22,12 +22,14 @@ char usage[] = "./bam-extractor [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-u: the flag or order of unaligned read-pair is not ordinary (default: not used)\n" 
 		"\t--barcode STRING: the barcode field in the bam file (default: not used)\n"
-		"\t--UMI STRING: the UMI field in the bam file (default: not used)\n" ;
+		"\t--UMI STRING: the UMI field in the bam file (default: not used)\n"
+		"\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n";
 
 static const char *short_options = "f:b:o:t:u" ;
 static struct option long_options[] = {
 			{ "barcode", required_argument, 0, 10000 },
 			{ "UMI", required_argument, 0, 10001 },
+			{ "mateIdSuffixLen", required_argument, 0, 10002},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -163,13 +165,20 @@ bool IsLowComplexity( char *seq )
 	return false ;
 }
 
-void TrimName( std::string &name )
+void TrimName( std::string &name, int trimLen )
 {
 	int len = name.length() ;
-	if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 
-			&& name[len - 2] == '/' )
+	if (trimLen == -1)
 	{
-		name.erase( len - 2, 2 ) ; // Haven't tested yet.
+		if ( ( name[len - 1] == '1' || name[len - 1] == '2' ) 
+				&& name[len - 2] == '/' )
+		{
+			name.erase( len - 2, 2 ) ; // Haven't tested yet.
+		}
+	}
+	else
+	{
+		name.erase(len - trimLen, trimLen) ;
 	}
 }
 
@@ -471,6 +480,7 @@ int main( int argc, char *argv[] )
 	int kmerLength = 9  ;
 	SeqSet refSet( kmerLength ) ;
 	int threadCnt = 1 ;
+	int mateIdLen = -1 ;
 
 	std::map<std::string, struct _candidate> candidates ; 
 	std::map<std::string, int> usedName ; // For single-end case.
@@ -510,6 +520,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10001 ) // UMI
 		{
 			strcpy( umiField, optarg ) ;
+		}
+		else if ( c == 10002 ) // mateIdSuffixLen
+		{
+			mateIdLen = atoi( optarg ) ;
 		}
 		else
 		{
@@ -633,19 +647,18 @@ int main( int argc, char *argv[] )
 
 				if ( !alignments.Next() )
 				{
-					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
+					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u(--abnormalUnmapFlag from wrapper) option.\n") ;
 					return EXIT_FAILURE ;
 				}
 				std::string mateName( alignments.GetReadId() ) ;
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
-						
-				TrimName( name ) ;
-				TrimName( mateName ) ;
+				TrimName( name, mateIdLen ) ;
+				TrimName( mateName, mateIdLen ) ;
 				if ( name.compare( mateName ) != 0 )
 				{
 					fprintf( stderr, "%s\n%s\n", name.c_str(), mateName.c_str() ) ;
-					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u option.\n") ;
+					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u(--abnormalUnmapFlag from wrapper) option.\n") ;
 					return EXIT_FAILURE ;
 				}
 
@@ -715,7 +728,7 @@ int main( int argc, char *argv[] )
 				if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
 				{
 					std::string name( alignments.GetReadId() ) ;
-					TrimName( name ) ;	
+					TrimName( name, mateIdLen ) ;	
 
 					if ( candidates.find( name ) == candidates.end() )
 					{
@@ -803,7 +816,7 @@ int main( int argc, char *argv[] )
 		if ( alignments.fragStdev != 0 )
 		{
 			std::string name( alignments.GetReadId() ) ;
-			TrimName( name ) ;
+			TrimName( name, mateIdLen ) ;
 
 			if ( candidates.find( name ) == candidates.end() )
 			{
@@ -862,8 +875,8 @@ int main( int argc, char *argv[] )
 			continue ;
 
 		std::string name( alignments.GetReadId() ) ;
-		TrimName( name ) ;	
-
+		TrimName( name, mateIdLen ) ;
+		
 		std::map<std::string, struct _candidate>::iterator it = candidates.find( name ) ;
 		if ( it == candidates.end() )
 			continue ;
