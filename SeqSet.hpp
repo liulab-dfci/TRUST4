@@ -4323,6 +4323,19 @@ public:
 				return true ;
 			else if ( a.similarity < b.similarity )
 				return false ;
+			else 
+			{
+				// The assignment is the same, then we should replace the paralog.
+				int i ;
+				char *name = seqs[b.seqIdx].name ;
+				for ( i = 0 ; name[i + 1] ; ++i )
+				{
+					if ((name[i + 1] == '-' || name[i + 1] == '*') && (name[i] < '0' || name[i] > '9'))
+						return true ;
+					if (name[i] == 'O' && name[i + 1] == 'R')
+						return true ;
+				}
+			}
 		}
 		
 		// Different alleles may have some effects on the boundary.
