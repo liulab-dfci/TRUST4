@@ -402,16 +402,21 @@ while ( <FP1> )
 	if ( defined $cdr3{ $key } )
 	{
 		my $val = \@{ $cdr3{ $key } } ;
-		if ( $cols[10] > $val->[0] ) 
+		if ( $cols[9] > $val->[0] )  # found an assembly with better CDR3 score
 		{
-			$val->[0] = $cols[10];
+			$val->[0] = $cols[9] ;
+		}
+
+		if ( $cols[10] > $val->[3] ) 
+		{
 			$val->[2] = $assemblyId ;
+			$val->[3] = $cols[10];
 		}
 		$val->[1] += $cols[10] ;
 	}
 	else
 	{
-		@{ $cdr3{ $key } } = ( $cols[9], $cols[10], $assemblyId ) ;
+		@{ $cdr3{ $key } } = ( $cols[9], $cols[10], $assemblyId, $cols[10] ) ;
 	}
 	$totalCnt[ $type ] += $cols[10] if ( $type != -1 ) ;
 }

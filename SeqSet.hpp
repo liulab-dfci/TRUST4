@@ -2235,7 +2235,7 @@ public:
 		}
 		rcSeq[i] = '\0' ;
 	}
-
+	
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename, bool isIMGT = false ) 
 	{
@@ -5531,12 +5531,12 @@ public:
 						int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
 						if ( geneType != 0 )
 							continue ;
-								
 						if ( allOverlaps[i].readEnd <= geneOverlap[2].readStart + 6 && 
-							geneOverlap[0].readEnd + ( seqs[ geneOverlap[0].seqIdx ].consensusLen 
-								- geneOverlap[0].seqEnd - 50 )
+							allOverlaps[i].readEnd + ( seqs[ allOverlaps[i].seqIdx ].consensusLen 
+								- allOverlaps[i].seqEnd - 100 )
 							        	 <= geneOverlap[2].readStart + 6 
-							&& IsBetterGeneMatch( allOverlaps[i], geneOverlap[ geneType ], 1.0 ) )
+							&& ( geneOverlap[geneType].seqIdx == -1
+								|| IsBetterGeneMatch( allOverlaps[i], geneOverlap[ geneType ], 1.0 ) ) )
 						{
 							geneOverlap[ geneType ] = allOverlaps[i] ;
 						}
@@ -7190,7 +7190,7 @@ public:
 			cdr[2].similarity = cdr3Score / 100.0 ;
 				
 		}
-
+		
 		if ( detailLevel >= 2 && cdr[2].similarity > 0 )
 		{
 			AnnotateReadDGene( read, geneOverlap, cdr, secondaryGeneOverlaps ) ;
