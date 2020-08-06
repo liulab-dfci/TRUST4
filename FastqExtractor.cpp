@@ -320,7 +320,7 @@ int main( int argc, char *argv[] )
 			{
 				OutputSeq( fp1, reads.id, reads.seq, reads.qual ) ;
 				if ( hasMate )
-					OutputSeq( fp2, mateReads.id, mateReads.seq, mateReads.qual ) ;
+					OutputSeq( fp2, reads.id, mateReads.seq, mateReads.qual ) ;
 				if ( hasBarcode )
 					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
 						barcodeStart, barcodeEnd, barcodeRevComp, refSet ) ;
@@ -402,7 +402,7 @@ int main( int argc, char *argv[] )
 					continue ;
 				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual ) ;
 				if ( readBatch2 != NULL )
-					OutputSeq( fp2, readBatch2[i].id, readBatch2[i].seq, readBatch2[i].qual ) ;
+					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual ) ;
 				if ( hasBarcode )
 					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
 						barcodeStart, barcodeEnd, barcodeRevComp, refSet ) ;

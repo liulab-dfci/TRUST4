@@ -25,6 +25,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-o STRING: prefix of the output file (default: trust)\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
+		"\t--skipMateExtension: skip the step of extension assemblies with mate-pair information\n"
 		"\t--noTrim: do not trim the reads for assembly (default: trim)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
 		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
@@ -46,6 +47,7 @@ static struct option long_options[] = {
 			{ "barcode", required_argument, 0, 10002 },
 			{ "keepNoBarcode", no_argument, 0, 10003 },
 			{ "UMI", required_argument, 0, 10004},
+			{ "skipMateExtension", no_argument, 0, 10005},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -223,6 +225,7 @@ int main( int argc, char *argv[] )
 	int constantGeneEnd = 200 ;
 	bool keepMissingBarcode = false ;
 	int threadCnt = 1 ;
+	bool skipMateExtension = false ;
 
 	while ( 1 )
 	{
@@ -285,6 +288,10 @@ int main( int argc, char *argv[] )
 		{
 			umiFile.AddReadFile( optarg, false ) ;
 			hasUmi = true ;
+		}
+		else if ( c == 10005 ) // skipMateExtension
+		{
+			skipMateExtension = true ;
 		}
 		else
 		{
@@ -1341,6 +1348,29 @@ int main( int argc, char *argv[] )
 			assembledReads[i].read ) ;
 	}
 	fclose( fp ) ;
+
+	if ( skipMateExtension )
+	{
+		FILE *fp ;
+		if ( outputPrefix[0] != '-' )
+		{
+			sprintf( buffer, "%s_final.out", outputPrefix ) ;
+			fp = fopen( buffer, "w" ) ;
+		}
+		else
+			fp = stdout ;
+
+		if ( hasBarcode )
+			seqSet.Output( fp, &barcodeIntToStr ) ;
+		else
+			seqSet.Output( fp, NULL ) ;
+		fflush( fp ) ;
+
+		if ( outputPrefix[0] != '-' )
+			fclose( fp ) ;
+
+		return 0 ;	
+	}
 
 	SeqSet extendedSeq( indexKmerLength > 17 ? indexKmerLength : 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
