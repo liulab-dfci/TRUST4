@@ -124,7 +124,7 @@ If you are interested in a subset of chains, you can "grep" those from trust_cdr
 
 The directory './example' in this distribution contains one BAM files as input for TRUST4. Run TRUST4 with:
 
-	./run-trust4 -b example/example.bam -f bcrtcr.fa --ref IMGT+C.fa
+	./run-trust4 -b example/example.bam -f hg38_bcrtcr.fa --ref human_IMGT+C.fa
 
 The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa, TRUST_example_cdr3.out, TRUST_example_report.tsv and several fq/fa files.
 
