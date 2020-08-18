@@ -18,7 +18,7 @@ Tcr Receptor Utilities for Solid Tissue (TRUST) is a computational tool to analy
 
 ### Install
 
-1. Clone the [GitHub repo](https://github.com/mourisl/TRUST4), e.g. with `git clone https://github.com/mourisl/TRUST4.git`
+1. Clone the [GitHub repo](https://github.com/liulab-dfci/TRUST4), e.g. with `git clone https://github.com/liulab-dfci/TRUST4.git`
 2. Run `make` in the repo directory
 
 You will find the executable files in the downloaded directory. If you want to run TRUST4 without specifying the directory, you can either add the directory of TRUST4 to the environment variable PATH or create a soft link ("ln -s") of the file "run-trust4" to a directory in PATH.
@@ -78,7 +78,7 @@ The output trust_cdr3.out is a tsv file. The fields are:
 
 The output trust_report.tsv is a tsv file. The fileds are:
 	
-	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C 
+	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C	consensus_id
 
 For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. 
 
@@ -147,4 +147,4 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  
 ### Support
 
-Create a [GitHub issue](https://github.com/mourisl/TRUST4/issues).
+Create a [GitHub issue](https://github.com/liulab-dfci/TRUST4/issues).
