@@ -128,6 +128,12 @@ The directory './example' in this distribution contains one BAM files as input f
 
 The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa, TRUST_example_cdr3.out, TRUST_example_report.tsv and several fq/fa files.
 
+The directory also contains two fastq files, and you can run TRUST4 with:
+
+	./run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -1 example/example_1.fq -2 example/example_2.fq -o TRUST_example
+
+The run will generate the files mentioned above from BAM input.
+
 ### Terms of use
 
 This program is free software; you can redistribute it and/or modify it
