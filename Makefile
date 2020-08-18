@@ -5,7 +5,7 @@ LINKFLAGS = -lpthread -lz
 DEBUG=
 OBJECTS = main.o #BaseReads.o Alignment.o 
 
-all: trust4 bam-extractor fastq-extractor annotator clone-evo
+all: trust4 bam-extractor fastq-extractor annotator
 
 trust4: main.o
 	$(CXX) -o $@ $(LINKPATH) $(CXXFLAGS) $< $(LINKFLAGS)
@@ -30,4 +30,4 @@ Annotator.o: Annotator.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerInd
 #Alignment.o: Alignment.cpp Alignment.h SimpleVector.h defs.h StatsTests.h KmerTree.h ReadSet.h KmerIndex.h poa.h
 
 clean:
-	rm -f *.o *.gch trust4 bam-extractor annotator fastq-extractor clone-evo
+	rm -f *.o *.gch trust4 bam-extractor annotator fastq-extractor
