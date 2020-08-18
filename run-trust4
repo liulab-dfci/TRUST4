@@ -17,6 +17,7 @@ die "usage: ./run-trust4 [OPTIONS]:\n".
     "Optional:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file from IMGT database. (default: not used but recommended)\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
+    "\t--od STRING: the directory for output files. (default: ./)\n".
     "\t-t INT: number of threads (default: 1)\n".
     #"\t-h: print help message and exit.\n"
     "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (default: not used)\n".
@@ -74,6 +75,7 @@ my $stage = 0 ;
 my $noExtraction = 0 ;
 my $hasBarcode = 0 ;
 my $hasUmi = 0 ;
+my $outputDirectory = "" ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 
@@ -108,7 +110,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "-o" )
 	{
 		$prefix = $ARGV[$i + 1] ;
-		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--od" )
+	{
+		$outputDirectory = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--ref" )
@@ -215,9 +221,15 @@ if ( $prefix eq "" )
 	{
 		$prefix = "TRUST" ;
 	}
-
-	$mainArgs .= " -o $prefix" ;
 }
+
+if ( $outputDirectory ne "" )
+{
+	mkdir $outputDirectory if ( !-d $outputDirectory ) ;
+	$prefix = "$outputDirectory/$prefix" ;
+}
+
+$mainArgs .= " -o $prefix" ;
 
 # Extract the file
 if ( $stage <= 0 )
