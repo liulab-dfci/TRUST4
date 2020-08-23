@@ -2288,6 +2288,8 @@ public:
 					if ( fa.seq[i] != '.' )	
 						++k ;
 				sw.info[0].b = k - 1 ;
+				if (sw.info[0].a > sw.info[0].b) // in case the annotation does not have information on the cdr1
+					sw.info[0].a = sw.info[0].b = -1 ;
 
 				// Infer the coordinate for CDR2
 				for ( ; i < 3 * ( 56 - 1 ) ; ++i )
@@ -2298,6 +2300,8 @@ public:
 					if ( fa.seq[i] != '.' )	
 						++k ;
 				sw.info[1].b = k - 1 ;
+				if (sw.info[1].a > sw.info[1].b) // in case the annotation does not have information on the cdr2
+					sw.info[1].a = sw.info[1].b = -1 ;
 				
 				if ( seqLen >= 3 * ( 104 - 1 ) + 1 )
 				{
@@ -5582,7 +5586,6 @@ public:
 			{
 				int seqRangeStart = seqs[ vgene.seqIdx ].info[ cdrIdx ].a ; 
 				int seqRangeEnd = seqs[ vgene.seqIdx ].info[ cdrIdx ].b ;
-
 				if ( vgene.seqStart <= seqRangeStart && vgene.seqEnd >= seqRangeEnd )
 				{
 					i = vgene.readStart - 1 ;
@@ -5612,7 +5615,7 @@ public:
 					cdr[cdrIdx].matchCnt = matchCnt ;
 					cdr[cdrIdx].similarity = (double)matchCnt / 
 						( readRangeEnd - readRangeStart + 1 + seqRangeEnd - seqRangeStart + 1 ) ;
-					//printf( "%d: %d %d; %d %d\n", matchCnt, readRangeStart, readRangeEnd, seqRangeStart, seqRangeEnd ) ;
+					//printf( "%d %d: %d %d; %d %d\n", cdrIdx, matchCnt, readRangeStart, readRangeEnd, seqRangeStart, seqRangeEnd ) ;
 
 					/*char *r = new char[readRangeEnd - readRangeStart + 2] ;
 					memcpy( r, read + readRangeStart, readRangeEnd - readRangeStart + 1 ) ;
