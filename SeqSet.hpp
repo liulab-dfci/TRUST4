@@ -7674,8 +7674,8 @@ public:
 			breakCoords.Resize( k ) ;
 			
 			int start, end ;
-			for ( j = 0 ; j < k ; ++j )
-				printf( "%d %s breakCoords %d: %d %d\n", i, seqs[i].name, j, breakCoords[j].a, breakCoords[j].b ) ;
+			//for ( j = 0 ; j < k ; ++j )
+			//	printf( "%d %s breakCoords %d: %d %d\n", i, seqs[i].name, j, breakCoords[j].a, breakCoords[j].b ) ;
 			for ( j = 0 ; j <= k ; ++j )
 			{
 				if ( j == 0 )
