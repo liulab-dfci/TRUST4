@@ -51,7 +51,7 @@ struct _interval
 	int chrId ;
 	int start, end ;
 
-	bool operator<( const struct _interval &b )
+	bool operator<( const struct _interval &b ) const
 	{
 		if ( chrId != b.chrId )
 			return chrId < b.chrId ;

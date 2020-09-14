@@ -71,7 +71,7 @@ struct _sortRead
 
 	struct _overlap geneOverlap[4] ; // Rough annotation of the read
 
-	bool operator<( const struct _sortRead &b )
+	bool operator<( const struct _sortRead &b ) const 
 	{
 		if ( minCnt != b.minCnt )
 			return minCnt > b.minCnt ;
