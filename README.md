@@ -37,6 +37,7 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 		Optional:
 			--ref STRING: path to detailed V/D/J/C gene reference file, such as from IMGT database. (default: not used). (recommended) 
 			-o STRING: prefix of output files. (default: inferred from file prefix)
+			--od STRING: the directory for output files. (default: ./)
 			-t INT: number of threads (default: 1)
 			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
 			--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)
