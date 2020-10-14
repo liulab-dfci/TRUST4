@@ -75,18 +75,18 @@ struct _overlap
 			return similarity > b.similarity ; 
 		else if ( readEnd - readStart != b.readEnd - b.readStart )
 			return readEnd - readStart > b.readEnd - b.readStart ;
-		else if ( seqIdx != b.seqIdx )
-			return seqIdx < b.seqIdx ;
 		else if ( strand !=  b.strand )
 			return strand < b.strand ;
+		else if ( seqStart != b.seqStart )
+			return seqStart < b.seqStart ;
+		else if ( seqEnd != b.seqEnd )
+			return seqEnd < b.seqEnd ; 
 		else if ( readStart != b.readStart )
 			return readStart < b.readStart ;
 		else if ( readEnd != b.readEnd )
 			return readEnd < b.readEnd ;
-		else if ( seqStart != b.seqStart )
-			return seqStart < b.seqStart ;
 		else 
-			return seqEnd < b.seqEnd ; 
+			return seqIdx < b.seqIdx ;
 
 		return false ;
 	}
@@ -992,10 +992,18 @@ private:
 			++mismatchThreshold ;
 		if ( rightOverhangSize >= 2 )
 			++mismatchThreshold ;
-		mismatchThreshold *= mismatchThresholdFactor ;
-		if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > 1.5 / kmerLength ) 
-			ret = 0 ;
 
+		double densityThreshold = 1.5 / kmerLength ;
+		//if ( leftOverhangSize + rightOverhangSize > 2 * kmerLength )
+		//	densityThreshold = 1.0 / 6 ;
+		mismatchThreshold *= mismatchThresholdFactor ;
+		if ( mismatchCnt > mismatchThreshold && (double)mismatchCnt / ( leftOverhangSize + rightOverhangSize ) > densityThreshold ) 
+			ret = 0 ;
+		/*if ( !strcmp(r, "AACCTTCACCTACACGCCCTGCAGCCAGAAGACTCAGCCCTGTATCTCTGCGCCAGCAGCGGGACATTTGGTTCACCCCTCCACTCTGGGAACGGGACCCGGCTCTCAGTG"))
+		{
+			fprintf(stderr, "%s: %d %d %d %d. %d\n", seq.name, mismatchCnt, mismatchThreshold, leftOverhangSize, rightOverhangSize,
+				kmerLength );
+		}*/
 		extendedOverlap.seqIdx = overlap.seqIdx ;
 		extendedOverlap.readStart = overlap.readStart - leftOverhangSize ;
 		extendedOverlap.readEnd = overlap.readEnd + rightOverhangSize ;
@@ -1059,7 +1067,42 @@ private:
 		return true ;
 	}
 
-	int GetHitsFromRead( char *read, char *rcRead, int strand, int barcode, SimpleVector<struct _hit> &hits, SimpleVector<bool> *puse )
+	void SortHits( SimpleVector<struct _hit> &hits, bool alreadyReadOrder )
+	{
+		int i, k ;
+		if ( hits.Size() > 2 * seqs.size() && alreadyReadOrder ) 
+		{
+			// Bucket sort.
+			int hitCnt = hits.Size() ;
+			int seqCnt = seqs.size() ;
+			SimpleVector<struct _hit> *buckets[2] ;
+			buckets[0] = new SimpleVector<struct _hit>[seqCnt] ;
+			buckets[1] = new SimpleVector<struct _hit>[seqCnt] ;
+
+			for ( i = 0 ; i < hitCnt ; ++i )
+			{
+				int tag = hits[i].strand == 1 ? 1 : 0 ;
+				buckets[tag][ hits[i].indexHit.idx ].PushBack( hits[i] ) ;
+			}
+			
+			hits.Clear() ;
+			for ( k = 0 ; k <= 1 ; ++k )
+			{
+				for ( i = 0 ; i < seqCnt ; ++i )
+				{
+					hits.PushBack( buckets[k][i] ) ;
+				}
+			}
+
+			delete[] buckets[0] ;
+			delete[] buckets[1] ;
+		}
+		else
+			std::sort( hits.BeginAddress(), hits.EndAddress() ) ;
+
+	}
+
+	int GetHitsFromRead( char *read, char *rcRead, int strand, int barcode, bool allowTotalSkip, SimpleVector<struct _hit> &hits, SimpleVector<bool> *puse )
 	{
 		int i, j ;
 		int len = strlen( read ) ;
@@ -1092,12 +1135,12 @@ private:
 				if ( downSample > 1 && ( i - kmerLength + 1 ) % downSample != 0 )
 					continue ;
 
-				if ( i == kmerLength || !prevKmerCode.IsEqual( kmerCode ) )
+				if ( i == kmerLength - 1 || !prevKmerCode.IsEqual( kmerCode ) )
 				{
 					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
 
 					int size = indexHit.Size() ;
-					if ( size >= 100 && puse == NULL && barcode == -1 && i != kmerLength - 1 && i != len - 1 )
+					if ( size >= 100 && puse == NULL /*&& barcode == -1*/ && i != kmerLength - 1 && i != len - 1 )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -1105,6 +1148,9 @@ private:
 							continue ;
 						}
 					}
+
+					if ( size >= 100 && allowTotalSkip )
+						continue ;
 
 					skipCnt = 0 ;
 					int repeats = size ;
@@ -1155,13 +1201,13 @@ private:
 				kmerCode.Append( rcRead[i] ) ;
 				if ( downSample > 1 && ( i - kmerLength + 1 ) % downSample != 0 )
 					continue ;
-				if ( i == kmerLength || !prevKmerCode.IsEqual( kmerCode ) )
+				if ( i == kmerLength - 1 || !prevKmerCode.IsEqual( kmerCode ) )
 				{
 					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
 
 					int size = indexHit.Size() ;
 
-					if ( size >= 100 && puse == NULL && barcode == -1 && i != kmerLength - 1 && i != len - 1 )
+					if ( size >= 100 && puse == NULL /*&& barcode == -1*/ && i != kmerLength - 1 && i != len - 1 )
 					{
 						if ( skipCnt < skipLimit )
 						{
@@ -1169,6 +1215,9 @@ private:
 							continue ;
 						}
 					}
+					if ( size >= 100 && allowTotalSkip )
+						continue ;
+
 					skipCnt = 0 ;
 					
 					int repeats = size ;
@@ -1215,70 +1264,59 @@ private:
 
 	// Obtain the overlaps, each overlap further contains the hits induce the overlap. 
 	// readType: 0(default): sqeuencing read. 1:seqs, no need filter.
-	// forExtension: further filter to ignore regions that could not result in sequence extension.
+	// ## forExtension (not used): further filter to ignore regions that could not result in sequence extension.
+	// skipRepeats: skip the repeated hits.
 	// Return: the number of overlaps.
-	int GetOverlapsFromRead( char *read, int strand, int barcode, int readType, int forExtension, std::vector<struct _overlap> &overlaps, 
+	int GetOverlapsFromRead( char *read, int strand, int barcode, int readType, bool skipRepeats, std::vector<struct _overlap> &overlaps, 
 		SimpleVector<bool> *puse = NULL )
 	{
 		int i, j, k ;
 		int len = strlen( read ) ;
 		if ( len < kmerLength )
 			return -1 ;
-
-		SimpleVector<struct _hit> hits ;		    	
+		
+		int overlapCnt = 0 ;
+		SimpleVector<struct _hit> hits ;
 		char *rcRead =  new char[len + 1] ;
-		GetHitsFromRead( read, rcRead, strand, barcode, hits, puse ) ;
+		
+		if ( skipRepeats /*&& barcode == -1*/ && puse == NULL )
+		{
+			GetHitsFromRead( read, rcRead, strand, barcode, true, hits, puse ) ;
+			SortHits( hits, true ) ;
+			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, 0, overlaps ) ;
+
+			if ( overlapCnt == 0 )
+			{
+				hits.Clear() ;
+				overlaps.clear() ;
+			}
+		}
+		
+		if ( overlapCnt == 0 ) // readType == 1 or failed aggressive skipping for readType 0.
+		{
+			GetHitsFromRead( read, rcRead, strand, barcode, false, hits, puse ) ;
+			SortHits( hits, true ) ;
+
+			// Find the overlaps.
+
+			//if ( seqs.size() == 1 )
+			//	for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
+			//		printf( "- %d %s %d %d\n", it->readOffset, seqs[ it->indexHit.idx ].name, it->indexHit.offset, it->strand ) ;
+			//if ( seqs.size() == 1 )
+			//	for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
+			//		printf( "- %d %s %d %d\n", it->readOffset, seqs[ it->indexHit.idx ].name, it->indexHit.offset, it->strand ) ;
+
+			//int hitLenRequired = 31 ;
+			int filterHits = 0 ;
+			if ( readType == 0 )
+			{
+				//hitLenRequired = ( len / 3 < hitLenRequired ? hitLenRequired : ( len / 3 ) ) ;
+				filterHits = 1 ;
+			}
+
+			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
+		}
 		delete[] rcRead ;
-		
-		//if ( seqs.size() != 620 )
-		//printf( "hitsize=%d; %d %d\n", hits.Size(), seqs.size(), kmerLength ) ;
-		// Find the overlaps.
-		// Sort the hits
-		//if ( seqs.size() == 1 )
-		//	for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
-		//		printf( "- %d %s %d %d\n", it->readOffset, seqs[ it->indexHit.idx ].name, it->indexHit.offset, it->strand ) ;
-		if ( hits.Size() > 2 * seqs.size() ) 
-		{
-			// Bucket sort.
-			int hitCnt = hits.Size() ;
-			int seqCnt = seqs.size() ;
-			SimpleVector<struct _hit> *buckets[2] ;
-			buckets[0] = new SimpleVector<struct _hit>[seqCnt] ;
-			buckets[1] = new SimpleVector<struct _hit>[seqCnt] ;
-
-			for ( i = 0 ; i < hitCnt ; ++i )
-			{
-				int tag = hits[i].strand == 1 ? 1 : 0 ;
-				buckets[tag][ hits[i].indexHit.idx ].PushBack( hits[i] ) ;
-			}
-			
-			hits.Clear() ;
-			for ( k = 0 ; k <= 1 ; ++k )
-			{
-				for ( i = 0 ; i < seqCnt ; ++i )
-				{
-					hits.PushBack( buckets[k][i] ) ;
-				}
-			}
-
-			delete[] buckets[0] ;
-			delete[] buckets[1] ;
-		}
-		else
-			std::sort( hits.BeginAddress(), hits.EndAddress() ) ;
-		//if ( seqs.size() == 1 )
-		//	for ( struct _hit *it = hits.BeginAddress() ; it != hits.EndAddress() ; ++it )
-		//		printf( "- %d %s %d %d\n", it->readOffset, seqs[ it->indexHit.idx ].name, it->indexHit.offset, it->strand ) ;
-
-		//int hitLenRequired = 31 ;
-		int filterHits = 0 ;
-		if ( readType == 0 )
-		{
-			//hitLenRequired = ( len / 3 < hitLenRequired ? hitLenRequired : ( len / 3 ) ) ;
-			filterHits = 1 ;
-		}
-		
-		int overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
 		//if ( seqs.size() != 620 )
 		//	printf( "overlapCnt = %d\n", overlapCnt ) ;
 		/*if ( overlapCnt > 100 )
@@ -1970,7 +2008,7 @@ private:
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt ;
 
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, seqs[i].barcode, 1, 0, overlaps ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, seqs[i].barcode, 1, false, overlaps ) ;
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
 				if ( overlaps[j].strand == -1 ) // Note that all the seqs are from 5'->3' on its strand.
@@ -2054,7 +2092,7 @@ private:
 
 			double backupSimilarity = novelSeqSimilarity ;
 			novelSeqSimilarity = repeatSimilarity ;
-			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, seqs[i].barcode, 1, 0, overlaps, &use ) ;
+			overlapCnt = GetOverlapsFromRead( seqs[i].consensus, 1, seqs[i].barcode, 1, false, overlaps, &use ) ;
 			novelSeqSimilarity = backupSimilarity ;
 
 			//printf( "%d %d\n", i, overlapCnt ) ;
@@ -2484,7 +2522,7 @@ public:
 			return false ;
 
 		SimpleVector<struct _hit> hits ;	
-		GetHitsFromRead( read, rcRead, 0, -1, hits, NULL  ) ;
+		GetHitsFromRead( read, rcRead, 0, -1, false, hits, NULL  ) ;
 
 		int hitCnt = hits.Size() ;
 		if ( hitCnt == 0 )
@@ -2635,7 +2673,7 @@ public:
 	// If it is a candidate, but is quite different from the one we stored, we create a new poa for it.
 	// Return: the index id in the set. 
 	//	   -1: not add. -2: only overlapped with novel seq and could not be extended.
-	int AddRead( char *read, char *geneName, int &strand, int barcode, int minKmerCount, double similarityThreshold )
+	int AddRead( char *read, char *geneName, int &strand, int barcode, int minKmerCount, bool repetitiveData, double similarityThreshold )
 	{
 		//printf( "%s\n", read ) ;
 		int i, j, k ;
@@ -2646,7 +2684,7 @@ public:
 		std::vector<struct _overlap> overlaps ;
 		int overlapCnt ;
 		
-		overlapCnt = GetOverlapsFromRead( read, strand, barcode, 0, 1, overlaps ) ;
+		overlapCnt = GetOverlapsFromRead( read, strand, barcode, 0, repetitiveData, overlaps ) ;
 				
 		if ( overlapCnt <= 0 )
 			return -1 ;
@@ -2806,7 +2844,8 @@ public:
 				//if ( !strcmp( read, "TTACTGTAATATACGATATTTTGACTGGTTATTAAGAGGCGACCCAAGAATCAATACTACTTTGACTACTGGGGCCAGGGAACCCTGGTCACCGTCTCCT" ) && i == 1 )
 				//	fprintf( stderr, "hi\n" ) ;
 				// Only extend the novel seqs.
-				if ( ExtendOverlap( r, len, seq, barcode == -1 ? 1.0 : 2.0, align, overlaps[i], extendedOverlaps[k] ) == 1 )
+				if ( ExtendOverlap( r, len, seq, ( barcode == -1 && !repetitiveData ) ? 
+						1.0 : 2.0, align, overlaps[i], extendedOverlaps[k] ) == 1 )
 				{
 					if ( extendedOverlaps[k].similarity < similarityThreshold )
 					{
@@ -2954,7 +2993,8 @@ public:
 					if ( seq.isRef )
 						continue ;
 				
-					if ( ExtendOverlap( r, len, seq, barcode == -1 ? 1.0 : 2.0, align, overlaps[i], extendedOverlaps[k] ) == 1 )
+					if ( ExtendOverlap( r, len, seq, ( barcode == -1 && !repetitiveData ) ? 1.0 : 2.0, 
+						align, overlaps[i], extendedOverlaps[k] ) == 1 )
 					{
 						j = i ;
 						++k ;
@@ -3781,7 +3821,7 @@ public:
 
 		std::vector<struct _overlap> overlaps ;
 		
-		int overlapCnt = GetOverlapsFromRead( read, strand, barcode, 0, 0, overlaps ) ;
+		int overlapCnt = GetOverlapsFromRead( read, strand, barcode, 0, false, overlaps ) ;
 		//printf( "%d %d\n", overlapCnt, mateOverlapCnt ) ;
 		//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
 		assign.seqIdx = -1 ;
@@ -5020,7 +5060,7 @@ public:
 			contigBuffer[ contigLen ] = '\0' ;
 			contigOverlaps[k].clear() ;
 
-			int contigOverlapCnt = GetOverlapsFromRead( contigBuffer, 0, -1, detailLevel == 0 ? 0 : 1, 0, contigOverlaps[k] ) ;		
+			int contigOverlapCnt = GetOverlapsFromRead( contigBuffer, 0, -1, detailLevel == 0 ? 0 : 1, false, contigOverlaps[k] ) ;		
 			for ( i = 0 ; i < contigOverlapCnt ; ++i )
 			{
 				contigOverlaps[k][i].readStart += contigs[k].a ;
@@ -5204,6 +5244,7 @@ public:
 			}*/
 
 			if ( geneType >= 0 && geneOverlap[ geneType ].seqIdx == -1 )
+				//IsBetterGeneMatch(overlaps[i], geneOverlap[geneType], 1.0 ) )
 				geneOverlap[ geneType ] = overlaps[i] ;
 
 			
@@ -7581,7 +7622,7 @@ public:
 		for ( i = 0 ; i < readCnt ; ++i )
 		{
 			std::vector<struct _overlap> overlaps ;
-			int overlapCnt = GetOverlapsFromRead( reads[i].seq, 1, -1, 1, 0, overlaps ) ;
+			int overlapCnt = GetOverlapsFromRead( reads[i].seq, 1, -1, 1, false, overlaps ) ;
 			if ( overlapCnt == 0 )
 				continue ;
 

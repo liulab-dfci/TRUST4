@@ -26,7 +26,8 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
 		"\t--skipMateExtension: skip the step of extension assemblies with mate-pair information\n"
-		"\t--noTrim: do not trim the reads for assembly (default: trim)\n"
+		///"\t--noV: do not assemble the full length V gene (default: not used)\n"
+		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
 		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
 		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" ;
@@ -43,7 +44,7 @@ char buffer[10240] = "" ;
 static const char *short_options = "f:u:1:2:b:o:c:t:" ;
 static struct option long_options[] = {
 			{ "debug-ns", required_argument, 0, 10000 },
-			{ "noTrim", no_argument, 0, 10001 },
+			{ "trimLevel", required_argument, 0, 10001 },
 			{ "barcode", required_argument, 0, 10002 },
 			{ "keepNoBarcode", no_argument, 0, 10003 },
 			{ "UMI", required_argument, 0, 10004},
@@ -218,7 +219,7 @@ int main( int argc, char *argv[] )
 	bool countMyself = true ;
 	int maxReadLen = -1 ;
 	int firstReadLen = -1 ;
-	bool flagNoTrim = false ;
+	int trimLevel = 1 ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
 	bool hasUmi = false ;
@@ -271,9 +272,9 @@ int main( int argc, char *argv[] )
 		{
 			seqSet.InputNovelFa( optarg ) ;
 		}
-		else if ( c == 10001) //noTrim
+		else if ( c == 10001) //trimLevel
 		{
-			flagNoTrim =true ;
+			trimLevel = atoi( optarg ) ;
 		}
 		else if ( c == 10002 ) // barcode 
 		{
@@ -310,6 +311,12 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+
+	if ( trimLevel > 1 ) 
+	{
+		// We need a more careful rough annotation.
+		refSet.ChangeKmerLength( 7 ) ;
+	} 
 	refSet.SetHitLenRequired( 17 ) ;
 
 	std::vector< struct _sortRead > sortedReads ;
@@ -617,7 +624,7 @@ int main( int argc, char *argv[] )
 	kmerCount.SetBuffer( maxReadLen ) ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
-		if ( flagNoTrim )
+		if ( trimLevel == 0 )
 			kmerCount.GetCountStatsAndTrim( sortedReads[i].read, NULL, 
 					sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
 		else
@@ -689,6 +696,8 @@ int main( int argc, char *argv[] )
 	
 
 	// Quickly annoate the reads.
+	if ( trimLevel > 1 )
+		refSet.SetRadius(0) ;
 	if ( threadCnt <= 1 )
 	{
 		struct _overlap geneOverlap[4] ;
@@ -727,9 +736,49 @@ int main( int argc, char *argv[] )
 		delete[] args ;
 	}
 	PrintLog( "Finish rough annotations." ) ;
+
+	if ( trimLevel > 1 && !hasBarcode )
+	{
+		// use V gene assignment as barcode to speed up.
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( sortedReads[i].geneOverlap[0].seqIdx != -1 && sortedReads[i].geneOverlap[0].similarity > 0.95 )
+			{
+				sortedReads[i].barcode = sortedReads[i].geneOverlap[0].seqIdx ;
+				if ( sortedReads[i].mateIdx != -1 )
+					sortedReads[ sortedReads[i].mateIdx ].barcode = sortedReads[i].geneOverlap[0].seqIdx ;
+			}
+		}
+		/*for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( sortedReads[i].barcode == -1 )
+			{
+				free( sortedReads[i].id ) ;
+				free( sortedReads[i].read ) ;
+				if ( sortedReads[i].qual != NULL )
+					free( sortedReads[i].qual ) ;
+				sortedReads[i].read = NULL ;
+			}
+		}*/
+
+		/*for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( sortedReads[i].geneOverlap[0].seqIdx == -1 && sortedReads[i].geneOverlap[2].seqIdx == -1 )
+			{
+				free( sortedReads[i].id ) ;
+				free( sortedReads[i].read ) ;
+				if ( sortedReads[i].qual != NULL )
+					free( sortedReads[i].qual ) ;
+				sortedReads[i].read = NULL ;
+			}
+		}*/
+	}
+
 	// Remove the redudant sequence before V gene.
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
+		if ( sortedReads[i].read == NULL )
+			continue ;
 		struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
 		if ( geneOverlap[0].seqIdx == -1 )
 			continue ;
@@ -740,19 +789,34 @@ int main( int argc, char *argv[] )
 		if ( geneOverlap[0].similarity > 0.95 && 
 			geneOverlap[0].seqStart <= refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) / 3 )
 			mayTrim = true ; 
+		
+		if ( trimLevel > 1 )
+			mayTrim = true ;
 
 		if ( !mayTrim )
 			continue ;
 		
 		int trimBase = geneOverlap[0].readStart ;
+		if ( trimLevel > 1 && refSet.GetSeqName(geneOverlap[0].seqIdx)[0] == 'T') // Some bad annotation
+		{	
+			if ( geneOverlap[0].seqEnd + 25 < refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) )
+				trimBase = geneOverlap[0].readEnd + 2 ;
+			else if ( geneOverlap[0].similarity < 0.97 )
+			{
+				trimBase = ( geneOverlap[0].readStart + geneOverlap[0].readEnd ) / 2 ;
+			}
+		}
+		//printf("%s\n", sortedReads[i].read) ;	
+		//printf("0: %lf %d %d %s: %d %d\n", geneOverlap[0].similarity, mayTrim, trimBase,  
+		//	refSet.GetSeqName(geneOverlap[0].seqIdx), geneOverlap[0].readStart, geneOverlap[0].readEnd) ;
 		if ( trimBase <= 0 )
 			continue ;
 
 		if ( geneOverlap[2].seqIdx != -1 
-			&& geneOverlap[2].readStart < trimBase )
+			&& geneOverlap[2].readStart < trimBase && trimLevel <= 1 )
 			continue ;
 		if ( geneOverlap[3].seqIdx != -1 
-			&& geneOverlap[3].readStart < trimBase )
+			&& geneOverlap[3].readStart < trimBase && trimLevel <= 1 )
 			continue ;
 
 		if ( sortedReads[i].len - trimBase < 31 )
@@ -808,32 +872,59 @@ int main( int argc, char *argv[] )
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		int len = sortedReads[i].len ;
+		int gidx = 3 ;
 		struct _overlap *geneOverlap = sortedReads[i].geneOverlap ;
-		if ( geneOverlap[3].seqIdx == -1 || sortedReads[i].read == NULL )
+		if ( sortedReads[i].read == NULL )
 			continue ;
+		for ( gidx = 2 ; gidx <= 3 ; ++gidx)
+			if ( geneOverlap[gidx].seqIdx != -1 )
+				break ;
+		if ( gidx > 3 )
+			continue ;
+		
+		if ( gidx == 2 && refSet.GetSeqName(geneOverlap[gidx].seqIdx)[2] == 'H' )
+		{
+			gidx = 3 ;
+			if ( geneOverlap[gidx].seqIdx == -1 )
+				continue ;
+		}
 
 		bool mayTrim = false ;
-		if ( geneOverlap[3].seqStart < indexKmerLength && geneOverlap[3].similarity > 0.95 )
+		if ( gidx == 3 && geneOverlap[3].seqStart < indexKmerLength && geneOverlap[3].similarity > 0.95 )
 				//&& geneOverlap[3].readEnd + indexKmerLength >= sortedReads[i].len 
 				//&& refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
 			mayTrim  = true ;
+		if ( trimLevel > 1 )
+			mayTrim = true ;
 		if ( !mayTrim )
 			continue ;
 		
-		int trimBase = len - geneOverlap[3].readEnd ;
-		if ( firstReadLen > 200 && refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
+		int trimBase = len - geneOverlap[gidx].readEnd - 1 ;
+		if ( trimLevel > 1 && refSet.GetSeqName(geneOverlap[gidx].seqIdx)[0] == 'T') // Some bad annotation
+		{
+			if ( geneOverlap[gidx].seqStart >= 25 )
+				trimBase = len - ( geneOverlap[gidx].readStart - 1 ) ;
+			else if ( geneOverlap[gidx].similarity < 0.97 )
+			{
+				trimBase = len - ( ( geneOverlap[gidx].readStart + geneOverlap[gidx].readEnd ) / 2 ) - 1 ;
+			}
+		}
+		//printf("%s %d %s\n", sortedReads[i].id, gidx, sortedReads[i].read) ;
+		//printf("%d: %lf %d %d %s: %d %d\n", gidx, geneOverlap[gidx].similarity, mayTrim, trimBase,  
+		//	refSet.GetSeqName(geneOverlap[gidx].seqIdx), geneOverlap[gidx].readStart, geneOverlap[gidx].readEnd) ;
+		/*if ( firstReadLen > 200 && gidx == 3 && trimLevel < 2 && refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
 		{
 			trimBase = ( len - geneOverlap[3].readStart ) + geneOverlap[3].seqStart ;
-		}
+		}*/
 		
 		if ( trimBase <= 0 )
 			continue ;
 
-		if ( geneOverlap[2].seqIdx != -1 
-				&& geneOverlap[2].readStart + trimBase >= sortedReads[i].len )
+		if ( gidx == 3 && geneOverlap[2].seqIdx != -1 
+				&& geneOverlap[2].readStart + trimBase >= sortedReads[i].len && trimLevel <= 1 )
 			continue ;
 		if ( geneOverlap[0].seqIdx != -1 
-				&& geneOverlap[0].readStart + trimBase >= sortedReads[i].len )
+				&& geneOverlap[0].readStart + trimBase >= sortedReads[i].len && trimLevel <= 1 )
 			continue ;
 
 		if ( sortedReads[i].len - trimBase < 31 )
@@ -846,7 +937,7 @@ int main( int argc, char *argv[] )
 			continue ;
 		}
 
-		if ( geneOverlap[3].strand < 0 )
+		if ( geneOverlap[gidx].strand < 0 )
 		{
 			// Remove the first bases
 			for ( j = trimBase ; j <= len ; ++j )
@@ -879,6 +970,7 @@ int main( int argc, char *argv[] )
 			if ( geneOverlap[j].readEnd + trimBase >= len )
 				geneOverlap[j].readEnd = len - 1 ;
 		}
+		//printf("%s\n", sortedReads[i].read);
 		sortedReads[i].len -= trimBase ;
 	}
 
@@ -898,7 +990,7 @@ int main( int argc, char *argv[] )
 
 		seqSet.SetIsLongSeqSet( true ) ;
 	}
-
+	
 	// Remove the sequences whose J gene is not associate with C gene.
 	/*for ( i = 0 ; i < readCnt ; ++i )
 	  {
@@ -967,7 +1059,7 @@ int main( int argc, char *argv[] )
 	if ( hasBarcode )
 		seqSet.SetHitLenRequired( 17 ) ;
 
-	if ( firstReadLen > 200 )
+	if ( firstReadLen > 200 || trimLevel > 1 )
 		changeKmerLengthThreshold /= 2 ;
 
 	for ( i = 0 ; i < readCnt ; ++i )
@@ -1080,7 +1172,7 @@ int main( int argc, char *argv[] )
 					similarityThreshold = 0.95 ;
 				
 				// When using barcode, we could be more casual.
-				if ( hasBarcode )
+				if ( hasBarcode || trimLevel > 1 )
 					similarityThreshold = 0.9 ;
 
 				//if ( similarityThreshold > 0.9 && geneOverlap[0].seqIdx != -1 && geneOverlap[2].seqIdx != -1 
@@ -1088,7 +1180,7 @@ int main( int argc, char *argv[] )
 				//	similarityThreshold = 1.0 ;
 
 				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, sortedReads[i].barcode, 
-						sortedReads[i].minCnt, similarityThreshold ) ;
+						sortedReads[i].minCnt, trimLevel > 1, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
@@ -1263,7 +1355,7 @@ int main( int argc, char *argv[] )
 		
 		int strand = 0 ;
 		addRet = seqSet.AddRead( sortedReads[ rescueReadIdx[i] ].read, name, strand, sortedReads[ rescueReadIdx[i] ].barcode, 
-			1, similarityThreshold ) ;
+			1, trimLevel > 1 ? true : false, similarityThreshold ) ;
 		sortedReads[ rescueReadIdx[i] ].strand = strand ;
 
 		if ( addRet >= 0 )
@@ -1586,7 +1678,7 @@ int main( int argc, char *argv[] )
 					lowFreqSeqSet.AddAssignedRead( lowFreqReads[i].read, assign ) ;
 				}
 			}
-			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, strand, lowFreqReads[i].barcode, 1, 0.97 ) < 0 )
+			else if ( lowFreqSeqSet.AddRead( lowFreqReads[i].read, name, strand, lowFreqReads[i].barcode, 1, false, 0.97 ) < 0 )
 			{
 				struct _overlap geneOverlap[4] ;
 				//buffer[0] = '\0' ;
