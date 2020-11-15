@@ -63,18 +63,26 @@ def GetFather(tag, father):
 		father[tag] = GetFather( father[tag], father )
 	return father[tag]
 	
-def LargerCluster(cdr3List, similarity):
+def LargerCluster(cdr3List, similarity, useRepresentative):
 	vjCDR3LenList = {}
 	clusterNameToId = {}
 	clusterIdToName = []
+	clusterRepresentativeId = {}
+	i = 0
 	for cdr3 in cdr3List:
 		if ( cdr3[0] not in clusterNameToId ):
 			clusterNameToId[cdr3[0]] = len(clusterIdToName)
 			clusterIdToName.append(cdr3[0])
-
+			clusterRepresentativeId[cdr3[0]] = i
+		if (cdr3[9] > cdr3List[ clusterRepresentativeId[cdr3[0]] ][9] ):
+			clusterRepresentativeId = i
+		i += 1
 	# Reorganize the CDR3 list by their V, J and CDR3 length.
 	i = 0
 	for cdr3 in cdr3List:
+		if (useRepresentative and clusterRepresentativeId[cdr3[0]] != i):
+			i += 1
+			continue
 		key = (GetMainGeneName(cdr3[2]), GetMainGeneName(cdr3[4]), len(cdr3[8]))
 		if (key not in vjCDR3LenList):
 			vjCDR3LenList[key] = []
@@ -82,14 +90,10 @@ def LargerCluster(cdr3List, similarity):
 		i += 1
 	# Prepare the set-union
 	father = []
-	clusterNameFirstId = {}
 	i = 0
 	for cdr3 in cdr3List:
 		father.append(i)
-		if (cdr3[0] in clusterNameFirstId ):
-			father[i] = clusterNameFirstId[cdr3[0]]
-		else:
-			clusterNameFirstId[cdr3[0]] = i
+		father[i] = clusterRepresentativeId[cdr3[0]]
 		i += 1
 	
 	# Build up the set-union relation
@@ -101,6 +105,9 @@ def LargerCluster(cdr3List, similarity):
 				if ( GetFather( cdr3IdList[i], father ) != GetFather( cdr3IdList[j], father ) 
 					and CompatibleSequence( cdr3List[ cdr3IdList[i] ][8], cdr3List[ cdr3IdList[j] ][8], 
 					similarity ) ):
+					if (cdr3List[cdr3IdList[j]][8] == "TGTCAGACTTCTGATGGCGGCAGTGCGGTGTTC"):
+						print(cdr3List[cdr3IdList[i]])
+						print(cdr3List[cdr3IdList[j]])
 					father[ cdr3IdList[j] ] = cdr3IdList[i]
 					
 	# Associate original clusters to larger cluster
@@ -148,16 +155,20 @@ def LargerCluster(cdr3List, similarity):
 if (__name__ == "__main__"):
 	if (len(sys.argv) <= 1):
 		print("usage: a.py trust_cdr3.out [OPTIONS]\n" + 
-			"OPTIONS:\n" 
-			"\t-s FLOAT: similarity of two CDR3s (default: 0.8)") 	
+			"OPTIONS:\n" +
+			"\t-s FLOAT: similarity of two CDR3s (default: 0.8)\n" +
+			"\t--representative: use representative CDR3 from each contig for cluster (default: no)") 	
 		exit(1)
 	cdr3List = []
 	similarity = 0.8 ;
+	useRepresentative = False
 	i = 2
 	while (i < len(sys.argv)):
 		if (sys.argv[i] == "-s"):
 			similarity = float(sys.argv[i + 1])
 			i += 1
+		elif (sys.argv[i] == '--representative'):
+			useRepresentative = True
 		else:
 			print("Unknown option: ", sys.argv[i])
 			exit(1)
@@ -184,4 +195,4 @@ if (__name__ == "__main__"):
 		if (cols[9] == 0):
 			continue
 		cdr3List.append(cols)
-	LargerCluster(cdr3List, similarity)
+	LargerCluster(cdr3List, similarity, useRepresentative)
