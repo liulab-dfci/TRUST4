@@ -23,7 +23,7 @@ Tcr Receptor Utilities for Solid Tissue (TRUST) is a computational tool to analy
 
 You will find the executable files in the downloaded directory. If you want to run TRUST4 without specifying the directory, you can either add the directory of TRUST4 to the environment variable PATH or create a soft link ("ln -s") of the file "run-trust4" to a directory in PATH.
 
-TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and samtools depends on [zlib](http://en.wikipedia.org/wiki/Zlib).
+TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and samtools depends on [zlib](http://en.wikipedia.org/wiki/Zlib). TRUST4 can be successfully compiled with gcc_darwin17.7.0 and gcc_9.2.0 installed by Homebrew on MacOS.
 
 
 ### Usage
