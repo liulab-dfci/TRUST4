@@ -8,7 +8,7 @@
 #include "SeqSet.hpp"
 #include "ReadFiles.hpp"
 
-char usage[] = "./bam-extractor [OPTIONS]:\n"
+char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t-u STRING: path to single-end read file\n"
