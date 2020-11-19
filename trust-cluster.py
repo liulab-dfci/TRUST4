@@ -3,6 +3,7 @@
 #!/usr/bin/env python3
 
 import sys
+import math
 
 def GetChainType(v, j, c):
 	s = ""
@@ -46,11 +47,20 @@ def CompatibleGeneAssignment(a, b):
 			return False
 	return True
 
+def GetSimilarity(a, b):
+	if (len(a) != len(b)):
+		return 0
+	sameCnt = 0
+	for i in range(len(a)):
+		if (a[i] == b[i]):
+			sameCnt += 1
+	return sameCnt / len(a)
+
 def CompatibleSequence(a, b, similarity):
 	if (len(a) != len(b)):
 		return False ;
 	diffCnt = 0 
-	diffMax = len(a) - int(len(a) * similarity)
+	diffMax = len(a) - int(math.ceil(len(a) * similarity))
 	for i in range(len(a)):
 		if (a[i] != b[i]):
 			diffCnt += 1
@@ -63,13 +73,15 @@ def GetFather(tag, father):
 		father[tag] = GetFather( father[tag], father )
 	return father[tag]
 	
-def LargerCluster(rawCdr3List, similarity, prefix, useRepresentative):
+def LargerCluster(rawCdr3List, similarity, prefix, useRepresentative, mode):
 	vjCDR3LenList = {}
 	clusterNameToId = {}
 	clusterIdToName = []
 	clusterRepresentativeId = {}
 	clusterRepresentativeAbund = {}
-
+	
+	if (len(rawCdr3List) == 0):
+		return
 	cdr3List = sorted(rawCdr3List, key=lambda x:(x[0], x[8]))
 	# Select the represenative, allowing same CDR3 shown up in different rows in a cluster to handle scRNA-seq
 	abund = cdr3List[0][10]
@@ -110,21 +122,42 @@ def LargerCluster(rawCdr3List, similarity, prefix, useRepresentative):
 		father.append(clusterRepresentativeId[cdr3[0]])
 	
 	# Build up the set-union relation
-	for key in vjCDR3LenList.keys():
-		cdr3IdList = vjCDR3LenList[key]
-		size = len( cdr3IdList )
-		for i in range(size):
-			for j in range(i + 1, size):
-				if ( GetFather( cdr3IdList[i], father ) != GetFather( cdr3IdList[j], father ) 
-					and CompatibleSequence( cdr3List[ cdr3IdList[i] ][8], cdr3List[ cdr3IdList[j] ][8], 
-					similarity ) ):
-					#if (cdr3List[cdr3IdList[j]][8] == "TGCCAACAGTATATTAGTTACTCGTACACTTTT"):
-					#	print(i, cdr3List[cdr3IdList[i]])
-					#	print(j, cdr3List[cdr3IdList[j]])
+	if (mode == "aggressive"):
+		for key in vjCDR3LenList.keys():
+			cdr3IdList = vjCDR3LenList[key]
+			size = len( cdr3IdList )
+			for i in range(size):
+				fi = GetFather(cdr3IdList[i], father)
+				for j in range(i + 1, size):
 					fj = GetFather(cdr3IdList[j], father) 
-					fi = GetFather(cdr3IdList[i], father)
-					father[fi] = fj
-	
+					if ( fi != fj  
+						and CompatibleSequence( cdr3List[ cdr3IdList[i] ][8], cdr3List[ cdr3IdList[j] ][8], 
+						similarity ) ):
+						#if (cdr3List[cdr3IdList[j]][8] == "TGCCAACAGTATATTAGTTACTCGTACACTTTT"):
+						#	print(i, cdr3List[cdr3IdList[i]])
+						#	print(j, cdr3List[cdr3IdList[j]])
+						father[fj] = fi
+	elif (mode == "center"):
+		for key in vjCDR3LenList.keys():
+			rawCdr3IdList = vjCDR3LenList[key][:]
+			cdr3IdList = sorted(rawCdr3IdList, key=
+					lambda x: (clusterRepresentativeAbund[cdr3List[x][0]], cdr3List[x][10]), reverse=True)
+			size = len(cdr3IdList)
+			for i in range(1, size):
+				maxFj = 0
+				maxSimilarity = -1
+				fi = GetFather(cdr3IdList[i], father)
+				for j in range(i):
+					fj = GetFather(cdr3IdList[j], father)
+					if (fi == fj):
+						continue
+					s = GetSimilarity(cdr3List[fi], cdr3List[fj])
+					if (s > maxSimilarity):
+						maxSimilarity = s
+						maxFj = fj
+				if (maxSimilarity >= similarity):
+					father[fi] = maxFj
+
 	# Associate original clusters to larger cluster
 	largerClusterToId = []
 	largerClusterToClusterName = []
@@ -173,22 +206,26 @@ if (__name__ == "__main__"):
 			"OPTIONS:\n" +
 			"\t-s FLOAT: similarity of two CDR3s (default: 0.8)\n" +
 			"\t--prefix STRING: prefix to new cluster name (default: cluster)\n" + 
+			"\t--center: use the center of the cluster for similarity comparison (default: no)\n"+
 			"\t--representative: use representative CDR3 from each contig for cluster (default: no)") 	
 		exit(1)
 	cdr3List = []
 	similarity = 0.8 ;
 	prefix = "cluster"
 	useRepresentative = False
+	mode = "aggressive"
 	i = 2
 	while (i < len(sys.argv)):
 		if (sys.argv[i] == "-s"):
 			similarity = float(sys.argv[i + 1])
 			i += 1
-		elif (sys.argv[i] == '--prefix'):
+		elif (sys.argv[i] == "--prefix"):
 			prefix = sys.argv[i + 1]
 			i += 1
-		elif (sys.argv[i] == '--representative'):
+		elif (sys.argv[i] == "--representative"):
 			useRepresentative = True
+		elif (sys.argv[i] == "--center"):
+			mode = "center"
 		else:
 			print("Unknown option: ", sys.argv[i])
 			exit(1)
@@ -215,4 +252,4 @@ if (__name__ == "__main__"):
 		if (cols[9] == 0):
 			continue
 		cdr3List.append(cols)
-	LargerCluster(cdr3List, similarity, prefix, useRepresentative)
+	LargerCluster(cdr3List, similarity, prefix, useRepresentative, mode)
