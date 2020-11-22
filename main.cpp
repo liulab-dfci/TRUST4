@@ -1057,7 +1057,12 @@ int main( int argc, char *argv[] )
 	}
 
 	if ( hasBarcode )
-		seqSet.SetHitLenRequired( 13 ) ;
+	{
+		if ( !hasMate )
+			seqSet.SetHitLenRequired( 13 ) ;
+		else
+			seqSet.SetHitLenRequired( 17 ) ;
+	}
 
 	if ( firstReadLen > 200 || trimLevel > 1 )
 		changeKmerLengthThreshold /= 2 ;
