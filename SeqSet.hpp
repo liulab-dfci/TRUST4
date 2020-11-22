@@ -1919,7 +1919,8 @@ private:
 					for ( j = 0 ; j < size ; ++j )
 					{
 						struct _hit nh ;
-						if ( indexHit[j].idx == k )
+						if ( indexHit[j].idx == k 
+							|| seqs[indexHit[j].idx].barcode != seqs[k].barcode)
 							continue ;
 												
 						if ( seqHitCnt.find( indexHit[j].idx ) != seqHitCnt.end() )

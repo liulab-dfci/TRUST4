@@ -1057,7 +1057,7 @@ int main( int argc, char *argv[] )
 	}
 
 	if ( hasBarcode )
-		seqSet.SetHitLenRequired( 17 ) ;
+		seqSet.SetHitLenRequired( 13 ) ;
 
 	if ( firstReadLen > 200 || trimLevel > 1 )
 		changeKmerLengthThreshold /= 2 ;
@@ -1441,7 +1441,7 @@ int main( int argc, char *argv[] )
 	}
 	fclose( fp ) ;
 
-	if ( skipMateExtension )
+	if ( skipMateExtension || !hasMate )
 	{
 		FILE *fp ;
 		if ( outputPrefix[0] != '-' )
