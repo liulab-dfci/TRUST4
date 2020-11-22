@@ -482,11 +482,12 @@ foreach my $barcode (@barcodeList )
 	if ( $maxTag >= 5 && $annotFile ne "" )
 	{
 		# use annotation file to further filter gdT
+		my $tag = 0 ;
 		for ( $i = 0 ; $i < 5 ; ++$i )
 		{
-			last if ( defined $barcodeChainInAnnot{$barcode."_".$i} ) ;
+			$tag |= (1<<$i) if ( defined $barcodeChainInAnnot{$barcode."_".$i} ) ;
 		}
-		next if ( $i < 5 ) ;
+		next if ( ($tag&3) == 3 || ($tag&5) == 5 || ($tag&24) == 24 ) ;
 	}
 
 	if ( $maxTag <= 2 )
