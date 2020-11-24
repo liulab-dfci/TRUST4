@@ -1058,7 +1058,7 @@ int main( int argc, char *argv[] )
 
 	if ( hasBarcode )
 	{
-		if ( !hasMate )
+		if ( 1 )
 			seqSet.SetHitLenRequired( 13 ) ;
 		else
 			seqSet.SetHitLenRequired( 17 ) ;
@@ -1446,7 +1446,7 @@ int main( int argc, char *argv[] )
 	}
 	fclose( fp ) ;
 
-	if ( skipMateExtension || !hasMate )
+	if ( skipMateExtension || !hasMate || hasBarcode)
 	{
 		FILE *fp ;
 		if ( outputPrefix[0] != '-' )

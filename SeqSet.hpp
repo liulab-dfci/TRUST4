@@ -8009,7 +8009,7 @@ public:
 			return 0 ;
 		else if ( direction == -1 && mateInfo.seqStart >= branchAdj[from][k].seqStart )
 			return 0 ;
-
+		
 		/*for ( i = 0 ; i < adjCnt ; ++i )
 		{
 		}*/
@@ -8776,6 +8776,28 @@ public:
 			}
 		}
 		
+		// Only allow end-to-end, gapped extension from when there is barcodes
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			if ( seqs[i].barcode == -1 )
+				continue ;
+			
+			int prevTag = matePrevNext[i].a ;
+			int nextTag = matePrevNext[i].b ;
+			if ( prevTag >= 0 && (extensionType[i].a == 1 || matePrevNextType[i].a != 2)) 
+			{
+				matePrevNext[i].a = -1 ;
+				extensionType[i].a = 0 ;
+				matePrevNextType[i].a = 0 ;
+			}
+			if ( nextTag >= 0 && (extensionType[i].b == 1 || matePrevNextType[i].b != 2)) 
+			{
+				matePrevNext[i].b = -1 ;
+				extensionType[i].b = 0 ;
+				matePrevNextType[i].b = 0 ;
+			}
+		}
+
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			uniqueSuccessorOf[i] = -1 ;
