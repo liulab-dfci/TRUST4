@@ -8777,7 +8777,7 @@ public:
 		}
 		
 		// Only allow end-to-end, gapped extension from when there is barcodes
-		for ( i = 0 ; i < seqCnt ; ++i )
+		/*for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( seqs[i].barcode == -1 )
 				continue ;
@@ -8796,7 +8796,7 @@ public:
 				extensionType[i].b = 0 ;
 				matePrevNextType[i].b = 0 ;
 			}
-		}
+		}*/
 
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
