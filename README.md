@@ -41,7 +41,7 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 			-t INT: number of threads (default: 1)
 			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
 			--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)
-			--barcodeWhiteList STRING: path to the barcode whitelist (default: not used)
+			--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)
 			--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)
 			--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)
 			--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)

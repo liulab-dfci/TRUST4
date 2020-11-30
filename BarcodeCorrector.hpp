@@ -142,7 +142,7 @@ public:
 	BarcodeCorrector() {}
 	~BarcodeCorrector() {}
 	
-	void SetWhiteList(char *whitelist)
+	void SetWhitelist(char *whitelist)
 	{
 		FILE *fp = fopen(whitelist, "r") ;
 		char buffer[256] ;

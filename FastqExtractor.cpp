@@ -22,7 +22,7 @@ char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"\t--barcodeStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
 		"\t--barcodeEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
 		"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
-		"\t--barcodeWhiteList STRING: path to the barcode whitelist (default: not used)\n"
+		"\t--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)\n"
 		"\t--read1Start INT: the start position of sequence in read 1 (default: 0)\n"
 		"\t--read1End INT: the end position of sequence in read 1 (default: length-1)\n"
 		"\t--read2Start INT: the start position of sequence in read 2 (default: 0)\n"
@@ -35,7 +35,7 @@ static struct option long_options[] = {
 			{ "barcodeStart", required_argument, 0, 10001},
 			{ "barcodeEnd", required_argument, 0, 10002},
 			{ "barcodeRevComp", no_argument, 0, 10003},
-			{ "barcodeWhiteList", required_argument, 0, 10004},
+			{ "barcodeWhitelist", required_argument, 0, 10004},
 			{ "read1Start", required_argument, 0, 10005},
 			{ "read1End", required_argument, 0, 10006},
 			{ "read2Start", required_argument, 0, 10007},
@@ -276,7 +276,7 @@ int main( int argc, char *argv[] )
 	BarcodeCorrector barcodeCorrector ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
-	bool hasBarcodeWhiteList = false ;
+	bool hasBarcodeWhitelist = false ;
 	int barcodeStart = 0 ;
 	int barcodeEnd = -1 ;
 	int read1Start = 0 ;
@@ -336,10 +336,10 @@ int main( int argc, char *argv[] )
 		{
 			barcodeRevComp = true ;
 		}
-		else if ( c == 10004 ) // barcodeWhiteList
+		else if ( c == 10004 ) // barcodeWhitelist
 		{
-			hasBarcodeWhiteList = true ;
-			barcodeCorrector.SetWhiteList( optarg ) ;
+			hasBarcodeWhitelist = true ;
+			barcodeCorrector.SetWhitelist( optarg ) ;
 		}
 		else if ( c == 10005 ) // read1Start
 		{
@@ -393,7 +393,7 @@ int main( int argc, char *argv[] )
 	refSet.SetHitLenRequired( hitLenRequired ) ;
 	reads.Rewind() ;
 	
-	if ( hasBarcode && hasBarcodeWhiteList )
+	if ( hasBarcode && hasBarcodeWhitelist )
 	{
 		barcodeCorrector.CollectBackgroundDistribution(barcodeFile, barcodeStart, barcodeEnd, barcodeRevComp) ;
 	}
@@ -450,7 +450,7 @@ int main( int argc, char *argv[] )
 				if ( hasBarcode )
 					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
 						barcodeStart, barcodeEnd, barcodeRevComp, 
-						hasBarcodeWhiteList ? &barcodeCorrector : NULL, refSet ) ;
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, refSet ) ;
 			}
 			
 			
@@ -486,7 +486,7 @@ int main( int argc, char *argv[] )
 			args[i].barcodeStart = barcodeStart ;
 			args[i].barcodeEnd = barcodeEnd ;
 			args[i].barcodeRevComp = barcodeRevComp ;
-			if ( hasBarcodeWhiteList )
+			if ( hasBarcodeWhitelist )
 				args[i].barcodeCorrector = &barcodeCorrector ;
 			else
 				args[i].barcodeCorrector = NULL ;
@@ -540,7 +540,7 @@ int main( int argc, char *argv[] )
 				if ( hasBarcode )
 					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
 						barcodeStart, barcodeEnd, barcodeRevComp, 
-						hasBarcodeWhiteList ? &barcodeCorrector : NULL, refSet ) ; 
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, refSet ) ; 
 			}
 		}
 		

@@ -22,7 +22,7 @@ die "TRUST4 v1.0.2-beta usage: ./run-trust4 [OPTIONS]:\n".
     #"\t-h: print help message and exit.\n"
     "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (default: not used)\n".
     "\t--barcodeRange INT INT CHAR: start, end(-1 for length-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
-    "\t--barcodeWhiteList STRING: path to the barcode whitelist (default: not used)\n".
+    "\t--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)\n".
     "\t--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)\n".
     "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
     #"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
@@ -200,9 +200,9 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$fastqExtractorArgs .= " --read2Start ".$ARGV[$i + 1]." --read2End ".$ARGV[$i + 2] ;
 		$i += 2 ;
 	}
-	elsif ( $ARGV[$i] eq "--barcodeWhiteList" )
+	elsif ( $ARGV[$i] eq "--barcodeWhitelist" )
 	{
-		$fastqExtractorArgs .= " --barcodeWhiteList ".$ARGV[$i + 1] ;
+		$fastqExtractorArgs .= " --barcodeWhitelist ".$ARGV[$i + 1] ;
 		$i += 1 ;
 	}
 	elsif ( $ARGV[$i] eq "--UMI" )
