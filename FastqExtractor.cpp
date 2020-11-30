@@ -7,6 +7,7 @@
 
 #include "SeqSet.hpp"
 #include "ReadFiles.hpp"
+#include "BarcodeCorrector.hpp"
 
 char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"Required:\n"
@@ -20,7 +21,12 @@ char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"\t--barcode STRING: path to the raw barcode file (default: not used)\n"
 		"\t--barcodeStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
 		"\t--barcodeEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
-		"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used )\n"
+		"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
+		"\t--barcodeWhiteList STRING: path to the barcode whitelist (default: not used)\n"
+		"\t--read1Start INT: the start position of sequence in read 1 (default: 0)\n"
+		"\t--read1End INT: the end position of sequence in read 1 (default: length-1)\n"
+		"\t--read2Start INT: the start position of sequence in read 2 (default: 0)\n"
+		"\t--read2End INT: the end position of sequence in read 2 (default: length-1)\n"
 		;
 
 static const char *short_options = "f:u:1:2:o:t:" ;
@@ -29,6 +35,11 @@ static struct option long_options[] = {
 			{ "barcodeStart", required_argument, 0, 10001},
 			{ "barcodeEnd", required_argument, 0, 10002},
 			{ "barcodeRevComp", no_argument, 0, 10003},
+			{ "barcodeWhiteList", required_argument, 0, 10004},
+			{ "read1Start", required_argument, 0, 10005},
+			{ "read1End", required_argument, 0, 10006},
+			{ "read2Start", required_argument, 0, 10007},
+			{ "read2End", required_argument, 0, 10008},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -43,7 +54,7 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 struct _threadArg 
 {
-	struct _Read *readBatch, *readBatch2 ;
+	struct _Read *readBatch, *readBatch2, *barcodeBatch ;
 	
 	int threadCnt ;
 	int batchSize ;
@@ -52,6 +63,10 @@ struct _threadArg
 
 	SeqSet *refSet ;
 	
+	BarcodeCorrector *barcodeCorrector ;
+	int barcodeStart, barcodeEnd ;
+	bool barcodeRevComp ;
+
 	int tid ;
 } ;
 
@@ -99,22 +114,57 @@ int IsGoodCandidate( char *read, char *buffer, SeqSet *refSet )
 	return 0 ;
 }
 
-void OutputSeq( FILE *fp, const char *name, char *seq, char *qual )
+void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, int start, int end )
 {
-	if ( qual != NULL )
-		fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
+	if ( start == 0 && end == -1 )
+	{
+		if ( qual != NULL )
+			fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
+		else
+			fprintf( fp, ">%s\n%s\n", name, seq ) ;
+	}
 	else
-		fprintf( fp, ">%s\n%s\n", name, seq ) ;
+	{
+		int i ;
+		int s = start ;
+		int e = ( end == -1 ? strlen( seq ) - 1 : end ) ;
+		
+		for ( i = s ; i <= e ; ++i )
+			buffer[i - s] = seq[i] ;
+		buffer[i - s] = '\0' ;
+
+		if (qual == NULL)
+		{
+			fprintf( fp, ">%s\n%s\n", name, buffer ) ;	
+		}
+		else
+		{
+			fprintf( fp, "@%s\n%s\n+\n", name, buffer ) ;	
+			
+			for ( i = s ; i <= e ; ++i )
+				buffer[i - s] = qual[i] ;
+			buffer[i - s] = '\0' ;
+			fprintf( fp, "%s\n", buffer ) ;
+		}
+	}
 }
 
 // Maybe barcode read quality could be useful in future.
 void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual, 
-	int start, int end, bool revcomp, SeqSet &seqSet )
+	int start, int end, bool revcomp, BarcodeCorrector *barcodeCorrector, SeqSet &seqSet )
 {
-	if ( barcode )
+	if ( barcode && barcode[0] != '\0')
 	{
 		if ( start == 0 && end == -1 && revcomp == false )
-			fprintf( fp, ">%s\n%s\n", name, barcode ) ;
+		{
+			int result = 0 ;
+			if ( barcodeCorrector != NULL )	
+				result = barcodeCorrector->Correct( barcode, qual ) ;
+			if (result >= 0)
+				fprintf( fp, ">%s\n%s\n", name, barcode ) ;
+			else
+				fprintf(fp, ">%s\nmissing_barcode\n", name) ;
+		}
 		else
 		{
 			int i ;
@@ -130,7 +180,13 @@ void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual,
 			else
 				seqSet.ReverseComplement( buffer, barcode + s, e - s + 1 ) ;
 			
-			fprintf( fp, ">%s\n%s\n", name, buffer ) ;
+			int result = 0 ;
+			if ( barcodeCorrector != NULL )	
+				result = barcodeCorrector->Correct( buffer, qual ) ;
+			if (result >= 0)
+				fprintf( fp, ">%s\n%s\n", name, buffer ) ;
+			else
+				fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
 		}
 	}
 	else
@@ -139,7 +195,7 @@ void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual,
 
 void *ProcessReads_Thread( void *pArg )
 {
-	int i ;	
+	int i, j ;	
 	struct _threadArg &arg = *((struct _threadArg *)pArg ) ;
 	for ( i = 0 ; i < arg.batchSize ; ++i )
 	{
@@ -154,6 +210,44 @@ void *ProcessReads_Thread( void *pArg )
 
 		if ( !goodCandidate ) 
 			arg.readBatch[i].id[0] = '\0' ;
+		/*else if (arg.barcodeBatch != NULL)
+		{
+			// Process the barcode. 
+			char *buffer = arg.buffer ;
+			char *barcode = arg.barcodeBatch[i].seq ;
+			//printf("%d: %s %s. %s %s\n", goodCandidate, arg.readBatch[i].id, arg.readBatch[i].seq, 
+			//		arg.barcodeBatch[i].id, arg.barcodeBatch[i].seq) ;
+			if ( arg.barcodeStart == 0 && arg.barcodeEnd == -1 && arg.barcodeRevComp == false )
+			{
+				if ( arg.barcodeCorrector != NULL )
+					strcpy( buffer, barcode ) ;
+				else
+					continue ; // no need to process the barcode
+			}
+			else
+			{
+				int s = arg.barcodeStart ;
+				int e = ( arg.barcodeEnd == -1 ? strlen( barcode ) - 1 : arg.barcodeEnd ) ;
+				if ( arg.barcodeRevComp == false )
+				{
+					for ( j = s ; j <= e ; ++j )
+						buffer[j - s] = barcode[j] ;
+					buffer[j - s] = '\0' ;
+				}
+				else
+					arg.refSet->ReverseComplement( buffer, barcode + s, e - s + 1 ) ;
+			}
+				
+			if ( arg.barcodeCorrector != NULL )
+			{
+				int result = 0 ;
+				result = arg.barcodeCorrector->Correct( buffer, arg.barcodeBatch[i].qual ) ;
+				if (result < 0)
+					buffer[0] = '\0' ;
+			}
+		
+			strcpy( barcode, buffer ) ;	
+		}*/
 	}
 
 	pthread_exit( NULL ) ;
@@ -179,10 +273,16 @@ int main( int argc, char *argv[] )
 	ReadFiles reads ;
 	ReadFiles mateReads ;
 	ReadFiles barcodeFile ;
+	BarcodeCorrector barcodeCorrector ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
+	bool hasBarcodeWhiteList = false ;
 	int barcodeStart = 0 ;
 	int barcodeEnd = -1 ;
+	int read1Start = 0 ;
+	int read1End = -1 ;
+	int read2Start = 0 ;
+	int read2End = -1 ;
 	bool barcodeRevComp = false ;
 
 	while ( 1 )
@@ -236,6 +336,27 @@ int main( int argc, char *argv[] )
 		{
 			barcodeRevComp = true ;
 		}
+		else if ( c == 10004 ) // barcodeWhiteList
+		{
+			hasBarcodeWhiteList = true ;
+			barcodeCorrector.SetWhiteList( optarg ) ;
+		}
+		else if ( c == 10005 ) // read1Start
+		{
+			read1Start = atoi( optarg ) ;
+		}
+		else if ( c == 10006 ) // read1Start
+		{
+			read1End = atoi( optarg ) ;
+		}
+		else if ( c == 10007 ) // read1Start
+		{
+			read2Start = atoi( optarg ) ;
+		}
+		else if ( c == 10008 ) // read1Start
+		{
+			read2End = atoi( optarg ) ;
+		}
 		else
 		{
 			fprintf( stderr, "Unknown parameter %s\n", optarg ) ;
@@ -272,6 +393,11 @@ int main( int argc, char *argv[] )
 	refSet.SetHitLenRequired( hitLenRequired ) ;
 	reads.Rewind() ;
 	
+	if ( hasBarcode && hasBarcodeWhiteList )
+	{
+		barcodeCorrector.CollectBackgroundDistribution(barcodeFile, barcodeStart, barcodeEnd, barcodeRevComp) ;
+	}
+
 	FILE *fp1 = NULL ;
 	FILE *fp2 = NULL ;
 	FILE *fpBc = NULL ;
@@ -318,12 +444,13 @@ int main( int argc, char *argv[] )
 				++goodCandidate ;
 			if ( goodCandidate )
 			{
-				OutputSeq( fp1, reads.id, reads.seq, reads.qual ) ;
+				OutputSeq( fp1, reads.id, reads.seq, reads.qual, read1Start, read1End ) ;
 				if ( hasMate )
-					OutputSeq( fp2, reads.id, mateReads.seq, mateReads.qual ) ;
+					OutputSeq( fp2, reads.id, mateReads.seq, mateReads.qual, read2Start, read2End ) ;
 				if ( hasBarcode )
 					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
-						barcodeStart, barcodeEnd, barcodeRevComp, refSet ) ;
+						barcodeStart, barcodeEnd, barcodeRevComp, 
+						hasBarcodeWhiteList ? &barcodeCorrector : NULL, refSet ) ;
 			}
 			
 			
@@ -355,7 +482,14 @@ int main( int argc, char *argv[] )
 			args[i].tid = i ;
 			args[i].readBatch = readBatch ;
 			args[i].readBatch2 = readBatch2 ;
-
+			args[i].barcodeBatch = barcodeBatch ;
+			args[i].barcodeStart = barcodeStart ;
+			args[i].barcodeEnd = barcodeEnd ;
+			args[i].barcodeRevComp = barcodeRevComp ;
+			if ( hasBarcodeWhiteList )
+				args[i].barcodeCorrector = &barcodeCorrector ;
+			else
+				args[i].barcodeCorrector = NULL ;
 			args[i].buffer = (char *)malloc( sizeof( char ) * 10001 ) ;
 			args[i].refSet = &refSet ;
 		}
@@ -400,12 +534,13 @@ int main( int argc, char *argv[] )
 			{
 				if ( readBatch[i].id[0] == '\0' )
 					continue ;
-				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual ) ;
+				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual, read1Start, read1End ) ;
 				if ( readBatch2 != NULL )
-					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual ) ;
+					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual, read2Start, read2End ) ;
 				if ( hasBarcode )
 					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
-						barcodeStart, barcodeEnd, barcodeRevComp, refSet ) ;
+						barcodeStart, barcodeEnd, barcodeRevComp, 
+						hasBarcodeWhiteList ? &barcodeCorrector : NULL, refSet ) ; 
 			}
 		}
 		

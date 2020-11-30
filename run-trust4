@@ -7,7 +7,7 @@ use Cwd 'cwd' ;
 use Cwd 'abs_path' ;
 use File::Basename ;
 
-die "TRUST4 v1.0.1 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.2-beta usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -21,7 +21,10 @@ die "TRUST4 v1.0.1 usage: ./run-trust4 [OPTIONS]:\n".
     "\t-t INT: number of threads (default: 1)\n".
     #"\t-h: print help message and exit.\n"
     "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (default: not used)\n".
-    "\t--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
+    "\t--barcodeRange INT INT CHAR: start, end(-1 for length-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
+    "\t--barcodeWhiteList STRING: path to the barcode whitelist (default: not used)\n".
+    "\t--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)\n".
+    "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
     #"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
     #"\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a umi is the true umi (default: 0 -1 +)\n".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
@@ -50,6 +53,7 @@ my $WD = dirname( abs_path( $0 ) ) ;
 my $kmerSize = 21 ;
 my $bloomFilterSize = 100000000 ;
 my $i ;
+my $j ;
 
 my $jellyfishBin = "jellyfish" ;
 #if ( -e "$WD/jellyfish/bin/jellyfish" )
@@ -62,6 +66,7 @@ my @singleFiles ;
 my @firstMateFiles ;
 my @secondMateFiles ;
 my @bamFiles ;
+my @barcodeFiles ;
 my $useJellyfish = 0 ;
 my $prefix = "" ;
 my $vdjcFasta = "" ;
@@ -79,23 +84,34 @@ my $hasUmi = 0 ;
 my $outputDirectory = "" ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
-
 for ( $i = 0 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "-1" )
 	{
-		push @firstMateFiles, $ARGV[$i + 1] ;
-		++$i ;
+		for ($j = $i + 1; $j < @ARGV; ++$j )		
+		{
+			last if ($ARGV[$j] =~ /^-/) ;
+			push @firstMateFiles, glob($ARGV[$j]) ;
+		}
+		$i = $j - 1 ;
 	}
 	elsif ( $ARGV[$i] eq "-2" )
 	{	
-		push @secondMateFiles, $ARGV[$i + 1] ;
-		++$i ;
+		for ($j = $i + 1; $j < @ARGV; ++$j )		
+		{
+			last if ($ARGV[$j] =~ /^-/) ;
+			push @secondMateFiles, glob($ARGV[$j]) ;
+		}
+		$i = $j - 1 ;
 	}
 	elsif ( $ARGV[ $i ] eq "-u" ) 
 	{
-		push @singleFiles, $ARGV[ $i + 1 ] ;
-		++$i ;
+		for ($j = $i + 1; $j < @ARGV; ++$j )		
+		{
+			last if ($ARGV[$j] =~ /^-/) ;
+			push @singleFiles, glob($ARGV[$j]) ;
+		}
+		$i = $j - 1 ;
 	}
 	elsif ( $ARGV[$i] eq "-b" )
 	{
@@ -154,10 +170,15 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$hasBarcode = 1 ;
 		$bamExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
-		$fastqExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
+		#$fastqExtractorArgs .= " --barcode ".$ARGV[$i + 1] ;
+		for ($j = $i + 1; $j < @ARGV; ++$j )		
+		{
+			last if ($ARGV[$j] =~ /^-/) ;
+			push @barcodeFiles, glob($ARGV[$j]) ;
+		}
 		$simpleRepArgs .= " --barcodeCnt" ;
 		$annotatorArgs .= "--barcode" ;
-		++$i ;
+		$i = $j - 1 ;
 	}
 	elsif ( $ARGV[$i] eq "--barcodeRange" )
 	{
@@ -168,6 +189,21 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		}
 
 		$i += 3 ;
+	}
+	elsif ( $ARGV[$i] eq "--read1Range")
+	{
+		$fastqExtractorArgs .= " --read1Start ".$ARGV[$i + 1]." --read1End ".$ARGV[$i + 2] ;
+		$i += 2 ;
+	}
+	elsif ( $ARGV[$i] eq "--read2Range")
+	{
+		$fastqExtractorArgs .= " --read2Start ".$ARGV[$i + 1]." --read2End ".$ARGV[$i + 2] ;
+		$i += 2 ;
+	}
+	elsif ( $ARGV[$i] eq "--barcodeWhiteList" )
+	{
+		$fastqExtractorArgs .= " --barcodeWhiteList ".$ARGV[$i + 1] ;
+		$i += 1 ;
 	}
 	elsif ( $ARGV[$i] eq "--UMI" )
 	{
@@ -246,13 +282,33 @@ if ( $stage <= 0 )
 	}
 	elsif ( @firstMateFiles > 0 && $noExtraction == 0 )
 	{
-		system_call( "$WD/fastq-extractor -1 ".$firstMateFiles[0]." -2 ".$secondMateFiles[0].
-				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
+		my $fname ; 
+		foreach $fname (@firstMateFiles)
+		{
+			$fastqExtractorArgs .= " -1 ".$fname ;
+		}
+		foreach $fname (@secondMateFiles)
+		{
+			$fastqExtractorArgs .= " -2 ".$fname ;
+		}
+		foreach $fname (@barcodeFiles)
+		{
+			$fastqExtractorArgs .= " --barcode ".$fname ;
+		}
+		system_call( "$WD/fastq-extractor -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
 	}
 	elsif ( @singleFiles > 0 && $noExtraction == 0 )
 	{
-		system_call( "$WD/fastq-extractor -u ".$singleFiles[0].
-				" -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
+		my $fname ; 
+		foreach $fname (@singleFiles)
+		{
+			$fastqExtractorArgs .= " -u ".$fname ;
+		}
+		foreach $fname (@barcodeFiles)
+		{
+			$fastqExtractorArgs .= " --barcode ".$fname ;
+		}
+		system_call( "$WD/fastq-extractor -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
 	}
 }
 
@@ -310,6 +366,24 @@ if ( $stage <= 2 )
 	{
 		$annotatorArgs .= " -r ${prefix}_assembled_reads.fa" ;
 	}
+
+	if ( $vdjcRef eq "" )
+	{
+		# Go through the -f file to check whether this could be from IMGT.
+		open FPtmp, $vdjcFasta ;
+		while (<FPtmp>)
+		{
+			next if ( /^>/) ;
+			if (/\./)
+			{
+				print STDERR "[".localtime()."] WARNING: $vdjcFasta is of IMGT format, automatically add --ref option.\n" ;
+				$vdjcRef = $vdjcFasta ;
+				last ;
+			}
+		}
+		close FPtmp ;
+	}
+
 	if ( $vdjcRef eq "" )
 	{
 		system_call( "$WD/annotator -f $vdjcFasta -a ${prefix}_final.out -t $threadCnt -o $prefix --notIMGT $annotatorArgs > ${prefix}_annot.fa" ) ;
