@@ -5,6 +5,7 @@
 #include <stdarg.h>
 
 #include <vector>
+#include <pthread.h>
 
 #include "KmerCount.hpp"
 #include "SeqSet.hpp"
