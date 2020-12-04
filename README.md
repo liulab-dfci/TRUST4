@@ -105,7 +105,7 @@ Normally, the file specified by "--ref" is downloaded from IMGT website, For exa
 
 The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
-* Single-cell data, e.g. 10X Genomics data:
+* 10X Genomics data:
 
 When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
 
@@ -122,6 +122,14 @@ In the output, the abundance in the report will use the number of barcodes for t
 For the chain information it is in CSV format:
 	
 	V_gene[,D_gene],J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity
+
+* SMART-Seq data
+
+We provide a wrapper "trust-smartseq.pl" to process the files from platforms like SMART-seq. The user shall give the . An example command can be
+
+	perl trust-smartseq.pl -1 read1_list.txt -2 read2_list.txt -t 8 -f hg38_bctcr.fa --ref human_IMGT+C.fa -o TRUST
+
+The script will create two files: TRUST_report.tsv for general summary and TRUST_annot.fa for assemblies. The formats are described above. Each cell's name is inferred by the file name before the first ".".
 
 * Simple report
 
