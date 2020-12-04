@@ -75,18 +75,47 @@ struct _overlap
 			return similarity > b.similarity ; 
 		else if ( readEnd - readStart != b.readEnd - b.readStart )
 			return readEnd - readStart > b.readEnd - b.readStart ;
+		else if ( seqIdx != b.seqIdx )
+			return seqIdx < b.seqIdx ;
 		else if ( strand !=  b.strand )
 			return strand < b.strand ;
-		else if ( seqStart != b.seqStart )
-			return seqStart < b.seqStart ;
-		else if ( seqEnd != b.seqEnd )
-			return seqEnd < b.seqEnd ; 
 		else if ( readStart != b.readStart )
 			return readStart < b.readStart ;
 		else if ( readEnd != b.readEnd )
 			return readEnd < b.readEnd ;
+		else if ( seqStart != b.seqStart )
+			return seqStart < b.seqStart ;
 		else 
-			return seqIdx < b.seqIdx ;
+			return seqEnd < b.seqEnd ; 
+
+		return false ;
+	}
+} ;
+
+// This order works better against reference set, because it seems works better for the 5' end site
+struct _sortOverlapOnRef
+{
+	bool operator() (const struct _overlap &a, const struct _overlap &b) const
+	{
+		// The overlap with more matched bases should come first.
+		if ( a.matchCnt > b.matchCnt + 2 || a.matchCnt < b.matchCnt - 2 )
+			return a.matchCnt > b.matchCnt ;
+		else if ( a.similarity != b.similarity )
+			return a.similarity > b.similarity ; 
+		else if ( a.readEnd - a.readStart != b.readEnd - b.readStart )
+			return a.readEnd - a.readStart > b.readEnd - b.readStart ;
+		else if ( a.strand !=  b.strand )
+			return a.strand < b.strand ;
+		else if ( a.seqStart != b.seqStart )
+			return a.seqStart < b.seqStart ;
+		else if ( a.seqEnd != b.seqEnd )
+			return a.seqEnd < b.seqEnd ; 
+		else if ( a.readStart != b.readStart )
+			return a.readStart < b.readStart ;
+		else if ( a.readEnd != b.readEnd )
+			return a.readEnd < b.readEnd ;
+		else 
+			return a.seqIdx < b.seqIdx ;
 
 		return false ;
 	}
@@ -3827,12 +3856,15 @@ public:
 		//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
 		assign.seqIdx = -1 ;
 
-		if ( overlapCnt == 0 )
+		if ( overlapCnt == 0 || seqs.size() == 0)
 		{
 			return -1 ;
 		}
-			
-		std::sort( overlaps.begin(), overlaps.end() ) ;
+		
+		if ( !seqs[0].isRef )
+			std::sort( overlaps.begin(), overlaps.end() ) ;
+		else
+			std::sort( overlaps.begin(), overlaps.end(), _sortOverlapOnRef() ) ;
 
 		int len = strlen( read ) ;
 		char *rc = new char[len + 1] ;
