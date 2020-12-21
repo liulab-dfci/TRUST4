@@ -5762,7 +5762,7 @@ public:
 							s = e - 18 ;
 					}
 					
-					int far = false ;
+					bool far = false ;
 					for ( i = s ; i <= e ; ++i )
 						if ( read[i] == 'M' )
 							far = true ;
