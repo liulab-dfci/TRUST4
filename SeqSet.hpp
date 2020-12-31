@@ -4257,7 +4257,7 @@ public:
 		int ret = 0 ;
 		for ( k = 0 ; k <= 2 ; ++k )	
 		{
-			for ( i = k, j = 0 ; i < len ; i += 3, ++j )
+			for ( i = k, j = 0 ; i + 2 < len ; i += 3, ++j )
 				aa[j] = DnaToAa( read[i], read[i + 1], read[i + 2] ) ;
 
 			for ( i = 0 ; i + 2 < j ; ++i ) // YYC
