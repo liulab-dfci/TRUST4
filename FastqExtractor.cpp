@@ -490,7 +490,7 @@ int main( int argc, char *argv[] )
 				args[i].barcodeCorrector = &barcodeCorrector ;
 			else
 				args[i].barcodeCorrector = NULL ;
-			args[i].buffer = (char *)malloc( sizeof( char ) * 10001 ) ;
+			args[i].buffer = (char *)malloc( sizeof( char ) * 100001 ) ;
 			args[i].refSet = &refSet ;
 		}
 
