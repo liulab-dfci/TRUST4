@@ -5400,9 +5400,13 @@ public:
 			{
 				// Extend right.
 				int seqIdx = allOverlaps[i].seqIdx ;				
+				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
+				double scoreThresholdAdjust = 1 ;
+				if ( geneType == 2)
+					scoreThresholdAdjust = 0.25 ;
 				AlignAlgo::GlobalAlignment_OneEnd( seqs[ seqIdx ].consensus + allOverlaps[i].seqEnd + 1, 
 					seqs[ seqIdx ].consensusLen - allOverlaps[i].seqEnd - 1, 
-					read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, 0, align ) ;
+					read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, 0, scoreThresholdAdjust, align ) ;
 				//printf( "%s\n", seqs[ seqIdx ].name ) ;
 				//AlignAlgo::VisualizeAlignment( seqs[ seqIdx ].consensus + allOverlaps[i].seqEnd + 1, 
 				//	seqs[ seqIdx ].consensusLen - allOverlaps[i].seqEnd - 1, 
@@ -5429,6 +5433,26 @@ public:
 					else
 						break ;
 				}
+				
+				// Force extension if the difference is very small.
+				// This would avoid the mismatches near the end that forced the terminating of 
+				// alignment extension above.
+				if ( geneType == 2 && seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 > 0 &&
+					seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 < 5 )
+				{
+					int extendLen = seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1;
+					for ( j = 0 ; j < extendLen ; ++j )
+					{	
+					        if (allOverlaps[i].readEnd + j + 1 >= len)
+							break ;
+						if (read[allOverlaps[i].readEnd + j + 1] 
+							== seqs[allOverlaps[i].seqIdx].consensus[allOverlaps[i].seqEnd + j + 1])
+							allOverlaps[i].matchCnt += 2;
+					}
+					allOverlaps[i].readEnd += j ;
+					allOverlaps[i].seqEnd += j ;
+				}
+
 
 				// Extend left.
 				char *rvs = new char[seqs[ seqIdx ].consensusLen ] ;
@@ -5436,13 +5460,16 @@ public:
 				Reverse( rvs, seqs[seqIdx].consensus, allOverlaps[i].seqStart ) ;
 				//rvr[geneOverlap[i].readStart] = '\0' ;
 				//rvs[geneOverlap[i].seqStart] = '\0' ;
-					
-				AlignAlgo::GlobalAlignment_OneEnd( rvs, allOverlaps[i].seqStart, rvr, allOverlaps[i].readStart, 0, align ) ;
+				scoreThresholdAdjust = 1 ;
+				if ( geneType == 0 || geneType == 3)
+					scoreThresholdAdjust = 0.25 ;
+				AlignAlgo::GlobalAlignment_OneEnd( rvs, allOverlaps[i].seqStart, rvr, allOverlaps[i].readStart, 
+						0, scoreThresholdAdjust, align ) ;
 				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
-					if ( allOverlaps[i].readStart > 1 && read[ allOverlaps[i].readStart - 1 ] == 'N' 
-						&& read[ allOverlaps[i].readStart - 2 ] == 'N' )
+					if ( allOverlaps[i].readStart > 1 && read[ allOverlaps[i].readStart - 1 ] == 'M' 
+						&& read[ allOverlaps[i].readStart - 2 ] == 'M' )
 					{
 						break ;
 					}
@@ -5465,7 +5492,23 @@ public:
 						break ;
 				}
 				delete[] rvs ;
-				
+				// Force extension if the difference is very small.
+				if ( (geneType == 0 || geneType == 3 ) && allOverlaps[i].seqStart > 0 &&
+					allOverlaps[i].seqStart < 5 )
+				{
+					int extendLen = allOverlaps[i].seqStart;
+					for ( j = 0 ; j < extendLen ; ++j )
+					{	
+					        if (allOverlaps[i].readStart - j - 1 >= 0)
+							break ;
+						if (read[allOverlaps[i].readStart - j - 1] 
+							== seqs[allOverlaps[i].seqIdx].consensus[allOverlaps[i].seqStart - j - 1])
+							allOverlaps[i].matchCnt += 2;
+					}
+					allOverlaps[i].readStart -= j ;
+					allOverlaps[i].seqStart -= j ;
+				}
+
 				allOverlaps[i].similarity = (double)( allOverlaps[i].matchCnt ) / 
 						( allOverlaps[i].seqEnd - allOverlaps[i].seqStart + 1 + 
 							allOverlaps[i].readEnd - allOverlaps[i].readStart + 1 ) ;

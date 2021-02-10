@@ -617,7 +617,7 @@ public:
 	
 	// Semi-global alignment where one end is matched, the other side is free.
 	//   the alignment score should be at least threshold
-	static int GlobalAlignment_OneEnd( char *t, int lent, char *p, int lenp, int threshold, char *align )
+	static int GlobalAlignment_OneEnd( char *t, int lent, char *p, int lenp, int threshold, double scoreThresholdFactor, char *align )
 	{
 		int *m, *e, *f ;
 		if ( lent == 0 || lenp == 0 )
@@ -691,8 +691,8 @@ public:
 		for ( i = 0 ; i <= lenp ; ++i )
 			for ( j = 0 ; j <= lent ; ++j )
 			{
-				int scoreThreshold = ( i + j ) * 0.5 *(  0.8 * SCORE_MATCH + 0.2 * SCORE_MISMATCH ) ;
-				if ( m[i * bmax + j] < scoreThreshold )
+				int scoreThreshold = ( i + j ) * 0.5 *(  0.8 * SCORE_MATCH + 0.2 * SCORE_MISMATCH ) * scoreThresholdFactor ;
+				if ( m[i * bmax + j] < scoreThreshold)
 					continue ;
 				if ( m[i * bmax +j] > max )
 				{
