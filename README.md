@@ -81,11 +81,11 @@ The coordinate is 0-based.
 
 The output trust_cdr3.out is a tsv file. The fields are:
 
-	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count CDR3_germline_similarity
+	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count CDR3_germline_similarity full_length_assembly
 
 The output trust_report.tsv is a tsv file. The fileds are:
 	
-	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C	consensus_id
+	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C	consensus_id consensus_id_full_length
 
 For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. 
 
@@ -121,7 +121,7 @@ In the output, the abundance in the report will use the number of barcodes for t
 
 For the chain information it is in CSV format:
 	
-	V_gene[,D_gene],J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity
+	V_gene,D_gene,J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity,consensus_full_length
 
 * SMART-Seq data
 

@@ -378,7 +378,7 @@ while ( <FP1> )
 		}
 	}
 	
-	my $info = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[0], $cols[11] ) ) ;
+	my $info = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[0], $cols[11], $cols[12]) ) ;
 
 	if ( $aa eq "partial" )
 	{

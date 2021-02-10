@@ -339,6 +339,7 @@ open FP1, $ARGV[0] ;
 my @totalCnt = (0, 0, 0) ;
 my %cdr3AssemblyId ; # Record which assembly is representative for the cdr3
 my %cdr3Barcode ; # record whether a "chain_cdr3_barcode" has showed up before or not 
+my %assemblyIdFullLength ; # record whether this assembly id contains full length assembly
 while ( <FP1> )
 {
 	chomp ;
@@ -419,11 +420,13 @@ while ( <FP1> )
 		@{ $cdr3{ $key } } = ( $cols[9], $cols[10], $assemblyId, $cols[10] ) ;
 	}
 	$totalCnt[ $type ] += $cols[10] if ( $type != -1 ) ;
+
+	$assemblyIdFullLength{$assemblyId} = $cols[12] ;
 }
 close FP1 ;
 
 # Output what we collected.
-print( "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid" ) ;
+print( "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\tcid_full_length" ) ;
 if ( $reportJunctionInfo == 1 )
 {
 	print( "\tjunction" )
@@ -470,13 +473,13 @@ foreach my $key ( sort { $cdr3{$b}[1] <=> $cdr3{$a}[1] } keys %cdr3 )
 	{
 		my $cnt = int($val[1]) ;
 		next if ($cnt == 0) ;
-		printf( "%d\t%e\t%s\t%s\t%s\t%s\t%s\t%s\t%s", $cnt, $freq, $info[4], $aa, 
-					$info[0], $info[1], $info[2], $info[3], $val[2] ) ;
+		printf( "%d\t%e\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d", $cnt, $freq, $info[4], $aa, 
+					$info[0], $info[1], $info[2], $info[3], $val[2], $assemblyIdFullLength{$val[2]} ) ;
 	}
 	else
 	{
-		printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s\t%s", $val[1], $freq, $info[4], $aa, 
-					$info[0], $info[1], $info[2], $info[3], $val[2] ) ;
+		printf( "%.2f\t%e\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d", $val[1], $freq, $info[4], $aa, 
+					$info[0], $info[1], $info[2], $info[3], $val[2], $assemblyIdFullLength{$val[2]} ) ;
 	}
 	if ( $reportJunctionInfo == 1 )
 	{

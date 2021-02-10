@@ -57,6 +57,8 @@ struct _annotate
 	struct _overlap geneOverlap[4] ;
 	struct _overlap cdr[3] ;
 	std::vector<struct _overlap> secondaryGeneOverlaps ;
+	
+	int isFullLength ;
 } ;
 
 struct _CDR3info
@@ -265,6 +267,37 @@ void AnnotationTieBreak( struct _annotate *annotations, SeqSet &seqSet, SeqSet &
 	}
 	delete[] abundance ;
 }
+
+int IsFullLengthAssembly(char *seq, struct _annotate &annotation, SeqSet &refSet)
+{
+	int i ;
+	struct _overlap *geneOverlap = annotation.geneOverlap ;
+	struct _overlap *cdr = annotation.cdr ;
+	for ( i = 0 ; i < 4 ; ++i )
+	{
+		if ( i == 1 )
+			continue ;
+		if (geneOverlap[i].seqIdx == -1)
+			return 0 ;
+	}
+
+	if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3 
+		|| geneOverlap[2].readEnd > geneOverlap[3].readStart + 6 )
+		return 0 ;
+	if (geneOverlap[0].seqStart >= 10 || geneOverlap[2].readEnd < cdr[2].readStart)
+		return 0 ;
+	if (geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].seqEnd < refSet.GetSeqConsensusLen(geneOverlap[2].seqIdx) - 3)
+		return 0 ;
+	if (geneOverlap[3].seqStart > 10)
+		return 0 ;
+	for ( i = geneOverlap[0].readStart ; i <= geneOverlap[3].readEnd ; ++i )
+	{
+		if (seq[i] == 'N')
+			return 0 ;
+	}
+	return 1 ;
+}
+
 
 void *AnnotateReads_Thread( void *pArg )
 {
@@ -544,7 +577,12 @@ int main( int argc, char *argv[] )
 			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, outputGeneAlignment, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
 	}
-
+	
+	// Add other informations for annotation.
+	for ( i = 0 ;i < seqCnt ; ++i )
+	{
+		annotations[i].isFullLength = IsFullLengthAssembly( seqSet.GetSeqConsensus(i), annotations[i], refSet ) ;
+	}
 	
 	// Output more CDR3 information 
 	if ( fpReads != NULL )
@@ -852,7 +890,6 @@ int main( int argc, char *argv[] )
 
 			if ( !includePartial && annotations[i].cdr[2].similarity == 0 )
 				continue ;
-
 			std::vector<struct _CDR3info> &info = cdr3Infos[i] ;
 			int size = info.size() ;
 			// Output each CDR3 information
@@ -899,9 +936,9 @@ int main( int argc, char *argv[] )
 						fprintf( fpOutput, "%s\t", buffer ) ;
 					}
 				}
-				fprintf( fpOutput, "%s\t%.2lf\t%.2lf\t%.2f\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count,
+				fprintf( fpOutput, "%s\t%.2lf\t%.2lf\t%.2f\t%d\n", info[j].seq, annotations[i].cdr[2].similarity, info[j].count,
 					refSet.GetCDR3Similarity( info[j].seq, annotations[i].geneOverlap, 
-						annotations[i].cdr ) * 100.0 ) ;
+						annotations[i].cdr ) * 100.0, annotations[i].isFullLength ) ;
 			}
 			
 		}
@@ -982,9 +1019,9 @@ int main( int argc, char *argv[] )
 					int cov = seqSet.GetConsensusWeightSumRange( i, annotations[i].cdr[2].readStart, 
 							annotations[i].cdr[2].readEnd ) ;
 					double avgCov = (double)cov / ( annotations[i].cdr[2].readEnd - annotations[i].cdr[2].readStart + 1 ) ;
-					fprintf( fpOutput, "%.2lf\t%.2lf\t%.2lf\n", annotations[i].cdr[2].similarity, avgCov,
+					fprintf( fpOutput, "%.2lf\t%.2lf\t%.2lf\t%d\n", annotations[i].cdr[2].similarity, avgCov,
 						refSet.GetCDR3Similarity( buffer, annotations[i].geneOverlap, 
-						annotations[i].cdr ) * 100.0 ) ;
+						annotations[i].cdr ) * 100.0, annotations[i].isFullLength ) ;
 				}
 			}
 		}
