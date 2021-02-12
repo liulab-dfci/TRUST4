@@ -281,6 +281,9 @@ int IsFullLengthAssembly(char *seq, struct _annotate &annotation, SeqSet &refSet
 			return 0 ;
 	}
 
+  if (cdr[2].seqIdx == -1)
+      return 0 ;
+
 	if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3 
 		|| geneOverlap[2].readEnd > geneOverlap[3].readStart + 6 )
 		return 0 ;

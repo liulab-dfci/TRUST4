@@ -2318,7 +2318,7 @@ public:
 			struct _seqWrapper ns ;
 			// Filter the gene with "/" sign
 			for ( i = 0 ; fa.id[i] ; ++i )
-				if ( fa.id[i] == '/' )
+				if ( fa.id[i] == '/' && fa.id[i + 1] == 'O' && fa.id[i + 2] == 'R') // no need to worry about access outside memory
 					break ;
 			if ( fa.id[i] == '/' )
 				continue ;
