@@ -7,7 +7,7 @@ use Cwd 'cwd' ;
 use Cwd 'abs_path' ;
 use File::Basename ;
 
-die "TRUST4 v1.0.2-beta usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.2 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -278,7 +278,6 @@ if ( $stage <= 0 )
 	if ( @bamFiles > 0 )
 	{
 		system_call( "$WD/bam-extractor -b ".$bamFiles[0]." -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $bamExtractorArgs" ) ;
-
 	}
 	elsif ( @firstMateFiles > 0 && $noExtraction == 0 )
 	{
