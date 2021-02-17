@@ -3361,7 +3361,9 @@ public:
 				{
 					if ( i == nameIdx )
 						continue ;
-					if ( strcmp( seqs[ extendedOverlaps[i].seqIdx ].name, seqs[ extendedOverlaps[i - 1].seqIdx ].name ) )
+					// if nameIdx == 0, then it's fine
+					// If nameIdx > 0, then i==0 case is with the name "Novel", and it is fine to skip it.
+					if ( i > 0 && strcmp( seqs[ extendedOverlaps[i].seqIdx ].name, seqs[ extendedOverlaps[i - 1].seqIdx ].name ) )
 					{
 						nameBuffer[ sum ] = '+' ;
 						nameBuffer[ sum + 1 ] = '\0' ;
