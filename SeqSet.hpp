@@ -1353,9 +1353,9 @@ private:
 			printf( "%s\n", read ) ;
 			exit( 1 ) ;
 		}*/
-		//if ( !strcmp( read, "TAGTAATCACTACTGGGCCTGGATCCGCCAGCCCCCAGGGAAAGGGCTGGAGTGGATTGGGAGTATCCATTCTAGTGGGAGCACCTACTTCAACCCGTCCCTCAAGAGTCGAGTCTCCACATCCGTAGACACGTCCGACAATCAAGTCTCCCTGAAGCTGAGGTCTGTGACCGCCGCAGACACGGCTGTGTATTACTGTGCGAGACAGTTTCTCCATCTGGACCCCATGTCCAACTGGTTCGACCCCCGG") && filterHits == 0  )
-		//for ( i = 0 ; i < overlapCnt ; ++i )
-		//	fprintf( stderr, "small test %d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
+		//if ( !strcmp(read, "ACCCGTTGGGGCATTGAAGGGGGGCTCTCTCGCACAGTAATATACGGCCGT") && readType == 0)
+		//  for ( i = 0 ; i < overlapCnt ; ++i )
+		//	  fprintf( stderr, "small test %d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
 		
 		// Determine whether we want to add this reads by looking at the quality of overlap
 		if ( overlapCnt == 0 )
@@ -1785,8 +1785,7 @@ private:
 			if ( IsOverlapLowComplex( r, overlaps[i]) )
 				overlaps[i].similarity = 0 ;
 			
-
-			//printf( "%d: %d %d %d %lf\n", overlaps[i].seqIdx, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
+		  //printf( "%d: %d %d %d %lf\n", overlaps[i].seqIdx, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
 			overlaps[i].matchCnt = matchCnt ;
 			if ( !seqs[ overlaps[i].seqIdx ].isRef && overlaps[i].similarity > 0 )
 			{
@@ -2685,7 +2684,7 @@ public:
 			char tmp = b[j] ;
 			b[j] = '\0' ;
 			int gt = GetGeneType( b + i ) ;
-			if ( gt < minB )
+			if ( gt < minB && gt != -1)
 				minB = gt ;
 			b[j] = tmp ;
 
@@ -2734,7 +2733,7 @@ public:
 						if ( seqs[ overlaps[i].seqIdx ].name[j] != geneName[j] )
 							break ;
 				}
-				if ( j == 3 )
+				if ( j == 3 || !strcmp( seqs[ overlaps[i].seqIdx].name, "Novel" ) )
 				{
 					overlaps[k] = overlaps[i] ;
 					++k ;
@@ -3348,12 +3347,20 @@ public:
 				for ( i = 0 ; i < eOverlapCnt ; ++i )
 					sum += strlen( seqs[ extendedOverlaps[i].seqIdx ].name ) ;
 				char* nameBuffer = new char[sum + eOverlapCnt + 1 ] ;
-				
-				strcpy( nameBuffer, seqs[ extendedOverlaps[0].seqIdx ].name ) ;
+			  
+				int nameIdx = 0 ;
+				for ( nameIdx = 0 ; nameIdx < eOverlapCnt ; ++nameIdx ) 
+          if ( strcmp( seqs[ extendedOverlaps[nameIdx].seqIdx ].name, "Novel" ) )
+						break ;
+			  if ( nameIdx >= eOverlapCnt )
+					nameIdx = 0 ;
+				strcpy( nameBuffer, seqs[ extendedOverlaps[nameIdx].seqIdx ].name ) ;
 				sum = strlen( nameBuffer ) ;
 				//printf( "%d\n", seqs.size() ) ;
-				for ( i = 1 ; i < eOverlapCnt ; ++i )
+				for ( i = 0 ; i < eOverlapCnt ; ++i )
 				{
+					if ( i == nameIdx )
+						continue ;
 					if ( strcmp( seqs[ extendedOverlaps[i].seqIdx ].name, seqs[ extendedOverlaps[i - 1].seqIdx ].name ) )
 					{
 						nameBuffer[ sum ] = '+' ;
@@ -4289,6 +4296,8 @@ public:
 	int GetGeneType( char *name )
 	{
 		int geneType = -1 ;
+    if ( name[0] == 'N' && name[1] == 'o' ) // Name is "Novel"
+      return -1 ;
 		switch ( name[3] )
 		{
 			case 'V': geneType = 0 ; break ;
