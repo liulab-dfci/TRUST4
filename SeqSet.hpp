@@ -3865,7 +3865,7 @@ public:
 		//printf( "%d %s\n%d %s\n", overlaps[0].strand, reads[i].seq, mateOverlaps[0].strand, reads[i + 1].seq ) ;
 		assign.seqIdx = -1 ;
 
-		if ( overlapCnt == 0 || seqs.size() == 0)
+		if ( overlapCnt <= 0 || seqs.size() == 0)
 		{
 			return -1 ;
 		}
@@ -7710,7 +7710,7 @@ public:
 		{
 			std::vector<struct _overlap> overlaps ;
 			int overlapCnt = GetOverlapsFromRead( reads[i].seq, 1, -1, 1, false, overlaps ) ;
-			if ( overlapCnt == 0 )
+			if ( overlapCnt <= 0 )
 				continue ;
 
 			std::sort( overlaps.begin(), overlaps.end() ) ;
