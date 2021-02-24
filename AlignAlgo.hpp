@@ -36,6 +36,11 @@ struct _posWeight
 	{
 		return count[0] + count[1] + count[2] + count[3] ;
 	}
+
+	void Clear()
+	{
+		count[0] = count[1] = count[2] = count[3] = 0 ;
+	}
 } ;
 
 class AlignAlgo

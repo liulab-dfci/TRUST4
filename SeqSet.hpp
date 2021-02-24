@@ -65,6 +65,7 @@ struct _overlap
 
 	SimpleVector<struct _pair> *hitCoords ;
 	SimpleVector<int> *info ; // store extra informations 
+	int infoFromHits ; // some information obtained GetOverlapFromHits
 
 	bool operator<( const struct _overlap &b ) const
 	{
@@ -89,6 +90,13 @@ struct _overlap
 			return seqEnd < b.seqEnd ; 
 
 		return false ;
+	}
+
+	double UpdateSimilarity( int rlen, int slen, int mcnt )
+	{
+		double origLen = matchCnt / similarity ;
+		similarity = ( matchCnt + mcnt ) / ( origLen + rlen + slen ) ;
+		matchCnt += mcnt ;
 	}
 } ;
 
@@ -1469,6 +1477,8 @@ private:
 			else
 				r = rcRead ;
 
+			overlaps[i].infoFromHits = i ;
+
 			SimpleVector<struct _pair> &hitCoords = *overlaps[i].hitCoords ; 	
 			int hitCnt = hitCoords.Size() ;
 			int matchCnt = 0, mismatchCnt = 0, indelCnt = 0  ;
@@ -1785,7 +1795,7 @@ private:
 			if ( IsOverlapLowComplex( r, overlaps[i]) )
 				overlaps[i].similarity = 0 ;
 			
-		  //printf( "%d: %d %d %d %lf\n", overlaps[i].seqIdx, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
+		  //printf( "%d %s: %d %d %d %lf. %d %d\n", overlaps[i].seqIdx, seqs[overlaps[i].seqIdx].name, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, overlaps[i].similarity, hitCnt, overlaps[i].matchCnt ) ;
 			overlaps[i].matchCnt = matchCnt ;
 			if ( !seqs[ overlaps[i].seqIdx ].isRef && overlaps[i].similarity > 0 )
 			{
@@ -4491,6 +4501,66 @@ public:
 				return i ;
 		return 0 ;
 	}
+
+	void MergeOverlappedSeqContigs( int seqIdx, bool updateIndex )
+	{
+		int i, j ;
+		SimpleVector<struct _pair> contigs ;
+		int contigCnt = GetContigIntervals( seqs[seqIdx].consensus, contigs ) ;
+		if ( contigCnt <= 1 )
+			return ;
+		SimpleVector<int> contigOverlaps ;
+		int minOverlap = 10 ;
+		int totalOverlap = 0 ;
+		for ( i = 0 ; i < contigCnt - 1 ; ++i )
+		{
+			int bestMatchCnt ;
+			int offset ;
+			// Only apply this to short contigs
+			if (contigs[i].b - contigs[i].a + 1 >= 75 && contigs[i + 1].b - contigs[i + 1].a + 1 >= 75) 
+				continue ;
+			int overlapSize = AlignAlgo::IsMateOverlap( seqs[seqIdx].consensus + contigs[i].a, contigs[i].b - contigs[i].a + 1,
+					 seqs[seqIdx].consensus + contigs[i + 1].a, contigs[i + 1].b - contigs[i + 1].a + 1,
+					 minOverlap, offset, bestMatchCnt, true ) ;
+
+			contigOverlaps.PushBack( overlapSize ) ;
+			if ( overlapSize >= 0 )
+				totalOverlap += overlapSize ;
+		}
+		if ( totalOverlap == 0 )
+			return ;
+
+		// Move the consensus sequences
+		int moveLeft = 0 ;
+		for ( i = 1 ; i < contigCnt ; ++i )
+		{
+			bool needMoveGap = 1 ;
+			if ( contigOverlaps[i - 1] >= 0 )
+			{
+				// overlap size + gap size between contigs
+				moveLeft += contigOverlaps[i - 1] + (contigs[i].a - contigs[i - 1].b - 1) ; 
+				needMoveGap = 0 ;
+			}
+
+			if (moveLeft > 0)
+			{
+				int start = contigs[i].a ;
+				int end = contigs[i].b ;
+				if ( needMoveGap )
+					start = contigs[i - 1].b + 1 ;
+				for ( j = start ; j <= end ; ++j )
+				{
+					seqs[seqIdx].consensus[j - moveLeft] = seqs[seqIdx].consensus[j] ;
+					seqs[seqIdx].posWeight[j - moveLeft] += seqs[seqIdx].posWeight[j] ;
+					seqs[seqIdx].posWeight[j].Clear() ;
+				}
+			}
+		}
+		seqs[seqIdx].consensusLen -= moveLeft ;
+		seqs[seqIdx].consensus[ seqs[seqIdx].consensusLen  ] = '\0' ;
+		seqs[seqIdx].posWeight.Resize( seqs[seqIdx].consensusLen ) ;
+		UpdateConsensus( seqIdx, updateIndex ) ;
+	}
 	
 	void ShiftAnnotations( int at, int shift, int baseChange, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
 	                        std::vector<struct _overlap> *secondaryGeneOverlaps )
@@ -5132,9 +5202,10 @@ public:
 				//for ( i = 0 ; i < cnt ; ++i )
 				//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ ovs[i].seqIdx].name, ovs[i].similarity, ovs[i].matchCnt, ovs[i].readStart, ovs[i].readEnd, ovs[i].seqStart, ovs[i].seqEnd ) ;
 
+				int extendedTimes = 0 ;
 				for ( i = 0 ; i < cnt ; ++i )
 				{
-					if ( seqUsed[ ovs[i].seqIdx ] != -1 )
+					if ( seqUsed[ ovs[i].seqIdx ] != -1 || ovs[i].similarity < 0.95 )
 						continue ;
 					
 					int effectiveLen = ovs[i].readEnd - ovs[i].readStart + 1 
@@ -5151,8 +5222,9 @@ public:
 							if ( o.seqIdx == ovs[i].seqIdx )
 							{
 								if ( o.seqEnd < ovs[i].seqStart + 31 
-									&& o.readStart <= contigs[j + 1].a + 10 
-									&& ovs[i].readEnd <= contigs[j].b - 10 ) 
+									&& ovs[i].readStart <= contigs[j + 1].a + 10 
+									&& o.readEnd >= contigs[j].b - 10 
+									&& o.similarity >= 0.95 ) 
 								{
 									ovs[i].readStart = o.readStart ;
 									ovs[i].seqStart = o.seqStart ;
@@ -5160,9 +5232,11 @@ public:
 									effectiveLen += o.readEnd - o.readStart + 1 
 										+ o.seqEnd - o.seqStart + 1 ;
 									extended = true ;
+									++extendedTimes ;
+									
+									//printf( "<=+ %s: %d %d. %d %d\n", seqs[ ovs[i].seqIdx ].name, ovs[i].matchCnt, effectiveLen, o.matchCnt, o.readEnd - o.readStart + 1 + o.seqEnd - o.seqStart + 1 ) ;
+									break ;
 								}
-								//printf( "<=+ %s: %d %d. %d %d\n", seqs[ ovs[i].seqIdx ].name, ovs[i].matchCnt, effectiveLen, o.matchCnt, o.readEnd - o.readStart + 1 + o.seqEnd - o.seqStart + 1 ) ;
-								break ;
 							}
 						}
 						
@@ -5181,8 +5255,9 @@ public:
 							if ( o.seqIdx == ovs[i].seqIdx )
 							{
 								if ( o.seqStart > ovs[i].seqEnd - 31 
-									&& o.readEnd <= contigs[j - 1].b - 10 
-									&& ovs[i].readStart <= contigs[j].a + 10 ) 
+									&& ovs[i].readEnd >= contigs[j - 1].b - 10 
+									&& o.readStart <= contigs[j].a + 10 
+									&& o.similarity >= 0.95 ) 
 								{
 									ovs[i].readEnd = o.readEnd ;
 									ovs[i].seqEnd = o.seqEnd ;
@@ -5190,9 +5265,11 @@ public:
 									effectiveLen += o.readEnd - o.readStart + 1 
 										+ o.seqEnd - o.seqStart + 1 ;
 									extended = true ;
+									++extendedTimes ;
+								  
+									//printf( "=>+ %s: %d %d. %d %d\n", seqs[ ovs[i].seqIdx ].name, ovs[i].matchCnt, effectiveLen, o.matchCnt, o.readEnd - o.readStart + 1 + o.seqEnd - o.seqStart + 1 ) ;
+							   	break ;
 								}
-								//printf( "=>+ %s: %d %d. %d %d\n", seqs[ ovs[i].seqIdx ].name, ovs[i].matchCnt, effectiveLen, o.matchCnt, o.readEnd - o.readStart + 1 + o.seqEnd - o.seqStart + 1 ) ;
-								break ;
 							}
 						}
 
@@ -5200,8 +5277,11 @@ public:
 							break ;
 					}
 					ovs[i].similarity = (double)ovs[i].matchCnt / effectiveLen ;
-				//	printf( "%s: %lf\n", seqs[ ovs[i].seqIdx ].name, ovs[i].similarity ) ;
-					seqUsed[ ovs[i].seqIdx ] = i ;
+					if ( extendedTimes > 0 )
+					{
+						//printf( "%s: %lf\n", seqs[ ovs[i].seqIdx ].name, ovs[i].similarity ) ;
+						seqUsed[ ovs[i].seqIdx ] = i ;
+					}
 				}
 			}
 
@@ -5305,6 +5385,11 @@ public:
 				&& IsBetterGeneMatch( overlaps[i], geneOverlap[geneType], 0.9 ) )
 			{
 				// The gene on a different region of the read. Might happen due to false alignment.
+				allOverlaps.push_back( overlaps[i] ) ;
+			}
+			else if ( geneType >= 0 && geneOverlap[ geneType ].seqIdx != -1 
+					&& overlaps[i].infoFromHits < geneOverlap[ geneType ].infoFromHits )
+			{
 				allOverlaps.push_back( overlaps[i] ) ;
 			}
 		}
@@ -5454,7 +5539,7 @@ public:
 					int extendLen = seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1;
 					for ( j = 0 ; j < extendLen ; ++j )
 					{	
-					        if (allOverlaps[i].readEnd + j + 1 >= len)
+						if (allOverlaps[i].readEnd + j + 1 >= len)
 							break ;
 						if (read[allOverlaps[i].readEnd + j + 1] 
 							== seqs[allOverlaps[i].seqIdx].consensus[allOverlaps[i].seqEnd + j + 1])
@@ -5510,7 +5595,7 @@ public:
 					int extendLen = allOverlaps[i].seqStart;
 					for ( j = 0 ; j < extendLen ; ++j )
 					{	
-					        if (allOverlaps[i].readStart - j - 1 >= 0)
+						if (allOverlaps[i].readStart - j - 1 < 0)
 							break ;
 						if (read[allOverlaps[i].readStart - j - 1] 
 							== seqs[allOverlaps[i].seqIdx].consensus[allOverlaps[i].seqStart - j - 1])
@@ -9428,6 +9513,12 @@ public:
 		}
 
 		Clean( true ) ;
+
+		seqCnt = seqs.size() ;
+		for ( i = 0 ; i < seqCnt ; ++i )
+		{
+			MergeOverlappedSeqContigs( i, false ) ;
+		}
 		novelSeqSimilarity = backupNovelSeqSimilarity ;
 	}
 
