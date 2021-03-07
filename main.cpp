@@ -88,7 +88,7 @@ struct _sortRead
 		{
 			int tmp = strcmp( read, b.read ) ;
 			if ( tmp != 0 )
-				return tmp ;
+				return tmp < 0;
 			else
 				return strcmp( id, b.id ) < 0 ;
 		}
