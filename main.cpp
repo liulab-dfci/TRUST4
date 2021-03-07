@@ -1241,9 +1241,10 @@ int main( int argc, char *argv[] )
 					{
 						// The mate is matched well, we use motif to check whether this could be
 						//   from CDR3.
-						if ( seqSet.HasMotif( sortedReads[i].read, -sortedReads[ sortedReads[i].mateIdx ].strand ) )
+						// Here info is set during good candidate set.
+						if ( seqSet.HasMotif( sortedReads[i].read, -sortedReads[ sortedReads[i].info ].strand ) )
 							addRet = seqSet.InputNovelRead( "Novel", sortedReads[i].read, 
-									-sortedReads[ sortedReads[i].mateIdx ].strand,
+									-sortedReads[ sortedReads[i].info ].strand,
 									sortedReads[i].barcode ) ;
 					}
 					//printf( "hello %d %d. %d %d %d %d\n", i, addRet, geneOverlap[0].seqIdx,
@@ -1299,7 +1300,39 @@ int main( int argc, char *argv[] )
 				if ( maySpan ) // If the read can span V,J, then there is no need to force add its mate.
 					good = false ;
 
-				goodCandidate[ sortedReads[i].mateIdx ] = good ;
+				if (good && !goodCandidate[ sortedReads[i].mateIdx ]) 
+				{
+					// We allow it go beyond the restriction of barcode
+					// so it can borrow information across cells.
+					int tag = sortedReads[i].mateIdx ;
+					for ( j = tag - 1 ; j > 0 ; --j )
+					{
+						if ( !strcmp(sortedReads[j].read, sortedReads[tag].read) )
+						{
+							goodCandidate[j] = good ;
+							sortedReads[j].info = i;
+						}
+						else 
+							break ;
+					}
+
+					for ( j = tag + 1 ; j < readCnt ; ++j )
+					{
+						if ( !strcmp(sortedReads[j].read, sortedReads[tag].read) )
+						{
+							goodCandidate[j] = good ;
+							sortedReads[j].info = i;
+						}
+						else 
+							break ;
+					}
+				}
+
+				if (good)
+				{
+					goodCandidate[ sortedReads[i].mateIdx ] = good ;
+					sortedReads[ sortedReads[i].mateIdx ].info = i;
+				}
 			}
 		}
 
