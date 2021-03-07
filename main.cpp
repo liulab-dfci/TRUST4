@@ -84,8 +84,13 @@ struct _sortRead
 			return len > b.len ;
 		else if (barcode != b.barcode)
 			return barcode < b.barcode ;
-		else 
-			return strcmp( read, b.read ) < 0 ;
+		else
+		{
+			int tmp = strcmp( read, b.read ) < 0 ;
+			return tmp ;
+			//else
+			//	return strcmp( id, b.id ) < 0 ;
+		}
 	}
 } ;
 

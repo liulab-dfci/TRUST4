@@ -70,7 +70,8 @@ struct _overlap
 	bool operator<( const struct _overlap &b ) const
 	{
 		// The overlap with more matched bases should come first.
-		if ( matchCnt > b.matchCnt + 2 || matchCnt < b.matchCnt - 2 )
+		//if ( matchCnt > b.matchCnt + 2 || matchCnt < b.matchCnt - 2 )
+		if ( matchCnt != b.matchCnt )
 			return matchCnt > b.matchCnt ;
 		else if ( similarity != b.similarity )
 			return similarity > b.similarity ; 
@@ -106,7 +107,8 @@ struct _sortOverlapOnRef
 	bool operator() (const struct _overlap &a, const struct _overlap &b) const
 	{
 		// The overlap with more matched bases should come first.
-		if ( a.matchCnt > b.matchCnt + 2 || a.matchCnt < b.matchCnt - 2 )
+		//if ( a.matchCnt > b.matchCnt + 2 || a.matchCnt < b.matchCnt - 2 )
+		if ( a.matchCnt != b.matchCnt )
 			return a.matchCnt > b.matchCnt ;
 		else if ( a.similarity != b.similarity )
 			return a.similarity > b.similarity ; 
