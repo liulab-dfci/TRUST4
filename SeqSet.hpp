@@ -7963,6 +7963,7 @@ public:
 			na.seqEnd = toEnd ;
 			na.matchCnt = 1 ;
 			na.similarity = 0 ;
+			na.strand = 0 ;
 			na.info = new SimpleVector<int> ;
 			na.info->PushBack( readId ) ;
 			mateAdj[from].push_back( na ) ;
