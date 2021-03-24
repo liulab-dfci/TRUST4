@@ -207,13 +207,16 @@ if (__name__ == "__main__"):
 			"\t-s FLOAT: similarity of two CDR3s (default: 0.8)\n" +
 			"\t--prefix STRING: prefix to new cluster name (default: cluster)\n" + 
 			"\t--center: use the center of the cluster for similarity comparison (default: no)\n"+
-			"\t--representative: use representative CDR3 from each contig for cluster (default: no)") 	
+			"\t--representative: use representative CDR3 from each contig for cluster (default: no)\n" +
+			"\t--format [cdr3, simplerep]: the input format type (default: cdr3)")
 		exit(1)
+
 	cdr3List = []
 	similarity = 0.8 ;
 	prefix = "cluster"
 	useRepresentative = False
 	mode = "aggressive"
+	inputFormat = "cdr3"
 	i = 2
 	while (i < len(sys.argv)):
 		if (sys.argv[i] == "-s"):
@@ -226,30 +229,57 @@ if (__name__ == "__main__"):
 			useRepresentative = True
 		elif (sys.argv[i] == "--center"):
 			mode = "center"
+		elif (sys.argv[i] == "--format"):
+			inputFormat = sys.argv[i + 1]
+			if (inputFormat not in ["cdr3", "simplerep"]):
+				print("Unknown format: ", inputFormat)
+				exit(1)
+			i += 1
 		else:
 			print("Unknown option: ", sys.argv[i])
 			exit(1)
 		i += 1
 
 	fp = open(sys.argv[1])
+	lineCnt = 0
 	for line in fp:
 		line = line.rstrip()
 		cols = line.split("\t")
-		cols[1] = int(cols[1])
-		skip = False
-		for g in [2, 4]: # Must have V, J genes.
-			if ( cols[g] == "*"):
-				skip = True 
-		if (float(cols[9]) == 0):
-			skip = True
-		if ( skip ):
-			continue 
-
-		for g in [2, 3, 4, 5]:
-			cols[g] = cols[g].split(",")[0]
-		cols[9] = float(cols[9])
-		cols[10] = float(cols[10])
-		if (cols[9] == 0):
-			continue
+		if (inputFormat == "cdr3"):
+			cols[1] = int(cols[1])
+			skip = False
+			for g in [2, 4]: # Must have V, J genes.
+				if ( cols[g] == "*"):
+					skip = True 
+			if (float(cols[9]) == 0):
+				skip = True
+			if ( skip ):
+				continue 
+			for	g in [2, 3, 4, 5]:
+				cols[g] = cols[g].split(",")[0]
+			cols[9] = float(cols[9])
+			cols[10] = float(cols[10])
+			if (cols[9] == 0):
+				continue
+		elif (inputFormat == "simplerep"):
+			if (line[0] == "#"):
+				continue
+			if ("_" in cols[3] or "?" in cols[3]):
+				continue
+			for g in [4, 6]: # Must have V, J genes.
+				if ( cols[g] == "*"):
+					skip = True 
+			reformat = [0] * 11
+			reformat[0] = "line" + str(lineCnt)
+			reformat[1] = 0
+			for	g in [4, 5, 6, 7]:
+				reformat[g - 2] = cols[g]	
+			reformat[6] = reformat[7] = "*"
+			reformat[8] = cols[2]
+			reformat[9] = 1
+			reformat[10] = cols[0]
+			cols = reformat[:]
 		cdr3List.append(cols)
+		lineCnt += 1
+	fp.close()
 	LargerCluster(cdr3List, similarity, prefix, useRepresentative, mode)
