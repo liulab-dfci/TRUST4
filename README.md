@@ -91,7 +91,7 @@ For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively.
 
 ### Practical notes
 
-#### * Build custom V,J,C gene database (files for -f and --ref)
+* #### Build custom V,J,C gene database (files for -f and --ref)
 
 To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
 	
@@ -105,7 +105,7 @@ Normally, the file specified by "--ref" is downloaded from IMGT website, For exa
 
 The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
-#### * 10X Genomics data:
+* #### 10X Genomics data:
 
 When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
 
@@ -123,7 +123,7 @@ For the chain information it is in CSV format:
 	
 	V_gene,D_gene,J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity,consensus_full_length
 
-#### * SMART-Seq data
+* #### SMART-Seq data
 
 We provide a wrapper "trust-smartseq.pl" to process the files from platforms like SMART-seq. The user shall give the . An example command can be
 
@@ -131,7 +131,7 @@ We provide a wrapper "trust-smartseq.pl" to process the files from platforms lik
 
 The script will create two files: TRUST_report.tsv for general summary and TRUST_annot.fa for assemblies. The formats are described above. Each cell's name is inferred by the file name before the first ".".
 
-#### * Simple report
+* #### Simple report
 
 The last step of generating simple report can be done with the command:
 
