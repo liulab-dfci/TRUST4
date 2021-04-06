@@ -12,11 +12,11 @@ Includes portions copyright from:
 	samtools - Copyright (C) 2008-, Genome Research Ltd, Heng Li
 	
 
-## What is TRUST4?
+### What is TRUST4?
 
 Tcr Receptor Utilities for Solid Tissue (TRUST) is a computational tool to analyze TCR and BCR sequences using unselected RNA sequencing data, profiled from solid tissues, including tumors. TRUST4 performs de novo assembly on V, J, C genes including the hypervariable complementarity-determining region 3 (CDR3) and reports consensus of BCR/TCR sequences. TRUST4 then realigns the contigs to IMGT reference gene sequences to report the corresponding information. TRUST4 supports both single-end and paired-end sequencing data with any read length. 
 
-## Install
+### Install
 
 1. Clone the [GitHub repo](https://github.com/liulab-dfci/TRUST4), e.g. with `git clone https://github.com/liulab-dfci/TRUST4.git`
 2. Run `make` in the repo directory
@@ -26,7 +26,7 @@ You will find the executable files in the downloaded directory. If you want to r
 TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and samtools depends on [zlib](http://en.wikipedia.org/wiki/Zlib). For MacOS, TRUST4 has been successfully compiled with gcc_darwin17.7.0 and gcc_9.2.0 installed by Homebrew.
 
 
-## Usage
+### Usage
 
 	Usage: ./run-trust4 [OPTIONS]
 		Required:
@@ -55,7 +55,7 @@ TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and sam
 				2: start from annotation
 				3: start from generating the report table
 
-## Input/Output
+### Input/Output
 
 The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
 
@@ -89,9 +89,9 @@ The output trust_report.tsv is a tsv file. The fileds are:
 
 For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. 
 
-## Practical notes
+### Practical notes
 
-### Build custom V,J,C gene database (files for -f and --ref)
+#### * Build custom V,J,C gene database (files for -f and --ref)
 
 To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
 	
@@ -105,7 +105,7 @@ Normally, the file specified by "--ref" is downloaded from IMGT website, For exa
 
 The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
-### 10X Genomics data:
+#### * 10X Genomics data:
 
 When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
 
@@ -123,7 +123,7 @@ For the chain information it is in CSV format:
 	
 	V_gene,D_gene,J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity,consensus_full_length
 
-### SMART-Seq data
+#### * SMART-Seq data
 
 We provide a wrapper "trust-smartseq.pl" to process the files from platforms like SMART-seq. The user shall give the . An example command can be
 
@@ -131,7 +131,7 @@ We provide a wrapper "trust-smartseq.pl" to process the files from platforms lik
 
 The script will create two files: TRUST_report.tsv for general summary and TRUST_annot.fa for assemblies. The formats are described above. Each cell's name is inferred by the file name before the first ".".
 
-### Simple report
+#### * Simple report
 
 The last step of generating simple report can be done with the command:
 
@@ -139,7 +139,7 @@ The last step of generating simple report can be done with the command:
 
 If you are interested in a subset of chains, you can "grep" those from trust_cdr3.out and run trust-simplerep.pl on the subset.
  
-## Example
+### Example
 
 The directory './example' in this distribution contains one BAM files as input for TRUST4. Run TRUST4 with:
 
@@ -153,11 +153,11 @@ The directory also contains two fastq files, and you can run TRUST4 with:
 
 The run will generate the files mentioned above from BAM input.
 
-## Miscellaneous
+### Miscellaneous
 
 The evaluation instructions and scripts in TRUST4's manuscript is available at: https://github.com/liulab-dfci/TRUST4_manuscript_evaluation .
 
-## Terms of use
+### Terms of use
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -174,6 +174,6 @@ Public License along with this program; if not, you can obtain one from
 http://www.gnu.org/licenses/gpl.txt or by writing to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  
-## Support
+### Support
 
 Create a [GitHub issue](https://github.com/liulab-dfci/TRUST4/issues).
