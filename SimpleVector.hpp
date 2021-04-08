@@ -211,7 +211,7 @@ public:
 		return s[i] ;
 	}
 
-	T &operator[]( int i )
+	T &operator[]( int i ) const
 	{
 		/*if ( i >= size )
 		{

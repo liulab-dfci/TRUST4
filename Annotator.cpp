@@ -49,6 +49,7 @@ static struct option long_options[] = {
 			{ "geneAlignment", no_argument, 0, 10005 },
 			{ "barcode", no_argument, 0, 10006 },
 			{ "UMI", no_argument, 0, 10007 },
+			{ "outputCDR3File", no_argument, 0, 10008},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -376,6 +377,7 @@ int main( int argc, char *argv[] )
 	bool outputGeneAlignment = false ;
 	bool hasBarcode = false ;
 	bool hasUmi = false ;
+	bool outputCDR3File = false ; // whether output the cdr3 file when the input is fasta
 	std::map<std::string, int> barcodeStrToInt ;
 
 	while ( 1 )
@@ -437,6 +439,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10007 ) // --umi
 		{
 			hasUmi = true ;
+		}
+		else if ( c == 10008 ) // force output CDR3 file
+		{
+			outputCDR3File = true ;
 		}
 		else
 		{
@@ -966,7 +972,7 @@ int main( int argc, char *argv[] )
 		fclose( fpOutput ) ;
 		fclose( fpReads ) ; 
 	}
-	else if ( ignoreWeight == 0 )
+	else if ( ignoreWeight == 0 && !outputCDR3File )
 	{
 		// Directly use consensus to output cdr3 information. 
 		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;

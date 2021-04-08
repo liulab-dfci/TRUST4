@@ -27,7 +27,23 @@ struct _seqWrapper
 
 	struct _triple info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1,2 and info[2].a for CDR3
 					// In extending seqs with mate pair information, these are used to store rough V, J, C read coordinate.	
-	int barcode ; // transformed barcode. -1: no barcode 
+	int barcode ; // transformed barcode. -1: no barcode
+
+	bool operator<( const struct _seqWrapper &b )	const
+	{
+		int i ;
+		int weightA = 0 ;
+		int weightB = 0 ;
+		for ( i = 0 ; i < consensusLen ; ++i )
+			weightA += posWeight[i].Sum() ;
+		for ( i = 0 ; i < b.consensusLen ; ++i )
+			weightB += b.posWeight[i].Sum() ;
+
+		if ( weightA != weightB )
+			return weightA > weightB ;
+		else
+			return consensusLen > b.consensusLen ;
+	}
 } ;
 
 struct _hit
@@ -9523,6 +9539,9 @@ public:
 			MergeOverlappedSeqContigs( i, false ) ;
 		}
 		novelSeqSimilarity = backupNovelSeqSimilarity ;
+
+		// Resort the seqs, since good assemblies might be shuffle to end when scaffolding
+		std::sort( seqs.begin(), seqs.end() ) ; 
 	}
 
 	void Output( FILE *fp, std::vector<std::string> *barcodeIntToStr = NULL )
