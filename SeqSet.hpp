@@ -4535,8 +4535,11 @@ public:
 			int bestMatchCnt ;
 			int offset ;
 			// Only apply this to short contigs
-			if (contigs[i].b - contigs[i].a + 1 >= 75 && contigs[i + 1].b - contigs[i + 1].a + 1 >= 75) 
+			if (contigs[i].b - contigs[i].a + 1 >= 75 && contigs[i + 1].b - contigs[i + 1].a + 1 >= 75)
+			{
+				contigOverlaps.PushBack( -1 ) ;	
 				continue ;
+			}
 			int overlapSize = AlignAlgo::IsMateOverlap( seqs[seqIdx].consensus + contigs[i].a, contigs[i].b - contigs[i].a + 1,
 					 seqs[seqIdx].consensus + contigs[i + 1].a, contigs[i + 1].b - contigs[i + 1].a + 1,
 					 minOverlap, offset, bestMatchCnt, true ) ;
