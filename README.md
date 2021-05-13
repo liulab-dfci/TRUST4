@@ -3,7 +3,7 @@ TRUST4
 
 Described in: 
 
-Song, L., et. al. TRUST4: immune repertoire reconstruction from bulk and single-cell RNA-seq data. Nature Methods. 2021 (Accepted)
+Song, L., Cohen, D., Ouyang, Z. et al. TRUST4: immune repertoire reconstruction from bulk and single-cell RNA-seq data. Nat Methods (2021). https://doi.org/10.1038/s41592-021-01142-2
 
 	Copyright (C) 2018- and GNU GPL by Li Song, Shirley Liu
 
