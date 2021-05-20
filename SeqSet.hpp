@@ -4683,7 +4683,8 @@ public:
 		if ( vInAnchor ) 
 		{
 			int dest = geneOverlap[0].readEnd - ( geneOverlap[0].seqEnd - seqs[geneOverlap[0].seqIdx].info[2].a ) ;
-			for ( i = geneOverlap[0].readEnd ; i >= dest ; --i )
+			// Due to indel, we need make sure the access would be within the boundary
+			for ( i = geneOverlap[0].readEnd ; i >= dest && i >= 0 ; --i ) 
 			{
 				if ( read[i] == 'M' )
 				{
@@ -4697,7 +4698,7 @@ public:
 		if ( jInAnchor )
 		{
 			int dest = geneOverlap[2].readStart + ( seqs[geneOverlap[2].seqIdx].info[2].a + 2 - geneOverlap[2].seqStart) ;
-			for ( i = geneOverlap[2].readStart ; i <= dest ; ++i )
+			for ( i = geneOverlap[2].readStart ; i <= dest && read[i] ; ++i )
 			{
 				if ( read[i] == 'M' )
 				{
@@ -7137,6 +7138,9 @@ public:
 				else if ( forcePartial )
 					cdr3Score = 0 ;
 				
+				if ( strongLocateS && strongLocateE && cdr3Score < 50 )
+					cdr3Score = 50 ;
+
 				// Now consider whether the gaps could create some false positive score CDR3.
 				if ( cdr3Score > 0 )
 				{
@@ -7424,8 +7428,7 @@ public:
 				}
 			}
 
-			cdr[2].similarity = cdr3Score / 100.0 ;
-				
+			cdr[2].similarity = cdr3Score / 100.0 ;	
 		}
 		
 		if ( detailLevel >= 2 && cdr[2].similarity > 0 )
