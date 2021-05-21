@@ -7612,6 +7612,12 @@ public:
 				break ;
 			}
 			
+			if ( readStart < cdr[2].readStart || readEnd > cdr[2].readEnd )
+			{
+				// When splicing too much, V, J gene anchor may overlap and stretch beyond CDR3
+				continue ;
+			}
+			
 			AlignAlgo::GlobalAlignment( seqs[ gene.seqIdx ].consensus + seqStart,
 					seqEnd - seqStart + 1,
 					seq + readStart - cdr[2].readStart, readEnd - readStart + 1, align ) ;
