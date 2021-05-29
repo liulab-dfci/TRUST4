@@ -25,9 +25,7 @@ You will find the executable files in the downloaded directory. If you want to r
 
 TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and samtools depends on [zlib](http://en.wikipedia.org/wiki/Zlib). For MacOS, TRUST4 has been successfully compiled with gcc_darwin17.7.0 and gcc_9.2.0 installed by Homebrew.
 
-TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). You can install TRUST4 with 
-
-	conda install -c bioconda trust4
+TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). You can install TRUST4 with `conda install -c bioconda trust4`
 
 ### Usage
 
