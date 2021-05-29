@@ -5499,7 +5499,7 @@ public:
 		}
 		
 		// Extend overlap
-		if ( detailLevel >= 2 )
+		if ( detailLevel >= 1 )
 		{
 			// Change gap nucleotide from 'N' to 'M'
 			for ( i = 0 ; i < contigCnt - 1 ; ++i )
@@ -5531,7 +5531,7 @@ public:
 				//	read + allOverlaps[i].readEnd + 1, len - allOverlaps[i].readEnd - 1, align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
-					if ( read[ allOverlaps[i].readEnd + 1 ] == 'N' && read[ allOverlaps[i].readEnd + 2] == 'N' )
+					if ( read[allOverlaps[i].readEnd + 1] == 'M' )
 						break ;
 					if ( align[j] == EDIT_MATCH || align[j] == EDIT_MISMATCH )
 					{
@@ -5586,8 +5586,7 @@ public:
 				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
-					if ( allOverlaps[i].readStart > 1 && read[ allOverlaps[i].readStart - 1 ] == 'M' 
-						&& read[ allOverlaps[i].readStart - 2 ] == 'M' )
+					if ( allOverlaps[i].readStart >= 1 && read[ allOverlaps[i].readStart - 1 ] == 'M') 
 					{
 						break ;
 					}
@@ -5759,8 +5758,9 @@ public:
 				if ( geneOverlap[2].readEnd + 3 >= geneOverlap[3].readStart && 
 					geneOverlap[2].readEnd - 3 <= geneOverlap[3].readStart &&
 					( geneOverlap[0].readEnd > geneOverlap[2].readStart + 6 || 
-					 geneOverlap[0].readEnd + ( seqs[ geneOverlap[0].seqIdx ].consensusLen - geneOverlap[0].seqEnd - 100 ) 
-					 	> geneOverlap[2].readStart + 6 ) ) 
+					 ( geneOverlap[0].readEnd + ( seqs[ geneOverlap[0].seqIdx ].consensusLen - geneOverlap[0].seqEnd - 100 ) 
+					 	> geneOverlap[2].readStart + 6 ) 
+					 && GetContigIdx(geneOverlap[0].readEnd, contigs) == GetContigIdx(geneOverlap[2].readStart, contigs)) ) 
 				{
 					struct _overlap orig = geneOverlap[0] ;
 					geneOverlap[0].seqIdx = -1 ;
@@ -7438,7 +7438,7 @@ public:
 		if ( vAlign != NULL )
 			delete[] vAlign ;
 
-		if ( detailLevel >= 2 )
+		if ( detailLevel >= 1 )
 		{
 			// Change gap nucleotide back from 'M' to 'N'
 			for ( i = 0 ; i < contigCnt - 1 ; ++i )
