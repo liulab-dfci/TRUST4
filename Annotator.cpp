@@ -288,7 +288,7 @@ int IsFullLengthAssembly(char *seq, struct _annotate &annotation, SeqSet &refSet
 	if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3 
 		|| geneOverlap[2].readEnd > geneOverlap[3].readStart + 6 )
 		return 0 ;
-	if (geneOverlap[0].seqStart >= 10 || geneOverlap[2].readEnd < cdr[2].readStart)
+	if (geneOverlap[0].seqStart >= 10 || geneOverlap[0].readEnd < cdr[2].readStart)
 		return 0 ;
 	if (geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].seqEnd < refSet.GetSeqConsensusLen(geneOverlap[2].seqIdx) - 3)
 		return 0 ;
