@@ -27,6 +27,10 @@ char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"\t--read1End INT: the end position of sequence in read 1 (default: length-1)\n"
 		"\t--read2Start INT: the start position of sequence in read 2 (default: 0)\n"
 		"\t--read2End INT: the end position of sequence in read 2 (default: length-1)\n"
+		"\t--UMI STRING: path to the raw UMI file (default: not used)\n"
+		"\t--umiStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
+		"\t--umiEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
+		"\t--umiRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
 		;
 
 static const char *short_options = "f:u:1:2:o:t:" ;
@@ -40,6 +44,10 @@ static struct option long_options[] = {
 			{ "read1End", required_argument, 0, 10006},
 			{ "read2Start", required_argument, 0, 10007},
 			{ "read2End", required_argument, 0, 10008},
+			{ "UMI", required_argument, 0, 10009},
+			{ "umiStart", required_argument, 0, 10010},
+			{ "umiEnd", required_argument, 0, 10011},
+			{ "umiRevComp", no_argument, 0, 10012},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -66,6 +74,9 @@ struct _threadArg
 	BarcodeCorrector *barcodeCorrector ;
 	int barcodeStart, barcodeEnd ;
 	bool barcodeRevComp ;
+
+	int umiStart, umiEnd ;
+	bool umiRevComp ;
 
 	int tid ;
 } ;
@@ -273,10 +284,12 @@ int main( int argc, char *argv[] )
 	ReadFiles reads ;
 	ReadFiles mateReads ;
 	ReadFiles barcodeFile ;
+	ReadFiles umiFile ;
 	BarcodeCorrector barcodeCorrector ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
 	bool hasBarcodeWhitelist = false ;
+	bool hasUmi = false ;
 	int barcodeStart = 0 ;
 	int barcodeEnd = -1 ;
 	int read1Start = 0 ;
@@ -284,6 +297,9 @@ int main( int argc, char *argv[] )
 	int read2Start = 0 ;
 	int read2End = -1 ;
 	bool barcodeRevComp = false ;
+	int umiStart = 0 ;
+	int umiEnd = -1 ;
+	bool umiRevComp = false ;
 
 	while ( 1 )
 	{
@@ -357,6 +373,23 @@ int main( int argc, char *argv[] )
 		{
 			read2End = atoi( optarg ) ;
 		}
+		else if ( c == 10009 ) // umi
+		{
+			hasUmi = true ;
+			umiFile.AddReadFile( optarg, false ) ;
+		}
+		else if ( c == 10010 ) // umiStart
+		{	
+			umiStart = atoi( optarg ) ;
+		}
+		else if ( c == 10011 ) // umiEnd
+		{
+			umiEnd = atoi( optarg ) ;
+		}
+		else if ( c == 10012 ) // umiRevComp
+		{
+			umiRevComp = true ;
+		}
 		else
 		{
 			fprintf( stderr, "Unknown parameter %s\n", optarg ) ;
@@ -401,6 +434,7 @@ int main( int argc, char *argv[] )
 	FILE *fp1 = NULL ;
 	FILE *fp2 = NULL ;
 	FILE *fpBc = NULL ;
+	FILE *fpUmi = NULL ;
 	if ( !hasMate )
 	{
 		sprintf( buffer, "%s.fq", prefix ) ;
@@ -419,6 +453,12 @@ int main( int argc, char *argv[] )
 		sprintf( buffer, "%s_bc.fa", prefix ) ;	
 		fpBc = fopen( buffer, "w" ) ;
 	}
+
+	if ( hasUmi )
+	{
+		sprintf( buffer, "%s_umi.fa", prefix ) ;	
+		fpUmi = fopen( buffer, "w" ) ;
+	}
 	
 	if ( threadCnt == 1 )
 	{
@@ -432,7 +472,13 @@ int main( int argc, char *argv[] )
 
 			if ( hasBarcode && !barcodeFile.Next() )
 			{
-				fprintf( stderr, "Read file and barcode have different number of reads.\n" ) ;
+				fprintf( stderr, "Read file and barcode file  have different number of reads.\n" ) ;
+				exit( 1 ) ;
+			}
+
+			if ( hasUmi && !umiFile.Next() )
+			{
+				fprintf( stderr, "Read file and UMI file have different number of reads.\n" ) ;
 				exit( 1 ) ;
 			}
 
@@ -451,9 +497,10 @@ int main( int argc, char *argv[] )
 					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
 						barcodeStart, barcodeEnd, barcodeRevComp, 
 						hasBarcodeWhitelist ? &barcodeCorrector : NULL, refSet ) ;
+				if ( hasUmi )
+					OutputBarcode( fpUmi, reads.id, umiFile.seq, umiFile.qual,
+							umiStart, umiEnd, umiRevComp, NULL, refSet ) ;
 			}
-			
-			
 		}
 	}
 	else
@@ -464,11 +511,14 @@ int main( int argc, char *argv[] )
 		struct _Read *readBatch = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
 		struct _Read *readBatch2 = NULL ;
 		struct _Read *barcodeBatch = NULL ;
+		struct _Read *umiBatch = NULL ;
 		if ( hasMate )
 			readBatch2 = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
 		if ( hasBarcode )
 			barcodeBatch = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
-		int fileInd1, fileInd2, fileIndBc ;
+		if ( hasUmi )
+			umiBatch = ( struct _Read *)calloc( sizeof( struct _Read ), maxBatchSize ) ;
+		int fileInd1, fileInd2, fileIndBc, fileIndUmi ;
 		
 		pthread_t *threads = (pthread_t *)malloc( sizeof( pthread_t ) * threadCnt ) ;
 		struct _threadArg *args = (struct _threadArg *)malloc( sizeof( struct _threadArg ) * threadCnt ) ;
@@ -512,7 +562,17 @@ int main( int argc, char *argv[] )
 				int tmp = barcodeFile.GetBatch( barcodeBatch, maxBatchSize, fileIndBc, true, true ) ;
 				if ( tmp != batchSize )
 				{
-					fprintf( stderr, "Read file and barcode have different number of reads.\n" ) ;
+					fprintf( stderr, "Read file and barcode file have different number of reads.\n" ) ;
+					exit ( 1 ) ;
+				}
+			}
+			
+			if ( hasUmi )
+			{
+				int tmp = umiFile.GetBatch( umiBatch, maxBatchSize, fileIndUmi, true, true ) ;
+				if ( tmp != batchSize )
+				{
+					fprintf( stderr, "Read file and umi file have different number of reads.\n" ) ;
 					exit ( 1 ) ;
 				}
 			}
@@ -541,6 +601,10 @@ int main( int argc, char *argv[] )
 					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
 						barcodeStart, barcodeEnd, barcodeRevComp, 
 						hasBarcodeWhitelist ? &barcodeCorrector : NULL, refSet ) ; 
+				
+				if ( hasUmi )
+					OutputBarcode( fpUmi, readBatch[i].id, umiBatch[i].seq, umiBatch[i].qual, 
+						umiStart, umiEnd, umiRevComp, NULL, refSet ) ; 
 			}
 		}
 		
@@ -567,6 +631,14 @@ int main( int argc, char *argv[] )
 				if ( barcodeBatch[i].qual )
 					free( barcodeBatch[i].qual ) ;
 			}
+			
+			if ( umiBatch != NULL )
+			{
+				free( umiBatch[i].id ) ;
+				free( umiBatch[i].seq ) ;
+				if ( umiBatch[i].qual )
+					free( umiBatch[i].qual ) ;
+			}
 		}
 		reads.id = NULL ;
 		reads.seq = NULL ;
@@ -582,6 +654,12 @@ int main( int argc, char *argv[] )
 			barcodeFile.id = NULL ;
 			barcodeFile.seq = NULL ;
 			barcodeFile.qual = NULL ;
+		}
+		if ( hasUmi )
+		{
+			umiFile.id = NULL ;
+			umiFile.seq = NULL ;
+			umiFile.qual = NULL ;
 		}
 
 		free( threads ) ;

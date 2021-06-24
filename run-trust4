@@ -25,8 +25,8 @@ die "TRUST4 v1.0.4 usage: ./run-trust4 [OPTIONS]:\n".
     "\t--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)\n".
     "\t--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)\n".
     "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
-    #"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
-    #"\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a umi is the true umi (default: 0 -1 +)\n".
+    "\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
+    "\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a umi is the true umi (default: 0 -1 +)\n".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
@@ -67,6 +67,7 @@ my @firstMateFiles ;
 my @secondMateFiles ;
 my @bamFiles ;
 my @barcodeFiles ;
+my @umiFiles ;
 my $useJellyfish = 0 ;
 my $prefix = "" ;
 my $vdjcFasta = "" ;
@@ -209,8 +210,23 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$hasUmi = 1 ;
 		$bamExtractorArgs .= " --UMI ".$ARGV[$i + 1] ;
+		for ($j = $i + 1; $j < @ARGV; ++$j )		
+		{
+			last if ($ARGV[$j] =~ /^-/) ;
+			push @umiFiles, glob($ARGV[$j]) ;
+		}
 		$annotatorArgs .= " --UMI" ;
-		++$i ;
+		$i = $j - 1;
+	}
+	elsif ( $ARGV[$i] eq "--umiRange")
+	{
+		$fastqExtractorArgs .= " --umiStart ".$ARGV[$i + 1]." --umiEnd ".$ARGV[$i + 2] ;
+		if ( $ARGV[$i + 3] eq "-" ) 
+		{
+			$fastqExtractorArgs .= " --umiRevComp" ;
+		}
+
+		$i += 3 ;
 	}
 	elsif ( $ARGV[$i] eq "--stage" )
 	{
@@ -294,6 +310,10 @@ if ( $stage <= 0 )
 		{
 			$fastqExtractorArgs .= " --barcode ".$fname ;
 		}
+		foreach $fname (@umiFiles)
+		{
+			$fastqExtractorArgs .= " --UMI ".$fname ;
+		}
 		system_call( "$WD/fastq-extractor -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
 	}
 	elsif ( @singleFiles > 0 && $noExtraction == 0 )
@@ -306,6 +326,10 @@ if ( $stage <= 0 )
 		foreach $fname (@barcodeFiles)
 		{
 			$fastqExtractorArgs .= " --barcode ".$fname ;
+		}
+		foreach $fname (@umiFiles)
+		{
+			$fastqExtractorArgs .= " --UMI ".$fname ;
 		}
 		system_call( "$WD/fastq-extractor -t $threadCnt -f $vdjcFasta -o ${prefix}_toassemble $fastqExtractorArgs" ) ;
 	}
@@ -361,7 +385,7 @@ if ( $stage <= 1 )
 # Annotation 
 if ( $stage <= 2 )
 {
-	if ( $hasBarcode == 0 )
+	if ( $hasBarcode == 0 || $hasUmi == 1 )
 	{
 		$annotatorArgs .= " -r ${prefix}_assembled_reads.fa" ;
 	}

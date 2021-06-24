@@ -812,11 +812,10 @@ int main( int argc, char *argv[] )
 			
 			std::vector<struct _CDR3info> &info = cdr3Infos[ cdr3Reads[i].overlap.seqIdx ] ;
 			int size = info.size() ;
+			std::map<int, int> umiUsed ;
 			if ( size == 1 ) // barcode option also forces to get in this branch. 
 			{
 				int cnt = 0 ;
-				std::map<int, int> umiUsed ;
-				
 				for ( k = i ; k < j ; ++k )
 				{
 					if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
@@ -841,6 +840,13 @@ int main( int argc, char *argv[] )
 				int l ;
 				SimpleVector<int> nc ;
 				
+				if ( hasUmi )
+				{
+						if ( umiUsed.find( cdr3Reads[k].umi ) != umiUsed.end() )
+							continue ;
+						umiUsed[ cdr3Reads[k].umi ] = 1 ;
+				}
+
 				if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
 				{
 					// Fragment overlap with the region.
