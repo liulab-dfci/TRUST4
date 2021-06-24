@@ -26,7 +26,7 @@ die "TRUST4 v1.0.4 usage: ./run-trust4 [OPTIONS]:\n".
     "\t--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)\n".
     "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
     "\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
-    "\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a umi is the true umi (default: 0 -1 +)\n".
+    "\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)\n".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
