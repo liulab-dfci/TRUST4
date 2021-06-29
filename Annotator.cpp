@@ -25,7 +25,8 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t--UMI: there is UMI information in -r file (default: not set)\n"
 		"\t--geneAlignment: output the gene alignment (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
-		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n";
+		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n"
+		"\t--readAssignment STRING: output the read assignment to the file (default: no output)\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
@@ -50,6 +51,7 @@ static struct option long_options[] = {
 			{ "barcode", no_argument, 0, 10006 },
 			{ "UMI", no_argument, 0, 10007 },
 			{ "outputCDR3File", no_argument, 0, 10008},
+			{ "readAssignment",required_argument, 0, 10009 },
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -364,6 +366,7 @@ int main( int argc, char *argv[] )
 	SeqSet seqSet( 17 ) ;
 	int c, option_index ;
 	FILE *fpAssembly = NULL ;
+	FILE *fpReadAssignment = NULL ;
 	struct _overlap geneOverlap[4] ;
 	struct _overlap cdr[3] ; // the coordinate for cdr1,2,3
 	option_index = 0 ;
@@ -443,6 +446,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10008 ) // force output CDR3 file
 		{
 			outputCDR3File = true ;
+		}
+		else if ( c == 10009 ) // output read assignment
+		{
+			fpReadAssignment = fopen(optarg, "w") ;
 		}
 		else
 		{
@@ -705,13 +712,23 @@ int main( int argc, char *argv[] )
 			delete[] args ;
 		}
 
+		if ( fpReadAssignment )
+		{
+			// Output the read assignment information
+			for ( i = 0 ; i < assembledReadCnt ; ++i )
+			{
+				if (assembledReads[i].overlap.seqIdx == -1)
+					continue ;
+				fprintf( fpReadAssignment, "%s\t%s\n", assembledReads[i].id, seqSet.GetSeqName(assembledReads[i].overlap.seqIdx) ) ;
+			}
+		}
 
 		for ( i = 0 ; i < assembledReadCnt ; ++i )
 		{
 			assign = assembledReads[i].overlap ;
 			if ( assign.seqIdx == -1 )
 				continue ;
-					
+						
 			int cdr3Len =  annotations[ assign.seqIdx ].cdr[2].readEnd -
 				annotations[ assign.seqIdx ].cdr[2].readStart + 1 ;
 			

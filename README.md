@@ -52,6 +52,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)
 			--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)
 			--repseq: the data is from TCR-seq or BCR-seq (default: not set)
+			--outputReadAssignment: output read assignment results to the prefix_assign.tsv file (default: no output)
 			--stage INT: start TRUST4 on specified stage (default: 0)
 				0: start from beginning (candidate read extraction)
 				1: start from assembly
