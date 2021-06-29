@@ -32,7 +32,7 @@ die "TRUST4 v1.0.4 usage: ./run-trust4 [OPTIONS]:\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--repseq: the data is from TCR-seq or BCR-seq (default: not set)\n".
-		"\t--outputReadAssignment: output read assignment results to the prefix_assign.tsv file (default: no output)\n".
+		"\t--outputReadAssignment: output read assignment results to the prefix_assign.out file (default: no output)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
     "\t\t0: start from beginning (candidate read extraction)\n".
     "\t\t1: start from assembly\n".
@@ -296,7 +296,7 @@ $mainArgs .= " -o $prefix" ;
 
 if ($outputReadAssignment == 1)
 {
-	$annotatorArgs .= " --readAssignment ${prefix}_assign.tsv" ;
+	$annotatorArgs .= " --readAssignment ${prefix}_assign.out" ;
 }
 
 # Extract the file
