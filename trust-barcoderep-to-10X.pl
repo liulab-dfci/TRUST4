@@ -75,7 +75,7 @@ while (<FP>)
 			$chainCols[1] eq "*" ? "None": $chainCols[1],
 			$chainCols[2] eq "*" ? "None": $chainCols[2],
 			$chainCols[3] eq "*" ? "None": $chainCols[3],
-			$chainCols[9] == 1 ? "True" : "False", IsProductive($cols[5]) ? "True" : "False", 
+			$chainCols[9] == 1 ? "True" : "False", IsProductive($chainCols[5]) ? "True" : "False", 
 			$chainCols[5], $chainCols[4], $chainCols[6], $chainCols[6], "None", "None"
 			) ;
 		if (substr($cols[1], -1) eq "T")
