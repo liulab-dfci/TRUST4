@@ -721,6 +721,7 @@ int main( int argc, char *argv[] )
 					continue ;
 				fprintf( fpReadAssignment, "%s\t%s\n", assembledReads[i].id, seqSet.GetSeqName(assembledReads[i].overlap.seqIdx) ) ;
 			}
+			fclose(fpReadAssignment) ;
 		}
 
 		for ( i = 0 ; i < assembledReadCnt ; ++i )
