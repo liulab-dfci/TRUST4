@@ -7,8 +7,9 @@ die "Usage: ./trust-barcoderep.pl xxx_cdr3.out [OPTIONS] > trust_barcode_report.
 	"OPTIONS:\n".
 	"\t-a xxx_annot.fa: TRUST4's annotation file. (default: not used)\n".
 	"\t--noImputation: do not perform imputation for partial CDR3. (default: impute)\n".
-	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
-	"\t--secondary: output secondary chains. (default: no)\n"
+	"\t--imputeBCR: perform imputation for BCR partial CDR3. (default: no)\n".
+	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n"
+	#"\t--secondary: output secondary chains. (default: no)\n"
 	if ( @ARGV == 0 ) ;
 
 my %cdr3 ;  
@@ -223,6 +224,7 @@ my $i ;
 my $reportPartial = 0 ;
 my $annotFile = "" ;
 my $impute = 1 ;
+my $imputeBCR = 0 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--reportPartial" )
@@ -232,6 +234,10 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--noImputation" )
 	{
 		$impute = 0 ;
+	}
+	elsif ( $ARGV[$i] eq "--imputeBCR" )
+	{
+		$imputeBCR = 1 ;
 	}
 	elsif ( $ARGV[$i] eq "-a" )
 	{
@@ -610,7 +616,7 @@ if ($impute == 1)
 		my @cols = @{$barcodeOutput{$barcode}} ;
 		next if ($cols[1] eq "*" && $cols[2] eq "*") ;
 		next if ($cols[1] ne "*" && $cols[2] ne "*") ;
-		next if ($cols[0] eq "B") ; # only impute for tcr
+		next if ($cols[0] eq "B" && $imputeBCR == 0) ; # only impute for tcr
 
 		my $missingChain = 0 ;
 		$missingChain = 1 if ($cols[2] eq "*") ;
