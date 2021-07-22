@@ -15,9 +15,10 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"Required:\n"
 		"\t-f STRING: fasta file containing the receptor genome sequence\n"
 		"\t-a STRING: path to the assembly file\n"
-		"\t-r STRING: path to the reads used in the assembly\n"
 		"Optional:\n"
+		"\t-r STRING: path to the reads used in the assembly\n"
 		"\t--fasta: the assembly file is in fasta format (default: false)\n"
+		"\t--fastq: the assembly file is in fastq format (default: false)\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-o STRING: the prefix of the file containing CDR3 information (default: trust)\n"
 		//"\t--partial: including partial CDR3s in the report (default: false)\n"
@@ -26,6 +27,8 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t--geneAlignment: output the gene alignment (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n"
+		"\t--outputCDR3File: output CDR3 file when not using -r option (default: no output)\n"
+		"\t--needReverseComplement: reverse complement sequences on another strand (default: no)\n"
 		"\t--readAssignment STRING: output the read assignment to the file (default: no output)\n";
 
 char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -52,6 +55,8 @@ static struct option long_options[] = {
 			{ "UMI", no_argument, 0, 10007 },
 			{ "outputCDR3File", no_argument, 0, 10008},
 			{ "readAssignment",required_argument, 0, 10009 },
+			{ "needReverseComplement", no_argument, 0, 10010 },
+			{ "fastq", no_argument, 0, 10011},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -76,6 +81,7 @@ struct _annotateReadsThreadArg
 	int tid ;
 	int threadCnt ;
 	bool impute ;
+	bool needRC ;
 
 	SeqSet *seqSet ;
 	SeqSet *refSet ;
@@ -318,6 +324,12 @@ void *AnnotateReads_Thread( void *pArg )
 		end = seqCnt ;
 	for ( i = start ; i < end ; ++i )
 	{
+		if ( arg.needRC )
+		{
+			int strand = arg.refSet->HasHitInSet( arg.seqSet->GetSeqConsensus(i), buffer) ;
+			if ( strand == -1 )
+				arg.seqSet->ReverseComplementInSeqSet( i ) ;
+		}
 		arg.refSet->AnnotateRead( arg.seqSet->GetSeqConsensus( i ), 2, arg.annotations[i].geneOverlap, arg.annotations[i].cdr, 
 			&( arg.annotations[i].secondaryGeneOverlaps ) ) ;
 		if ( arg.impute && arg.refSet->ImputeCDR3( arg.seqSet->GetSeqConsensus( i ), buffer, 
@@ -381,6 +393,8 @@ int main( int argc, char *argv[] )
 	bool hasBarcode = false ;
 	bool hasUmi = false ;
 	bool outputCDR3File = false ; // whether output the cdr3 file when the input is fasta
+	bool needRC = false ; // need reverse complment
+	int format = 0 ; // 0-trust4 format. 1-fasta, 2-fastq
 	std::map<std::string, int> barcodeStrToInt ;
 
 	while ( 1 )
@@ -414,6 +428,12 @@ int main( int argc, char *argv[] )
 		else if ( c == 10000 ) // --fasta
 		{
 			ignoreWeight = true ;
+			format = 1 ;
+		}
+		else if ( c == 10011) // --fastq
+		{
+			ignoreWeight = true ;
+			format = 2 ;
 		}
 		else if ( c == 10001 ) // --radius
 		{
@@ -451,6 +471,10 @@ int main( int argc, char *argv[] )
 		{
 			fpReadAssignment = fopen(optarg, "w") ;
 		}
+		else if ( c == 10010 ) // Reads on different strand, need to RC first
+		{
+			needRC = true ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -479,7 +503,8 @@ int main( int argc, char *argv[] )
 	PrintLog( "Start to annotate assemblies." ) ;
 	while ( fgets( buffer, sizeof( buffer ), fpAssembly ) != NULL )
 	{
-		if ( buffer[0] != '>' )
+		if ( (format != 2 && buffer[0] != '>') 
+			|| (format == 2 && buffer[0] != '@') )
 		{
 			printf( "%s", buffer ) ;
 			continue ;
@@ -531,6 +556,12 @@ int main( int argc, char *argv[] )
 		}
 		else
 			seqSet.InputNovelRead( buffer + 1, seq, 1, -1 ) ;
+
+		if (format == 2) // fastq
+		{
+			fgets(buffer, sizeof(buffer), fpAssembly) ;
+			fgets(buffer, sizeof(buffer), fpAssembly) ;
+		}
 	}
 	fclose( fpAssembly ) ;
 		
@@ -543,6 +574,13 @@ int main( int argc, char *argv[] )
 	{
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
+			if ( needRC )
+			{
+				int strand = refSet.HasHitInSet( seqSet.GetSeqConsensus(i), buffer ) ;
+				if ( strand == -1 )
+					seqSet.ReverseComplementInSeqSet( i ) ;
+			}
+
 			refSet.AnnotateRead( seqSet.GetSeqConsensus( i ), 2, annotations[i].geneOverlap, annotations[i].cdr, 
 					&annotations[i].secondaryGeneOverlaps ) ;
 			
@@ -570,6 +608,7 @@ int main( int argc, char *argv[] )
 			args[i].refSet = &refSet ;
 			args[i].annotations = annotations ;
 			args[i].impute = impute ;
+			args[i].needRC = needRC ;
 			pthread_create( &threads[i], &attr, AnnotateReads_Thread, (void *)( args + i ) ) ;
 		}
 
@@ -996,7 +1035,7 @@ int main( int argc, char *argv[] )
 		fclose( fpOutput ) ;
 		fclose( fpReads ) ; 
 	}
-	else if ( ignoreWeight == 0 && !outputCDR3File )
+	else if ( outputCDR3File ) // force output cdr3 file
 	{
 		// Directly use consensus to output cdr3 information. 
 		sprintf( buffer, "%s_cdr3.out", outputPrefix ) ;

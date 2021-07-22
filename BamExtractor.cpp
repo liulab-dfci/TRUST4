@@ -212,7 +212,7 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 		{
 			// single-end 
 			if ( !IsLowComplexity( arg.candidates[i].mate1 ) 
-				&& info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer ) )
+				&& info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer ) != 0)
 			{
 				pick.PushBack( i ) ;
 			}
@@ -221,8 +221,8 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 		{
 			// paired-end
 			if (  ( !IsLowComplexity( arg.candidates[i].mate1 ) && !IsLowComplexity( arg.candidates[i].mate2 ) ) 
-				&& ( info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer ) 
-					|| info.refSet->HasHitInSet( arg.candidates[i].mate2, info.seqBuffer ) ) )
+				&& ( info.refSet->HasHitInSet( arg.candidates[i].mate1, info.seqBuffer ) != 0 
+					|| info.refSet->HasHitInSet( arg.candidates[i].mate2, info.seqBuffer ) != 0 ) )
 			{
 				pick.PushBack( i ) ;
 			}
@@ -666,8 +666,8 @@ int main( int argc, char *argv[] )
 				if ( threadCnt == 1 )
 				{
 					if ( ( !IsLowComplexity( buffer2 ) && !IsLowComplexity( buffer ) ) && 
-						( refSet.HasHitInSet( buffer2, seqBuffer ) || 
-						 refSet.HasHitInSet( buffer, seqBuffer ) ) ) 
+						( refSet.HasHitInSet( buffer2, seqBuffer ) != 0 || 
+						 refSet.HasHitInSet( buffer, seqBuffer ) != 0 ) ) 
 					{
 						if ( !alignments.IsFirstMate() )
 						{
@@ -725,7 +725,7 @@ int main( int argc, char *argv[] )
 				// reads from alternative chromosomes, or the unmapped flag is not set appropriately
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
-				if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
+				if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) != 0)
 				{
 					std::string name( alignments.GetReadId() ) ;
 					TrimName( name, mateIdLen ) ;	
@@ -754,7 +754,7 @@ int main( int argc, char *argv[] )
 							continue ;
 						
 					}
-					if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) )
+					if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, seqBuffer ) != 0)
 					{
 						//alignments.GetReadSeq( buffer ) ;
 						// No need to trim read id for single-end data.

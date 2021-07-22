@@ -2330,6 +2330,24 @@ public:
 		}
 		rcSeq[i] = '\0' ;
 	}
+
+	void ReverseComplementInSeqSet(int idx)
+	{
+		// Should be used only when posWeight is not very meaningful.
+		char *buffer = strdup(seqs[idx].consensus) ;
+		ReverseComplement(seqs[idx].consensus, buffer, seqs[idx].consensusLen) ;
+		int i ;
+		struct _posWeight tmp ;
+
+		seqs[idx].posWeight.SetZero( 0, seqs[idx].consensusLen ) ;
+		for ( i = 0 ; i < seqs[idx].consensusLen ; ++i )
+		{
+			if ( seqs[idx].consensus[i] != 'N' )
+				seqs[idx].posWeight[i].count[ nucToNum[ seqs[idx].consensus[i] - 'A' ] ] = 1 ;
+		}
+
+		free(buffer) ;
+	}
 	
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename, bool isIMGT = false ) 
@@ -2571,19 +2589,20 @@ public:
 	}
 	
 	// Test whether the read share a kmer hit on the seqs.
-	bool HasHitInSet( char *read, char *rcRead )
+	// 0-no hit. Other wise return the strand
+	int HasHitInSet( char *read, char *rcRead )
 	{
-		int i, k ;
+		int i, j, k ;
 		int len = strlen( read ) ;
 		if ( len < kmerLength )
-			return false ;
+			return 0 ;
 
 		SimpleVector<struct _hit> hits ;	
 		GetHitsFromRead( read, rcRead, 0, -1, false, hits, NULL  ) ;
 
 		int hitCnt = hits.Size() ;
 		if ( hitCnt == 0 )
-			return false ;
+			return 0 ;
 
 		// Bucket sort.
 		int seqCnt = seqs.size() ;
@@ -2606,11 +2625,17 @@ public:
 			for ( i = 0 ; i < seqCnt ; ++i )
 			{
 				int size = buckets[k][i].Size() ;
-				if ( size > 0 && size > max )
+
+				int readHitCount = 1 ;
+				for (j = 1 ; j < size ; ++j)
+					if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
+						++readHitCount ;
+
+				if ( size > 0 && readHitCount > max )
 				{
 					maxTag = k ;
 					maxSeqIdx = i ;
-					max = size ;
+					max = readHitCount ;
 				}
 			}
 		}
@@ -2619,18 +2644,17 @@ public:
 		GetOverlapsFromHits( buckets[maxTag][maxSeqIdx], hitLenRequired, 1, overlaps ) ;
 		delete[] buckets[0] ;
 		delete[] buckets[1] ;
-		//printf( "%d %d\n", hitCnt, overlaps.size() ) ;	
 		for ( i = 0 ; i < overlaps.size() ; ++i )
 		{
 			//printf( "%s\n", seqs[ overlaps[i].seqIdx ].name ) ;
 			delete overlaps[i].hitCoords ;
 		}
 		if ( overlaps.size() == 0 )
-			return false ;
+			return 0 ;
 		/*printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
 		for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
 			printf( "%d %d\n", overlaps[0].hitCoords->Get(i).a, overlaps[0].hitCoords->Get(i).b ) ;*/
-		return true ;
+		return maxTag == 0 ? -1 : 1 ;
 	}
 
 	// Compute the length of hit from the read, take the overlaps of kmer into account 
