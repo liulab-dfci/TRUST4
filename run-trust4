@@ -400,6 +400,10 @@ if ( $stage <= 2 )
 	{
 		$annotatorArgs .= " -r ${prefix}_assembled_reads.fa" ;
 	}
+	else
+	{
+		$annotatorArgs .= " --outputCDR3File" ;
+	}
 
 	if ( $vdjcRef eq "" )
 	{
