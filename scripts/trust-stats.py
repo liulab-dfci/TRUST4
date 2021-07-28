@@ -57,6 +57,7 @@ def ComputeClonality(rep):
 
 def OutputChain(rep, name):
 	outputList = [name]
+	outputList.append(sum(list(rep.values())))
 	outputList.append(ComputeRichness(rep))
 	outputList.append(ComputeCPK(rep))
 	outputList.append(ComputeEntropy(rep))
@@ -64,7 +65,7 @@ def OutputChain(rep, name):
 	print("\t".join([str(x) for x in outputList]))
 
 def ProcessImmuneRepertoire(immrep):
-	print("\t".join(["#chain", "Richness", "CPK", "Entropy", "Clonality"]))
+	print("\t".join(["#chain", "Abundance", "Richness", "CPK", "Entropy", "Clonality"]))
 	# IGH overall
 	tmp = {}
 	for i in range(10):
