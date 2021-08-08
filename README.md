@@ -86,6 +86,8 @@ The coordinate is 0-based.
 The output trust_cdr3.out is a tsv file. The fields are:
 
 	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count CDR3_germline_similarity full_length_assembly
+	
+Please note that CDR3_score in trust_cdr3.out has been divided by 100, so 1.00 is the maximum score and 0.01 means imputed CDR3.
 
 The output trust_report.tsv is a tsv file. The fileds are:
 	
