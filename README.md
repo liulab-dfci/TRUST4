@@ -117,7 +117,7 @@ When given barcode, TRUST4 only assembles the reads with the same barcode togeth
 
 If your input is raw FASTQ files, you can use "--barcode" to specify the barcode file and use "--barcodeRange" to tell TRUST4 how to extract barcode information. If the barcode or UMI sequence is in the read sequence, you may use "--read1Range", "--read2Range" to tell TRUST4 how to extract sequence information in the reads. TRUST4 supports using wildcard in the -1 -2/-u option, so a typical way to run 10X Genomics single-end data is by:
 
-	run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -u path_to_10X_fastqs/*_R2_*.fastq.gz --barcode path_to_10X_fastqs/*_R1_*.fastq.gz --barcodeRange 0 15 + --barcodeWhiteList cellranger_folder/cellranger-cs/VERSION/lib/python/cellranger/barcodes/737K-august-2016.txt [other options]
+	run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -u path_to_10X_fastqs/*_R2_*.fastq.gz --barcode path_to_10X_fastqs/*_R1_*.fastq.gz --barcodeRange 0 15 + --barcodeWhitelist cellranger_folder/cellranger-cs/VERSION/lib/python/cellranger/barcodes/737K-august-2016.txt [other options]
 
 The exact options depend on your 10X Genomics kit.
 
