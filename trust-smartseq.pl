@@ -105,7 +105,7 @@ open $FP2, $readFile2 if ($hasMate) ;
 open FPfinalreport, ">${outputPrefix}_report.tsv" ;
 open FPfinalannot, ">${outputPrefix}_annot.fa" ;
 
-print FPfinalreport "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\n" ;
+print FPfinalreport "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\tcid_full_length\n" ;
 
 while (<FP1>)
 {
