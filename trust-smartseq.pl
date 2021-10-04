@@ -175,8 +175,11 @@ while (<FP1>)
 		}
 		elsif ( int($chainType/2) == int($mainChainType/2) && $chainType%2 == 1 - ($mainChainType%2))
 		{
-			$add = 1 ;
-			++$representativeCols2Cnt ;
+			if ($representativeCols2Cnt < $representativeN)
+			{
+				$add = 1 ;
+				++$representativeCols2Cnt ;
+			}
 		}
 		if ($add == 1)
 		{
