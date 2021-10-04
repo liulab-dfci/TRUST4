@@ -13,8 +13,9 @@ die "TRUST4 SMART-seq pipeline usage: perl smartseq-process.pl [OPTIONS]:\n".
     "\t-f STRING: path to the fasta file coordinate and sequence of V/D/J/C genes\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file from IMGT database. (default: not used but recommended)\n".
     "\t-o STRING: prefix of final output files. (default: TRUST)\n".
-    "\t-t INT: number of threads (default: 1)\n"
-    #"\t--noclear: do not clear the intermediate results (default: clear)\n"
+    "\t-t INT: number of threads (default: 1)\n".
+    "\t--representative INT: number of representative for each detected chain (default: 1)\n"
+		#"\t--noclear: do not clear the intermediate results (default: clear)\n"
     if (@ARGV == 0) ;
 
 sub system_call
@@ -67,6 +68,7 @@ my $readFile2 = "" ;
 my $outputPrefix = "TRUST" ;
 my $hasMate = 0 ;
 my $trust4Args = "" ;
+my $representativeN = 1 ;
 for ( $i = 0 ; $i < @ARGV ; ++$i )
 {
 	if ($ARGV[$i] eq "-1")	
@@ -88,6 +90,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ($ARGV[$i] eq "-t" || $ARGV[$i] eq "-f" || $ARGV[$i] eq "--ref")
 	{
 		$trust4Args .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ($ARGV[$i] eq "--representative")
+	{
+		$representativeN = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	else
@@ -139,14 +146,17 @@ while (<FP1>)
 	chomp $line ;
 	my $report1 = $line ;
 	my @cols = split /\t/, $line ;
-	my $contigId1 = $cols[8] ;
 	my $mainChainType = GetPairChainType($cols[4], $cols[6], $cols[7]) ;
 	
-	my $contigId2 = "" ;
 	my $report2 = "" ;
 
-	my @representativeCols1 = @cols ;
-	my @representativeCols2 ;
+	my @representativeCols ;
+
+	@{$representativeCols[0]} = @cols ;
+	my $representativeCols1Cnt = 1 ;
+	my $representativeCols2Cnt = 0 ;
+	my $representativeCnt = 1 ;
+
 	# Go throught the list to find the second representative.
 	while (<FPreport>)	
 	{
@@ -154,22 +164,38 @@ while (<FP1>)
 		$line = $_ ;
 		@cols = split /\t/, $line ;
 		my $chainType = GetPairChainType($cols[4], $cols[6], $cols[7]) ;
-		if ( int($chainType/2) == int($mainChainType/2) && $chainType%2 == 1 - ($mainChainType%2))
+		my $add = 0 ;
+		if ($chainType == $mainChainType)
 		{
-			$contigId2 = $cols[8] ;
-			$report2 = $line ;
-			@representativeCols2 = @cols ;
-			last ;
+			if ($representativeCols1Cnt < $representativeN)
+			{
+				$add = 1 ;
+				++$representativeCols1Cnt ;
+			}
 		}
+		elsif ( int($chainType/2) == int($mainChainType/2) && $chainType%2 == 1 - ($mainChainType%2))
+		{
+			$add = 1 ;
+			++$representativeCols2Cnt ;
+		}
+		if ($add == 1)
+		{
+				@{$representativeCols[$representativeCnt]} = @cols ;
+				++$representativeCnt ;
+		}
+
+		last if ($representativeCols1Cnt >= $representativeN && $representativeCols2Cnt >= $representativeN) ;
 	}
 	
 	# Output the representative information
-	$representativeCols1[8] = $cellPrefix."_".$contigId1 ;
-	print FPfinalreport join("\t", @representativeCols1), "\n" ;
-	if ($report2 ne "")
+	my %selectedContigs ;
+	for ($i = 0 ; $i < $representativeCols1Cnt + $representativeCols2Cnt ; ++$i)
 	{
-		$representativeCols2[8] = $cellPrefix."_".$contigId2 ;
-		print FPfinalreport join("\t", @representativeCols2), "\n" ;
+		my @cols = @{$representativeCols[$i]} ;
+		my $contigId = $cols[8] ;
+		$cols[8] = $cellPrefix."_".$contigId ;
+		$selectedContigs{$contigId} = 1 ;
+		print FPfinalreport join("\t", @cols), "\n" ;
 	}
 	close FPreport ;
 
@@ -183,10 +209,10 @@ while (<FP1>)
 		chomp $seq ;
 
 		my @cols = split / /, $header ;
-		if ($cols[0] eq ">".$contigId1 || $cols[0] eq ">".$contigId2)
+		my $contigId = substr($cols[0], 1) ;
+		if (defined $selectedContigs{$contigId})
 		{
-			my $tmp = substr($cols[0], 1) ;
-			$cols[0] = ">$cellPrefix"."_".$tmp ;
+			$cols[0] = ">$cellPrefix"."_".$contigId ;
 			print FPfinalannot join(" ", @cols), "\n$seq\n" ;
 		}
 	}
