@@ -332,7 +332,7 @@ public:
 				int max = e[tagi * bmax + tagj] ;
 				int a = EDIT_INSERT ;
 
-				if ( f[tagi * bmax + tagj] >= m[tagi * bmax + tagj] )
+				if ( f[tagi * bmax + tagj] >= max )
 					a = EDIT_DELETE ;
 				if ( tagi > 0 && tagj > 0 
 					&& ( m[ ( tagi - 1 ) * bmax + tagj - 1] + 
