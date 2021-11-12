@@ -138,7 +138,7 @@ if ($format eq "cdr3")
 		my @cols = split ;
 		next if ($cols[9] <= 0) ;
 		push @{$seqCDR3s{$cols[0]}}, $cols[8] ; # cdr3nt
-		push @{$seqCDR3s{$cols[0]}}, $cols[10] ; # abundance
+		push @{$seqCDR3s{$cols[0]}}, int($cols[10]) ; # abundance
 		my $fullLength = "F" ;
 		$fullLength = "T" if ($cols[12] == 1) ;
 		push @{$seqCDR3s{$cols[0]}}, $fullLength ; # full-length
@@ -158,7 +158,7 @@ elsif ($format eq "barcoderep")
 			my $seqId = $cols2[7] ;
 			my $fullLength = "F" ;
 			$fullLength = "T" if ($cols2[9] == 1) ;
-			@{$seqCDR3s{$seqId}} = ($cols2[4], $cols2[6], $fullLength) ;
+			@{$seqCDR3s{$seqId}} = ($cols2[4], int($cols2[6]), $fullLength) ;
 		}
 	}
 }
