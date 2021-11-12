@@ -95,6 +95,8 @@ The output trust_report.tsv is a tsv file. The fileds are:
 
 For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. 
 
+The output trust_airr.tsv follows [the AIRR format](https://docs.airr-community.org/en/latest/datarep/rearrangements.html). 
+
 ### Practical notes
 
 * #### Build custom V,J,C gene database (files for -f and --ref)
@@ -128,6 +130,8 @@ In the output, the abundance in the report will use the number of barcodes for t
 For the chain information it is in CSV format:
 	
 	V_gene,D_gene,J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity,consensus_full_length
+
+TRUST4 also converts the barcode report file to the trust_barcode_airr.tsv file to follow the AIRR format.
 
 * #### SMART-Seq data
 
