@@ -3,7 +3,7 @@
 use strict ;
 use warnings ;
 
-die "usage: trust-airr.pl trust_cdr3.out trust_annot.fa > trust_airr.tsv\n" if (@ARGV == 0) ;
+die "usage: trust-airr.pl trust_cdr3.out trust_annot.fa [--format cdr3|barcoderep]> trust_airr.tsv\n" if (@ARGV == 0) ;
 
 my %DnaToAa = (
 		'TCA' => 'S',    # Serine
@@ -105,28 +105,68 @@ sub Translate
 sub CoordToCigar
 {
 	my $cigar = "" ;
-	$cigar = $_[3]."S" if ($_[3] > 0) ;
-	$cigar .= ($_[4]-$_[3]+1)."M" ;
-	$cigar .= ($_[0]-$_[4]-1)."S" if ($_[0]-$_[4]-1 > 0) ;
+	$cigar = $_[1]."S" if ($_[1] > 0) ;
+	$cigar .= ($_[2]-$_[1]+1)."M" ;
+	$cigar .= ($_[5]-$_[2]-1)."S" if ($_[5]-$_[2]-1 > 0) ;
+	return $cigar ;
 } 
+
+my $format = "cdr3" ;
+my $i ;
+for ($i = 2 ; $i < @ARGV ; ++$i)
+{
+	if ($ARGV[$i] eq "--format")
+	{
+		$format = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	else
+	{
+		die "Unknown option ".$ARGV[$i]."\n" ;
+	}
+}
+
 
 my %seqCDR3s ;
 
 open FP, $ARGV[0] ;
-while (<FP>)
+if ($format eq "cdr3")
 {
-	chomp ;
-	my @cols = split ;
-	next if ($cols[9] <= 0) ;
-	push @{$seqCDR3s{$cols[0]}}, $cols[8] ; # cdr3nt
-	push @{$seqCDR3s{$cols[0]}}, $cols[10] ; # abundance
-	my $fullLength = "F" ;
-	$fullLength = "T" if ($cols[12] == 1) ;
-	push @{$seqCDR3s{$cols[0]}}, $fullLength ; # full-length
+	while (<FP>)
+	{
+		chomp ;
+		my @cols = split ;
+		next if ($cols[9] <= 0) ;
+		push @{$seqCDR3s{$cols[0]}}, $cols[8] ; # cdr3nt
+		push @{$seqCDR3s{$cols[0]}}, $cols[10] ; # abundance
+		my $fullLength = "F" ;
+		$fullLength = "T" if ($cols[12] == 1) ;
+		push @{$seqCDR3s{$cols[0]}}, $fullLength ; # full-length
+	}
+}
+elsif ($format eq "barcoderep")
+{
+	while (<FP>)
+	{
+		next if (/^#/) ;
+		chomp ;
+		my @cols = split ;
+		for ($i = 2 ; $i <= 3 ; ++$i)
+		{
+			next if ($cols[$i] eq "*") ;
+			my @cols2 = split /,/, $cols[$i] ;
+			my $seqId = $cols2[7] ;
+			@{$seqCDR3s{$seqId}} = ($cols2[4], $cols2[6], $cols2[9]) ;
+		}
+	}
+}
+else
+{
+	die "Unknown format ".$format."\n" ;
 }
 close FP ;
 
-print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcomplete_vdj\tconsensus_count\n" ;
+print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 
 open FP, $ARGV[1] ;
 while (<FP>)
@@ -137,7 +177,8 @@ while (<FP>)
 	chomp $seq ;
 	
 	my @cols = split /\s/, substr($header,1) ;
-	
+	next if (!defined $seqCDR3s{$cols[0]}) ;	
+
 	my @vCoord ;
 	my @dCoord ;
 	my @jCoord ;
@@ -153,11 +194,12 @@ while (<FP>)
 	my $jcigar = "" ;
 	my $jidentity = "" ;
 	my $ccall = "" ;
+	my $cellId = "" ;
 
 	if ( $cols[3] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
 	{
 		$vcall = (split /\(/, $cols[3])[0] ;
-		@vCoord = ($1, $2, $3, $4, $5) ;
+		@vCoord = ($1, $2, $3, $4, $5, length($seq)) ;
 		$vcigar = CoordToCigar(@vCoord) ;
 		$videntity = (split /:/, $cols[3])[-1] ;
 	}
@@ -169,7 +211,7 @@ while (<FP>)
 	if ( $cols[4] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
 	{
 		$dcall = (split /\(/, $cols[4])[0] ;
-		@dCoord = ($1, $2, $3, $4, $5) ;
+		@dCoord = ($1, $2, $3, $4, $5, length($seq)) ;
 		$dcigar = CoordToCigar(@dCoord) ;
 	}
 	else
@@ -180,7 +222,7 @@ while (<FP>)
 	if ( $cols[5] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
 	{
 		$jcall = (split /\(/, $cols[5])[0] ;
-		@jCoord = ($1, $2, $3, $4, $5) ;
+		@jCoord = ($1, $2, $3, $4, $5, length($seq)) ;
 		$jcigar = CoordToCigar(@jCoord) ;
 		$jidentity = (split /:/, $cols[3])[-1] ;
 	}
@@ -192,7 +234,7 @@ while (<FP>)
 	if ( $cols[6] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
 	{
 		$ccall = (split /\(/, $cols[6])[0] ;
-		@cCoord = ($1, $2, $3, $4, $5) ;
+		@cCoord = ($1, $2, $3, $4, $5, length($seq)) ;
 	}
 	else
 	{
@@ -212,8 +254,12 @@ while (<FP>)
 	$cdr3 = ( split /=/, $cols[9] )[1] ;
 
 	my @cdr3s = @{$seqCDR3s{$cols[0]}} ;
+	if ($format eq "barcoderep")
+	{
+		$cellId = (split /_/, $cols[0])[0] ;
+	}
 
-#print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcomplete_vdj\tconsensus_count\n" ;
+#print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 	for (my $i = 0 ; $i < scalar(@cdr3s) ; $i += 3)
 	{
 		my $cdr3aa = Translate($cdr3s[$i]) ;
@@ -221,9 +267,14 @@ while (<FP>)
 		$productive = "F" if ($cdr3aa eq "") ;
 		my $outputSeq = $seq ;
 		substr($outputSeq, $cdr3Coord[0], $cdr3Coord[1] - $cdr3Coord[0] + 1, $cdr3s[$i]) ;
-		print join("\t", ($cols[0]."_".($i/3), $outputSeq, "F", $productive,
+		my $seqId = $cols[0] ;
+		if ($format eq "cdr3")
+		{
+			$seqId .= "_".($i/3) ;
+		}
+		print join("\t", ($seqId, $outputSeq, "F", $productive,
 			$vcall, $dcall, $jcall, $ccall, "", "", $cdr3s[$i], $cdr3aa, 
-		  $vcigar, $dcigar, $jcigar, $videntity, $jidentity, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
+		  $vcigar, $dcigar, $jcigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
 	}
 }
 close FP ;
