@@ -168,7 +168,7 @@ else
 }
 close FP ;
 
-print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
+print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 
 open FP, $ARGV[1] ;
 while (<FP>)
@@ -197,6 +197,8 @@ while (<FP>)
 	my $jidentity = "" ;
 	my $ccall = "" ;
 	my $cellId = "" ;
+	my $cdr1 = "" ;
+	my $cdr2 = "" ;
 
 	if ( $cols[3] =~ /\(([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\):\(([0-9]+?)-([0-9]+?)\)/ )
 	{
@@ -244,6 +246,22 @@ while (<FP>)
 	}
 
 	next if ( $cols[9] =~ /:0\.00/ ) ; # partial CDR3
+	
+	if ($cols[7] =~ /=(\w+?)$/)
+	{
+		if ($1 ne "null")
+		{
+			$cdr1 = $1 ;
+		}
+	}
+	
+	if ($cols[8] =~ /=(\w+?)$/)
+	{
+		if ($1 ne "null")
+		{
+			$cdr2 = $1 ;
+		}
+	}
 
 	if ( $cols[9] =~ /CDR3\(([0-9]+?)-([0-9]+?)\)/ )
 	{
@@ -261,7 +279,7 @@ while (<FP>)
 		$cellId = (split /_/, $cols[0])[0] ;
 	}
 
-#print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
+#print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 	for (my $i = 0 ; $i < scalar(@cdr3s) ; $i += 3)
 	{
 		my $cdr3aa = Translate($cdr3s[$i]) ;
@@ -275,7 +293,7 @@ while (<FP>)
 			$seqId .= "_".($i/3) ;
 		}
 		print join("\t", ($seqId, $outputSeq, "F", $productive,
-			$vcall, $dcall, $jcall, $ccall, "", "", $cdr3s[$i], $cdr3aa, 
+			$vcall, $dcall, $jcall, $ccall, "", "", $cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
 		  $vcigar, $dcigar, $jcigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
 	}
 }
