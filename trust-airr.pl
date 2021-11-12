@@ -156,7 +156,9 @@ elsif ($format eq "barcoderep")
 			next if ($cols[$i] eq "*") ;
 			my @cols2 = split /,/, $cols[$i] ;
 			my $seqId = $cols2[7] ;
-			@{$seqCDR3s{$seqId}} = ($cols2[4], $cols2[6], $cols2[9]) ;
+			my $fullLength = "F" ;
+			$fullLength = "T" if ($cols2[9] == 1) ;
+			@{$seqCDR3s{$seqId}} = ($cols2[4], $cols2[6], $fullLength) ;
 		}
 	}
 }
