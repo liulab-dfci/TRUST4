@@ -3,7 +3,7 @@
 use strict ;
 use warnings ;
 
-die "usage: trust-airr.pl trust_cdr3.out trust_annot.fa [--format cdr3|barcoderep]> trust_airr.tsv\n" if (@ARGV == 0) ;
+die "usage: trust-airr.pl trust_report.tsv trust_annot.fa [--format simplerep|cdr3|barcoderep]> trust_airr.tsv\n" if (@ARGV == 0) ;
 
 my %DnaToAa = (
 		'TCA' => 'S',    # Serine
@@ -111,7 +111,7 @@ sub CoordToCigar
 	return $cigar ;
 } 
 
-my $format = "cdr3" ;
+my $format = "simplerep" ;
 my $i ;
 for ($i = 2 ; $i < @ARGV ; ++$i)
 {
@@ -130,7 +130,24 @@ for ($i = 2 ; $i < @ARGV ; ++$i)
 my %seqCDR3s ;
 
 open FP, $ARGV[0] ;
-if ($format eq "cdr3")
+
+if ($format eq "simplerep")
+{
+	while (<FP>)
+	{
+		next if (/^#/) ;
+		chomp ;
+		my @cols = split ;
+		next if ($cols[3] eq "partial") ;
+		my $seqId = $cols[8] ;
+		push @{$seqCDR3s{$seqId}}, $cols[2] ; # cdr3nt
+		push @{$seqCDR3s{$seqId}}, int($cols[0]) ; # abundance
+		my $fullLength = "F" ;
+		$fullLength = "T" if ($cols[9] == 1) ;
+		push @{$seqCDR3s{$seqId}}, $fullLength ; # full-length
+	}
+}
+elsif ($format eq "cdr3")
 {
 	while (<FP>)
 	{

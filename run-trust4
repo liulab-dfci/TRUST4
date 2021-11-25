@@ -436,7 +436,7 @@ if ( $stage <= 2 )
 if ( $stage <= 3 )
 {
 	system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs > ${prefix}_report.tsv" ) ;
-	system_call( "perl $WD/trust-airr.pl ${prefix}_cdr3.out ${prefix}_annot.fa > ${prefix}_airr.tsv" ) ;
+	system_call( "perl $WD/trust-airr.pl ${prefix}_report.tsv ${prefix}_annot.fa > ${prefix}_airr.tsv" ) ;
 	if ( $hasBarcode == 1 )
 	{
 		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out -a ${prefix}_annot.fa > ${prefix}_barcode_report.tsv" ) ;
