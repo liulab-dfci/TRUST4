@@ -264,6 +264,15 @@ if ( $vdjcFasta eq "" )
 	die "Need to use -f to specify the sequence of annotated V/D/J/C genes' sequence.\n" ;
 }
 
+# Check the existence of files
+foreach $i ($vdjcFasta, $vdjcRef, @bamFiles, @firstMateFiles, @secondMateFiles, @barcodeFiles)
+{
+	if ( !(-e $i))
+	{
+		die "Could not find file $i\n";
+	}
+}
+
 # Infer the output prefix.
 if ( $prefix eq "" )
 {
