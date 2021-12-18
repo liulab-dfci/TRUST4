@@ -5,6 +5,12 @@ LINKFLAGS = -lpthread -lz
 DEBUG=
 OBJECTS = main.o #BaseReads.o Alignment.o 
 
+#asan=1
+ifneq ($(asan),)
+	CXXFLAGS+=-fsanitize=address -g
+	LDFLAGS+=-fsanitize=address -ldl -g
+endif
+
 all: trust4 bam-extractor fastq-extractor annotator
 
 trust4: main.o
