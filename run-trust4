@@ -265,12 +265,24 @@ if ( $vdjcFasta eq "" )
 }
 
 # Check the existence of files
-foreach $i ($vdjcFasta, $vdjcRef, @bamFiles, @firstMateFiles, @secondMateFiles, @barcodeFiles)
+foreach $i ($vdjcFasta, $vdjcRef, @bamFiles, @firstMateFiles, @secondMateFiles)
 {
 	next if (length($i) == 0) ;
 	if ( !(-e $i))
 	{
 		die "Could not find file $i\n";
+	}
+}
+
+if (scalar(@bamFiles) == 0)
+{
+	foreach $i (@barcodeFiles)
+	{
+		next if (length($i) == 0) ;
+		if ( !(-e $i))
+		{
+			die "Could not find file $i\n";
+		}
 	}
 }
 

@@ -112,8 +112,10 @@ public:
 		
 		int negInf = ( lent + 1 ) * ( lenp + 1 ) * SCORE_INDEL ;
 		int bmax = ( lent + 1 ) ;
-
-		int *m = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ;
+		int bufferM[256] ;
+		int *m = bufferM ;
+		if ((lenp + 1) * (lent + 1) > 256)
+			m = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ;
 		
 		m[0] = 0 ;
 		for ( i = 1 ; i <= lenp ; ++i )
@@ -207,7 +209,8 @@ public:
 			align[i] = align[j] ;
 			align[j] = tmp ;
 		}
-		delete[] m ;
+		if ((lenp + 1) * (lent + 1) > 256)
+			delete[] m ;
 		
 		return ret ;
 	}
@@ -810,7 +813,7 @@ public:
 	
 	
 	
-	static double GlobalAlignment_classic( char *t, int lent, char *p, int lenp, char *align ) 
+	static int GlobalAlignment_classic( char *t, int lent, char *p, int lenp, char *align ) 
 	{
 		int i, j ;
 		int *score = new int[ ( lenp + 1 ) * ( lent + 1 ) ] ;
@@ -877,6 +880,11 @@ public:
 		}
 		//printf( "%d\n", score[lenp * bmax + lent] ) ;
 		return score[lenp * bmax + lent] ;
+	}
+
+	static int GlobalAlignment_WFA(char *t, int lent, char *p, int lenp, char *align)
+	{
+		int i, j ;
 	}
 	
 	static int LocalAlignment( char *t, int lent, char *p, int lenp, int &tstart, int &pstart, char *align )
