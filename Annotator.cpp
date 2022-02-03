@@ -154,6 +154,24 @@ bool IsCDR3Compatible( const struct _assignRead &r, const struct _CDR3info &cdr3
 	return true ;
 }
 
+bool IsSameFragment(char *id1, char *id2, char *s1, char *s2)
+{
+	if (!strcmp(id1, id2))
+		return true ;
+	else
+	{
+		// The case for merged pairs.
+		int l1 = strlen(id1) ;
+		int l2 = strlen(id2) ;
+		if ((l1 == l2 - 2 && id2[l2-2] == '.' && id2[l2 - 1] == '1')
+				|| (l2 == l1 - 2 && id1[l1-2] == '.' && id1[l1 - 1] == '1'))
+		{
+			if (!strcmp(s1, s2))
+				return true ;
+		}
+	}
+	return false ;
+}
 
 // Could be improved by using BitTable and compress the read covering the same set of CDR3s.
 void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector< struct _CDR3info >& info )
@@ -875,7 +893,7 @@ int main( int argc, char *argv[] )
 				int cnt = 0 ;
 				for ( k = i ; k < j ; ++k )
 				{
-					if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
+					if ( k < j - 1 && IsSameFragment( cdr3Reads[k].id, cdr3Reads[k + 1].id, cdr3Reads[k].read, cdr3Reads[k + 1].read ) )
 						++k ;
 					
 					if ( hasUmi )
@@ -904,7 +922,8 @@ int main( int argc, char *argv[] )
 						umiUsed[ cdr3Reads[k].umi ] = 1 ;
 				}
 
-				if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
+				//if ( k < j - 1 && !strcmp( cdr3Reads[k].id, cdr3Reads[k + 1].id ) )
+				if ( k < j - 1 && IsSameFragment( cdr3Reads[k].id, cdr3Reads[k + 1].id, cdr3Reads[k].read, cdr3Reads[k + 1].read ) )
 				{
 					// Fragment overlap with the region.
 					for ( l = 0 ; l < size ; ++l )
