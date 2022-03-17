@@ -99,19 +99,31 @@ The output trust_airr.tsv follows [the AIRR format](https://docs.airr-community.
 
 ### Practical notes
 
-* #### Build custom V,J,C gene database (files for -f and --ref)
+* #### Existing V,J,C gene database (files for --ref and -f) for human and mouse
 
-To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
-	
-	perl BuildDatabaseFa.pl reference.fa annotation.gtf bcr_tcr_gene_name.txt > bcrtcr.fa
+For users' conveninece, we have generated database files for human and mouse in the Git repo. 
 
-to generate the input for "-f". The "bcr_tcr_gene_name.txt" is provided as "human_vdjc.list" in the repository.
+For human, please use `hg38_bcrtcr.fa` (Gencode v35) for `-f` and use `human_IMGT+C.fa` for `--ref`. We also provide `hg19_bcrtcr.fa` for `-f` for users who want to use human genome GRCh37/hg19.
+
+For mouse, please use `mouse/GRCm38_bcrtcr.fa` (Gencode vM22) for `-f` and use `mouse/mouse_IMGT+C.fa` for `--ref`.
+
+* #### Build custom V,J,C gene database (files for --ref and -f)
 
 Normally, the file specified by "--ref" is downloaded from IMGT website, For example, for human, you can use command
 
 	perl BuildImgtAnnot.pl Homo_sapien > IMGT+C.fa
 
 The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
+
+To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
+	
+	perl BuildDatabaseFa.pl reference.fa annotation.gtf bcr_tcr_gene_name.txt > bcrtcr.fa
+
+to generate the input for "-f". The "bcr_tcr_gene_name.txt" can be generated from `IMGT+C.fa` file using
+
+	grep ">" IMGT+C.fa | cut -f2 -d'>' | cut -f1 -d' ' | cut -f1 -d'*' | sort | uniq > bcr_tcr_gene_name.txt
+
+For users' convenience, we provide generated "bcr_tcr_gene_name.txt" for human and mouse as `human_vjc_IMGT.list` and `mouse/mouse_vdj_IMGT.list` respectively.
 
 * #### 10X Genomics data:
 
