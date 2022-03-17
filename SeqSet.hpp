@@ -109,12 +109,12 @@ struct _overlap
 		return false ;
 	}
 
-	double UpdateSimilarity( int rlen, int slen, int mcnt )
-	{
-		double origLen = matchCnt / similarity ;
-		similarity = ( matchCnt + mcnt ) / ( origLen + rlen + slen ) ;
-		matchCnt += mcnt ;
-	}
+	// double UpdateSimilarity( int rlen, int slen, int mcnt )
+	// {
+	// 	double origLen = matchCnt / similarity ;
+	// 	similarity = ( matchCnt + mcnt ) / ( origLen + rlen + slen ) ;
+	// 	matchCnt += mcnt ;
+	// }
 } ;
 
 // This order works better against reference set, because it seems works better for the 5' end site

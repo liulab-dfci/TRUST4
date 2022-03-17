@@ -151,7 +151,7 @@ public:
 		fclose(fp) ;
 	}
 
-	int CollectBackgroundDistribution(ReadFiles &barcodeFile, int start, int end, bool revcomp, int caseCnt = 2000000) 
+	void CollectBackgroundDistribution(ReadFiles &barcodeFile, int start, int end, bool revcomp, int caseCnt = 2000000) 
 	{
 		int readCnt = 0 ;
 		char buffer[256] ;
