@@ -882,10 +882,10 @@ public:
 		return score[lenp * bmax + lent] ;
 	}
 
-	static int GlobalAlignment_WFA(char *t, int lent, char *p, int lenp, char *align)
-	{
-		int i, j ;
-	}
+	// static int GlobalAlignment_WFA(char *t, int lent, char *p, int lenp, char *align)
+	// {
+	// 	int i, j ;
+	// }
 	
 	static int LocalAlignment( char *t, int lent, char *p, int lenp, int &tstart, int &pstart, char *align )
 	{
