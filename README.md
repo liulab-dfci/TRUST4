@@ -115,7 +115,7 @@ The available species name can be found on [IMGT FTP](http://www.imgt.org//downl
 
 The IMGT+C.fa can also be used to generate "bcr_tcr_gene_name.txt" file with command:
 
-  grep ">" IMGT+C.fa | cut -f2 -d'>' | cut -f1 -d' ' | cut -f1 -d'*' | sort | uniq > bcr_tcr_gene_name.txt  
+	grep ">" IMGT+C.fa | cut -f2 -d'>' | cut -f1 -d' ' | cut -f1 -d'*' | sort | uniq > bcr_tcr_gene_name.txt  
 
 * #### 10X Genomics data
 
