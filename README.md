@@ -101,7 +101,7 @@ The output trust_airr.tsv follows [the AIRR format](https://docs.airr-community.
 
 * #### Build custom V,J,C gene database (files for -f and --ref)
 
-To generate the file specified by "-f", you need the reference genome of the species you are interested in and corresponding genome annotation GTF file. Then you can use command 
+To generate the file specified by "-f", you need the reference genome (e.g. hg38 for human, or mm10 for mouse) of the species you are interested in and corresponding genome annotation GTF file (e.g. gencode v35 for human, or gencode mV21 for mouse). Then you can use command 
 	
 	perl BuildDatabaseFa.pl reference.fa annotation.gtf bcr_tcr_gene_name.txt > bcrtcr.fa
 
@@ -113,7 +113,11 @@ Normally, the file specified by "--ref" is downloaded from IMGT website, For exa
 
 The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
 
-* #### 10X Genomics data:
+The IMGT+C.fa can also be used to generate "bcr_tcr_gene_name.txt" file with command:
+
+  grep ">" IMGT+C.fa | cut -f2 -d'>' | cut -f1 -d' ' | cut -f1 -d'*' | sort | uniq > bcr_tcr_gene_name.txt  
+
+* #### 10X Genomics data
 
 When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
 
@@ -140,6 +144,10 @@ We provide a wrapper "trust-smartseq.pl" to process the files from platforms lik
 	perl trust-smartseq.pl -1 read1_list.txt -2 read2_list.txt -t 8 -f hg38_bctcr.fa --ref human_IMGT+C.fa -o TRUST
 
 The script will create two files: TRUST_report.tsv for general summary and TRUST_annot.fa for assemblies. The formats are described above. Each cell's name is inferred by the file name before the first ".".
+
+* #### UMI
+
+TRUST4 supports UMI-based abundance estimation. You can use --UMI to specify the UMI sequence file or the field in the BAM file. If the sequence contains non-UMI information, you can use --umiRange to specify the UMI sequence range. The rule is similar to the --barcode and --barcodeRange options in the single-cell section above.
 
 * #### Simple report
 
