@@ -167,7 +167,7 @@ The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, 
 
 The directory also contains two fastq files, and you can run TRUST4 with:
 
-	./run-trust4 -f human_IMGT+C.fa --ref human_IMGT+C.fa -1 example/example_1.fq -2 example/example_2.fq -o TRUST_example
+	./run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -1 example/example_1.fq -2 example/example_2.fq -o TRUST_example
 
 The run will generate the files mentioned above from BAM input. Your results should be like the files example_annot.fa, 
 
