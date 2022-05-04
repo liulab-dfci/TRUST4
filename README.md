@@ -79,9 +79,7 @@ Each type of genes has at most three gene candidate ranked by their similarity. 
 
 	CDRx(consensus_start-consensus_end):score=sequence
 	
-For CDR1,2, score is similarity. for CDR3, score 0.00 means partial CDR3, score 1.00 means CDR3 with imputed nucleotides and other numbers means the motif signal strength with 100.00 as strongest.
-
-The coordinate is 0-based.
+For CDR1,2, score is similarity. for CDR3, score 0.00 means partial CDR3, score 1.00 means CDR3 with imputed nucleotides and other numbers means the motif signal strength with 100.00 as strongest. The coordinate is 0-based.
 
 The output trust_cdr3.out is a tsv file. The fields are:
 
@@ -139,7 +137,7 @@ TRUST4 also converts the barcode report file to the trust_barcode_airr.tsv file 
 
 * #### SMART-Seq data
 
-We provide a wrapper "trust-smartseq.pl" to process the files from platforms like SMART-seq. The user shall give the . An example command can be
+We provide a wrapper "trust-smartseq.pl" to process the files from platforms like SMART-seq. The user shall give the path to each file in a text file. An example command can be
 
 	perl trust-smartseq.pl -1 read1_list.txt -2 read2_list.txt -t 8 -f hg38_bctcr.fa --ref human_IMGT+C.fa -o TRUST
 
