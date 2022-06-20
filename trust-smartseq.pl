@@ -14,7 +14,8 @@ die "TRUST4 SMART-seq pipeline usage: perl smartseq-process.pl [OPTIONS]:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file from IMGT database. (default: not used but recommended)\n".
     "\t-o STRING: prefix of final output files. (default: TRUST)\n".
     "\t-t INT: number of threads (default: 1)\n".
-    "\t--representative INT: number of representative for each detected chain (default: 1)\n"
+    "\t--representative INT: number of representative for each detected chain (default: 1)\n".
+		"\t--trust-path STRING: TRUST4 executable files (default: same as this script)\n"
 		#"\t--noclear: do not clear the intermediate results (default: clear)\n"
     if (@ARGV == 0) ;
 
@@ -95,6 +96,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ($ARGV[$i] eq "--representative")
 	{
 		$representativeN = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ($ARGV[$i] eq "--trust-path")
+	{
+		$WD = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	else

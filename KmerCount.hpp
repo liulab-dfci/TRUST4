@@ -109,7 +109,7 @@ public:
 					buffer[j] = nucToNum[ ( it->first >> ( 2 * j ) ) & 3 ] ;  
 				}
 				buffer[j] = '\0' ;
-				printf( ">%d\n%s\n", it->second, buffer ) ;
+				fprintf( fp, ">%d\n%s\n", it->second, buffer ) ;
 			}
 		}
 		delete[] buffer ;
