@@ -3,7 +3,7 @@
 use strict ;
 use warnings ;
 
-die "usage: trust-airr.pl trust_report.tsv trust_annot.fa [--format simplerep|cdr3|barcoderep]> trust_airr.tsv\n" if (@ARGV == 0) ;
+die "usage: trust-airr.pl trust_report.tsv trust_annot.fa [--format simplerep|cdr3|barcoderep] [--airr-align trust_airr_align.tsv] > trust_airr.tsv\n" if (@ARGV == 0) ;
 
 my %DnaToAa = (
 		'TCA' => 'S',    # Serine
@@ -113,11 +113,17 @@ sub CoordToCigar
 
 my $format = "simplerep" ;
 my $i ;
+my $airrAlignFile = "" ;
 for ($i = 2 ; $i < @ARGV ; ++$i)
 {
 	if ($ARGV[$i] eq "--format")
 	{
 		$format = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ($ARGV[$i] eq "--airr-align")
+	{
+		$airrAlignFile = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	else
@@ -185,6 +191,21 @@ else
 }
 close FP ;
 
+# Read in the precomputed airr alignment file
+my %seqAirrs ;
+if (length($airrAlignFile) > 0)
+{
+	open FP, $airrAlignFile ;
+	while (<FP>)
+	{
+		chomp ;
+		my @cols = split /\t/, $_;
+		@{$seqAirrs{$cols[0]}} = @cols[1..$#cols] ;
+	}
+	close FP ;
+}
+
+# Go through the annot file to output 
 print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 
 open FP, $ARGV[1] ;
@@ -196,7 +217,8 @@ while (<FP>)
 	chomp $seq ;
 	
 	my @cols = split /\s/, substr($header,1) ;
-	next if (!defined $seqCDR3s{$cols[0]}) ;	
+	my $seqId = $cols[0] ;
+	next if (!defined $seqCDR3s{$seqId}) ;	
 
 	my @vCoord ;
 	my @dCoord ;
@@ -290,10 +312,25 @@ while (<FP>)
 	}
 	$cdr3 = ( split /=/, $cols[9] )[1] ;
 
-	my @cdr3s = @{$seqCDR3s{$cols[0]}} ;
+	my @cdr3s = @{$seqCDR3s{$seqId}} ;
 	if ($format eq "barcoderep")
 	{
-		$cellId = (split /_/, $cols[0])[0] ;
+		$cellId = (split /_/, $seqId)[0] ;
+	}
+	
+	my $sequenceAlignment = "" ;
+	my $germlineAlignment = "" ;
+	my @airrCols ;
+	my $alignmentCDR3Start = -1 ;
+	if (defined $seqAirrs{$seqId})
+	{
+		@airrCols = @{$seqAirrs{$seqId}} ;
+		$vcigar = $airrCols[0] ;
+		$dcigar = $airrCols[1] ;
+		$jcigar = $airrCols[2] ;
+		$sequenceAlignment = $airrCols[3] ;
+		$germlineAlignment = $airrCols[4] ;
+		$alignmentCDR3Start = $airrCols[5] ;
 	}
 
 #print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
@@ -302,15 +339,57 @@ while (<FP>)
 		my $cdr3aa = Translate($cdr3s[$i]) ;
 		my $productive = "T" ;
 		$productive = "F" if ($cdr3aa eq "") ;
+
+		# Update the sequence, sequence_alignment, germline_alignment to reflect alternative CDR3s
 		my $outputSeq = $seq ;
 		substr($outputSeq, $cdr3Coord[0], $cdr3Coord[1] - $cdr3Coord[0] + 1, $cdr3s[$i]) ;
-		my $seqId = $cols[0] ;
+		my $outputSequenceAlignment = $sequenceAlignment ;
+		my $outputGermlineAlignment = $germlineAlignment ;
+		if ($outputSequenceAlignment ne "")
+		{
+			my @cdr3 = split "", $cdr3s[$i] ;
+			my $j = $alignmentCDR3Start ; # index on the alignment
+			my $l = 0 ; # index on the cdr3 itself
+			my $m = $cdr3Coord[0] ; # index on the cdr3 with respect to the original sequence
+			my @tmpSequence = split "", $outputSequenceAlignment ;
+			my @tmpGermline = split "", $outputGermlineAlignment ;
+			while ($l < scalar(@cdr3))
+			{
+				if ($tmpGermline[$j] ne "-")
+				{
+					my $outsideGene = 1 ;
+					if (($vCoord[0] >= 0 && $m >= $vCoord[1] && $m <= $vCoord[2])
+						|| ($dCoord[0] >= 0 && $m >= $dCoord[1] && $m <= $dCoord[2])
+						|| ($jCoord[0] >= 0 && $m >= $jCoord[1] && $m <= $jCoord[2]))
+					{
+						$outsideGene = 0 ;
+					}
+					if ($outsideGene) 
+					{
+						$tmpGermline[$j] = $cdr3[$l] ;
+					}
+				}
+				if ($tmpSequence[$j] ne "-")
+				{
+					$tmpSequence[$j] = $cdr3[$l] ;
+					++$l ;
+					++$m ;
+				}
+				++$j ;
+			}
+			$outputSequenceAlignment = join("", @tmpSequence) ;
+			$outputGermlineAlignment = join("", @tmpGermline) ;	
+		}
+
+		my $outputSeqId = $seqId ;
 		if ($format eq "cdr3")
 		{
-			$seqId .= "_".($i/3) ;
+			$outputSeqId .= "_".($i/3) ;
 		}
-		print join("\t", ($seqId, $outputSeq, "F", $productive,
-			$vcall, $dcall, $jcall, $ccall, "", "", $cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
+
+		print join("\t", ($outputSeqId, $outputSeq, "F", $productive,
+			$vcall, $dcall, $jcall, $ccall, $outputSequenceAlignment, $outputGermlineAlignment, 
+			$cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
 		  $vcigar, $dcigar, $jcigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
 	}
 }

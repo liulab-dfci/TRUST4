@@ -664,7 +664,7 @@ int main( int argc, char *argv[] )
 			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, outputGeneAlignment, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
 
-		if (outputAirrAlignment)
+		if (outputAirrAlignment && annotations[i].cdr[2].seqIdx != -1)
 		{
 			refSet.AnnotationToAirrAlign(seqSet.GetSeqConsensus(i), annotations[i].geneOverlap, annotations[i].cdr, buffer) ;
 			fprintf(fpAirrAlignment, "%s\t%s\n", seqSet.GetSeqName(i), buffer) ;
