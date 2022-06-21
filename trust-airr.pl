@@ -389,7 +389,7 @@ while (<FP>)
 		}
 
 		my $outputSeqId = $seqId ;
-		if ($format eq "cdr3")
+		if ($format eq "cdr3" || $format eq "simplerep")
 		{
 			$outputSeqId .= "_".($i/3) ;
 		}
