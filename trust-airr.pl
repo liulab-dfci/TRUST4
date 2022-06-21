@@ -322,6 +322,7 @@ while (<FP>)
 	my $germlineAlignment = "" ;
 	my @airrCols ;
 	my $alignmentCDR3Start = -1 ;
+	my $alignmentCDR3End = -1 ;
 	if (defined $seqAirrs{$seqId})
 	{
 		@airrCols = @{$seqAirrs{$seqId}} ;
@@ -331,6 +332,12 @@ while (<FP>)
 		$sequenceAlignment = $airrCols[3] ;
 		$germlineAlignment = $airrCols[4] ;
 		$alignmentCDR3Start = $airrCols[5] ;
+		$alignmentCDR3End = $airrCols[6] ;
+		if ($alignmentCDR3Start == -1 || $alignmentCDR3End == -1)
+		{
+			$sequenceAlignment = "" ;
+			$germlineAlignment = "" ;
+		}
 	}
 
 #print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
