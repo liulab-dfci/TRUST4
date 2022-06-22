@@ -7,7 +7,7 @@ use Cwd 'cwd' ;
 use Cwd 'abs_path' ;
 use File::Basename ;
 
-die "TRUST4 v1.0.6 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.8-beta usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -27,6 +27,7 @@ die "TRUST4 v1.0.6 usage: ./run-trust4 [OPTIONS]:\n".
     "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
     "\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
     "\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)\n".
+		"\t--barcode-level STRING: barcode is for cell or molecule (default: cell)".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
@@ -85,6 +86,7 @@ my $hasBarcode = 0 ;
 my $hasUmi = 0 ;
 my $outputDirectory = "" ;
 my $outputReadAssignment = 0 ;
+my $chainsInBarcode = 2 ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 for ( $i = 0 ; $i < @ARGV ; ++$i )
@@ -242,6 +244,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--repseq" )
 	{
 		$mainArgs .= " --trimLevel 2 --skipMateExtension" ;
+	}
+	elsif ($ARGV[$i] eq "--barcode-level")
+	{
+		$chainsInBarcode = 1 if ($ARGV[$i + 1] eq "molecule") ;
+		++$i ;
 	}
 	else
 	{
@@ -462,7 +469,7 @@ if ( $stage <= 3 )
 	system_call( "perl $WD/trust-airr.pl ${prefix}_report.tsv ${prefix}_annot.fa --airr-align ${prefix}_airr_align.tsv > ${prefix}_airr.tsv" ) ;
 	if ( $hasBarcode == 1 )
 	{
-		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out -a ${prefix}_annot.fa > ${prefix}_barcode_report.tsv" ) ;
+		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out -a ${prefix}_annot.fa --chainsInBarcode $chainsInBarcode > ${prefix}_barcode_report.tsv" ) ;
 		system_call( "perl $WD/trust-airr.pl ${prefix}_barcode_report.tsv ${prefix}_annot.fa --format barcoderep --airr-align ${prefix}_airr_align.tsv > ${prefix}_barcode_airr.tsv" ) ;
 	}
 }
