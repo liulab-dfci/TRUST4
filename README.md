@@ -47,6 +47,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)
 			--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)
 			--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)
+			--barcode-level STRING: barcode is for cell or molecule (default: cell)
 			--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)
 			--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)
 			--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)
