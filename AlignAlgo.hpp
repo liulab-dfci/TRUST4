@@ -1120,14 +1120,14 @@ public:
 				return k ;
 			}*/
 
-			if ( j + 1 > max )
+			if ( j > max )
 			{
 				secMax = max ;
-				max = j + 1 ;
+				max = j ;
 				maxTag = k ;
 			}
-			else if ( j + 1 >= secMax ) // This secMax==max when there are two max value.
-				secMax = j + 1 ;
+			else if ( j >= secMax ) // This secMax==max when there are two max value.
+				secMax = j ;
 		}
 
 		if ( max >= minLen && max > secMax + 1 )

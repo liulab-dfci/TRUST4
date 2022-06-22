@@ -5782,9 +5782,9 @@ public:
 				if ( geneOverlap[2].readEnd + 3 >= geneOverlap[3].readStart && 
 					geneOverlap[2].readEnd - 3 <= geneOverlap[3].readStart &&
 					( geneOverlap[0].readEnd > geneOverlap[2].readStart + 6 || 
-					 ( geneOverlap[0].readEnd + ( seqs[ geneOverlap[0].seqIdx ].consensusLen - geneOverlap[0].seqEnd - 100 ) 
+					 (( geneOverlap[0].readEnd + ( seqs[ geneOverlap[0].seqIdx ].consensusLen - geneOverlap[0].seqEnd - 100 ) 
 					 	> geneOverlap[2].readStart + 6 ) 
-					 && GetContigIdx(geneOverlap[0].readEnd, contigs) == GetContigIdx(geneOverlap[2].readStart, contigs)) ) 
+					 && GetContigIdx(geneOverlap[0].readEnd, contigs) == GetContigIdx(geneOverlap[2].readStart, contigs))) ) 
 				{
 					struct _overlap orig = geneOverlap[0] ;
 					geneOverlap[0].seqIdx = -1 ;
@@ -7799,7 +7799,121 @@ public:
 		free( r ) ;
 	}
 
-	char *GetGeneOverlapAlignment( char *read, struct _overlap gene )
+	// Output the information for AIRR format: vcigar, dcigar, jcigar, sequence_alignment, germline_alignment, cdr3_start in the sequence_alignment string.
+	void AnnotationToAirrAlign(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], char *buffer)
+	{
+		int i, j, k, l, m ;
+		char *align[3] ; // align part for v, d, j genes.
+		char *buffer2 = new char[10023] ;
+		char *buffer3 = new char[10023] ;
+		align[0] = align[1] = align[2] = NULL ;
+		for (i = 0 ; i < 3 ; ++i)
+			align[i] = GetGeneOverlapAlignment(read, geneOverlap[i]) ;
+
+		// Output vcigar, dcigar and jcigar
+		buffer[0] = '\0' ;
+		for (i = 0 ; i < 3 ; ++i)
+		{
+			GetGeneAlignmentAirrCigar(read, geneOverlap[i], align[i], buffer2) ;
+			sprintf(buffer + strlen(buffer), "%s\t", buffer2) ;
+		}
+	
+		// Output the sequence alignment 
+		i = 0 ; // index on the alignment part. Note that buffer2 and buffer3 should have synchronized index.
+		j = -1 ; // index on the read
+		m = -1 ; // index on the sequence
+		int cdr3AdjustedStart = -1 ; // cdr3 coordinate in the alignment sequence
+		int cdr3AdjustedEnd = -1 ;
+		int prevK = -1 ;
+		int jstart, jend ; 
+		for (k = 0 ; k < 3 ; ++k)
+		{
+			if (geneOverlap[k].seqIdx == -1)
+				continue ;
+			if (prevK != -1) // Filling the gap between the genes
+			{
+				for (j = geneOverlap[prevK].readEnd + 1 ; j < geneOverlap[k].readStart ; ++j, ++i)
+				{
+					buffer2[i] = read[j] ;
+					buffer3[i] = read[j] ;
+					if (cdr[2].seqIdx != -1 && cdr[2].readStart == j)
+						cdr3AdjustedStart = i ;
+					if (cdr[2].seqIdx != -1 && cdr[2].readEnd == j)
+						cdr3AdjustedEnd = i ;
+				}
+			}
+			j = geneOverlap[k].readStart ;
+			jstart = geneOverlap[k].readStart ; // actual start site
+			jend = geneOverlap[k].readEnd + 1 ;
+			// handle the case of overlapped gene
+			int nextK ;
+			for (nextK = k + 1 ; nextK < 3 ; ++nextK)
+				if (geneOverlap[nextK].seqIdx != -1)
+					break ;
+			if (prevK != -1 && geneOverlap[prevK].readEnd >= geneOverlap[k].readStart)	
+			{
+				if (prevK != 1)
+					jstart = geneOverlap[prevK].readEnd ; 
+			}
+			if (nextK < 3 && geneOverlap[k].readEnd >= geneOverlap[nextK].readStart)
+			{
+				if (k == 1) // D gene has lwo prirority
+					jend = geneOverlap[nextK].readStart ;
+			}
+			prevK = k ;
+			const char *seq = seqs[geneOverlap[k].seqIdx].consensus ;
+			m = geneOverlap[k].seqStart ;
+			for (l = 0 ; align[k][l] != -1 ; ++l) 
+			{
+				if (j >= jend)
+					break ;
+				if (align[k][l] != EDIT_DELETE)
+				{
+					if (j < jstart)
+					{
+						++j ;
+						continue ;
+					}
+
+					buffer2[i] = read[j] ;
+					if (cdr[2].seqIdx != -1 && cdr[2].readStart == j)
+						cdr3AdjustedStart = i ;
+					if (cdr[2].seqIdx != -1 && cdr[2].readEnd == j)
+						cdr3AdjustedEnd = i ;
+					
+					if (align[k][l] == EDIT_INSERT)
+						buffer3[i] = '-' ;
+					else
+					{
+						buffer3[i] = seq[m] ;
+						++m ;
+					}
+					++j ;
+				}
+				else
+				{
+					if (j < jstart)
+						continue ;
+
+					buffer2[i] = '-' ;
+					buffer3[i] = seq[m] ;
+					++m ;
+				}
+				++i ;
+			} // for l
+		}
+		buffer2[i] = '\0' ;
+		buffer3[i] = '\0' ;
+		sprintf(buffer + strlen(buffer), "%s\t%s\t%d\t%d", buffer2, buffer3, cdr3AdjustedStart, cdr3AdjustedEnd) ;
+
+		for (i = 0 ; i < 3 ; ++i)
+			if (align[i])
+				delete[] align[i] ;
+		delete[] buffer2 ;
+		delete[] buffer3 ;
+	}
+
+	char *GetGeneOverlapAlignment(char *read, const struct _overlap gene )
 	{
 		if ( gene.seqIdx == -1 )
 			return NULL ;
@@ -7811,6 +7925,42 @@ public:
 				gene.seqEnd - gene.seqStart + 1,
 				read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
 		return align ;
+	}
+
+	void GetGeneAlignmentAirrCigar(const char *read, const struct _overlap &gene, const char *align, char *cigar)
+	{
+		int i, j ;
+		cigar[0] = '\0' ;
+		if (align == NULL || gene.seqIdx == -1)
+		{
+			return ;
+		}
+		int len = strlen(read) ;
+		if (gene.readStart > 0)
+			sprintf(cigar, "%dS", gene.readStart) ;
+		if (gene.seqStart > 0)
+			sprintf(cigar + strlen(cigar), "%dN", gene.seqStart) ; 
+			
+		for (i = 0 ; align[i] != -1 ; )
+		{
+			for (j = i + 1 ; align[j] != -1 ; ++j)
+				if (align[i] != align[j] && !(align[i] == EDIT_MATCH && align[j] == EDIT_MISMATCH)
+						&& !(align[i] == EDIT_MISMATCH && align[j] == EDIT_MATCH))
+					break ;
+			char op = 'M' ;
+			if (align[i] == EDIT_INSERT) // AIRR cigar is with respect to the query. My alignment algorithm is the operation on the reference.
+				op = 'D' ;
+			else if (align[i] == EDIT_DELETE)
+				op = 'I' ;
+			sprintf(cigar + strlen(cigar), "%d%c", j - i, op) ;
+					
+			i = j ;
+		}
+
+		if (gene.readEnd < len - 1)
+			sprintf(cigar + strlen(cigar), "%dS", len - 1 - gene.readEnd) ;
+		if (gene.seqEnd < seqs[gene.seqIdx].consensusLen - 1)
+			sprintf(cigar + strlen(cigar), "%dN", seqs[gene.seqIdx].consensusLen - 1 - gene.seqEnd) ;
 	}
 	
 	// Use the refSet to annotate current set.

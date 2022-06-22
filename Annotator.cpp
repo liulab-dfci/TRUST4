@@ -25,6 +25,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t--barcode: there is barcode information in -a and -r files (default: not set)\n"
 		"\t--UMI: there is UMI information in -r file (default: not set)\n"
 		"\t--geneAlignment: output the gene alignment (default: not set)\n"
+    "\t--airrAlignment: output the aligned sequences to prefix_airr_align.tsv (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n"
 		"\t--outputCDR3File: output CDR3 file when not using -r option (default: no output)\n"
@@ -56,7 +57,8 @@ static struct option long_options[] = {
 			{ "outputCDR3File", no_argument, 0, 10008},
 			{ "readAssignment",required_argument, 0, 10009 },
 			{ "needReverseComplement", no_argument, 0, 10010 },
-			{ "fastq", no_argument, 0, 10011},
+			{ "fastq", no_argument, 0, 10011 },
+			{ "airrAlignment", no_argument, 0, 10012 }, 
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -408,6 +410,7 @@ int main( int argc, char *argv[] )
 	bool isIMGT = true ;
 	bool impute = true ;
 	bool outputGeneAlignment = false ;
+	bool outputAirrAlignment = false ;
 	bool hasBarcode = false ;
 	bool hasUmi = false ;
 	bool outputCDR3File = false ; // whether output the cdr3 file when the input is fasta
@@ -492,6 +495,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10010 ) // Reads on different strand, need to RC first
 		{
 			needRC = true ;
+		}
+		else if ( c == 10012 ) // --airrAlignment
+		{
+			outputAirrAlignment = true ;
 		}
 		else
 		{
@@ -641,6 +648,13 @@ int main( int argc, char *argv[] )
 	AnnotationTieBreak( annotations, seqSet, refSet ) ;
 
 	// Output the annotation of consensus assemblies
+	FILE *fpAirrAlignment = NULL ;
+	if (outputAirrAlignment) 
+	{
+		sprintf(buffer, "%s_airr_align.tsv", outputPrefix) ;
+		fpAirrAlignment = fopen(buffer, "w") ;
+	}
+
 	for ( i = 0 ; i < seqCnt ; ++i )
 	{
 		int weightSum = seqSet.GetSeqWeightSum( i ) ; 
@@ -649,7 +663,16 @@ int main( int argc, char *argv[] )
 		refSet.AnnotationToString( seqSet.GetSeqConsensus( i ), annotations[i].geneOverlap, 
 			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, outputGeneAlignment, buffer + strlen( buffer ) ) ;
 		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
+
+		if (outputAirrAlignment && annotations[i].cdr[2].seqIdx != -1)
+		{
+			refSet.AnnotationToAirrAlign(seqSet.GetSeqConsensus(i), annotations[i].geneOverlap, annotations[i].cdr, buffer) ;
+			fprintf(fpAirrAlignment, "%s\t%s\n", seqSet.GetSeqName(i), buffer) ;
+		}
 	}
+
+	if (outputAirrAlignment)
+		fclose( fpAirrAlignment ) ;
 	
 	// Add other informations for annotation.
 	for ( i = 0 ;i < seqCnt ; ++i )

@@ -14,7 +14,8 @@ die "TRUST4 SMART-seq pipeline usage: perl smartseq-process.pl [OPTIONS]:\n".
     "\t--ref STRING: path to detailed V/D/J/C gene reference file from IMGT database. (default: not used but recommended)\n".
     "\t-o STRING: prefix of final output files. (default: TRUST)\n".
     "\t-t INT: number of threads (default: 1)\n".
-    "\t--representative INT: number of representative for each detected chain (default: 1)\n"
+    "\t--representative INT: number of representative for each detected chain (default: 1)\n".
+		"\t--trust-path STRING: TRUST4 executable files (default: same as this script)\n"
 		#"\t--noclear: do not clear the intermediate results (default: clear)\n"
     if (@ARGV == 0) ;
 
@@ -97,6 +98,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$representativeN = $ARGV[$i + 1] ;
 		++$i ;
 	}
+	elsif ($ARGV[$i] eq "--trust-path")
+	{
+		$WD = $ARGV[$i + 1] ;
+		++$i ;
+	}
 	else
 	{
 		die "Unknown parameter ".$ARGV[$i]."\n" ;
@@ -111,8 +117,10 @@ my $FP2 ;
 open $FP2, $readFile2 if ($hasMate) ;
 open FPfinalreport, ">${outputPrefix}_report.tsv" ;
 open FPfinalannot, ">${outputPrefix}_annot.fa" ;
+open FPfinalairr, ">${outputPrefix}_airr.tsv" ;
 
 print FPfinalreport "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\tcid_full_length\n" ;
+my $cellProcessed = 0 ;
 
 while (<FP1>)
 {
@@ -197,7 +205,7 @@ while (<FP1>)
 		my @cols = @{$representativeCols[$i]} ;
 		my $contigId = $cols[8] ;
 		$cols[8] = $cellPrefix."_".$contigId ;
-		$selectedContigs{$contigId} = 1 ;
+		$selectedContigs{$contigId} = $i ;
 		print FPfinalreport join("\t", @cols), "\n" ;
 	}
 	close FPreport ;
@@ -221,11 +229,43 @@ while (<FP1>)
 	}
 	close FPannot ;
 
+	# Process the AIRR file
+	open FPairr, "tmp_smartseq_airr.tsv" ;
+	my $lineCnt = 0 ;
+	while (<FPairr>)
+	{
+		chomp ;
+		if ($cellProcessed == 0 && $lineCnt == 0)
+		{
+			print FPfinalairr $_,"\n" ;
+		}
+		if ($lineCnt == 0)
+		{
+			++$lineCnt ;
+			next ;
+		}
+		
+		++$lineCnt ;
+		my $line = $_ ;
+		my @cols = split /\t/, $line ;
+		my $contigId = (split /_/, $cols[0])[0] ;
+		next if (!defined $selectedContigs{$contigId}) ;
+		my @matchedCols = @{$representativeCols[ $selectedContigs{$contigId} ]} ;
+		if ($matchedCols[2] eq $cols[12])
+		{
+			$cols[0] = ${cellPrefix}."_".$cols[0] ;
+			print FPfinalairr join("\t", @cols), "\n" ;
+		}
+	}
+	close FPairr ;
 	# remove the temporary files.
 	system("rm ./tmp_smartseq_*") ;
+
+	++$cellProcessed ;
 }
 close FP1 ;
 close $FP2 if ($hasMate) ;
 
 close FPfinalreport ;
 close FPfinalannot ;
+close FPfinalairr ;

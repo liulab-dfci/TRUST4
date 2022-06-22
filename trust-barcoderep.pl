@@ -8,7 +8,8 @@ die "Usage: ./trust-barcoderep.pl xxx_cdr3.out [OPTIONS] > trust_barcode_report.
 	"\t-a xxx_annot.fa: TRUST4's annotation file. (default: not used)\n".
 	"\t--noImputation: do not perform imputation for partial CDR3. (default: impute)\n".
 	"\t--imputeBCR: perform imputation for BCR partial CDR3. (default: no)\n".
-	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n"
+	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
+	"\t--chainsInBarcode INT: number of chains in a barcode. (default: 2)\n"
 	#"\t--secondary: output secondary chains. (default: no)\n"
 	if ( @ARGV == 0 ) ;
 
@@ -225,6 +226,7 @@ my $reportPartial = 0 ;
 my $annotFile = "" ;
 my $impute = 1 ;
 my $imputeBCR = 0 ;
+my $chainsInBarcode = 2 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--reportPartial" )
@@ -242,6 +244,11 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "-a" )
 	{
 		$annotFile = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--chainsInBarcode" )
+	{
+		$chainsInBarcode = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	else
@@ -555,6 +562,28 @@ foreach my $barcode (@barcodeList )
 	}
 	next if ( $chain1 eq "*" && $chain2 eq "*" ) ;
 	#print( join( "\t", ($barcode, $cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2 ) ), "\n" ) ;
+	if ($chainsInBarcode == 1)
+	{
+		if ($chain1 eq "*" && $chain2 ne "*")
+		{
+			$chain1 = $chain2 ;
+			$chain2 = "*" ;
+			$secondaryChain1 = $secondaryChain2 ;
+			$secondaryChain2 = "*" ;
+		}
+		elsif ($chain1 ne "*" && $chain2 ne "*")
+		{
+			my $abund1 = (split /,/, $chain1)[6] ;
+			my $abund2 = (split /,/, $chain2)[6] ;
+			if ($abund2 > $abund1)
+			{
+				$chain1 = $chain2 ;
+				$chain2 = "*" ;
+				$secondaryChain1 = $secondaryChain2 ;
+				$secondaryChain2 = "*" ;
+			}
+		}
+	}
 	@{$barcodeOutput{$barcode}} = ($cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2) ;
 }
 
