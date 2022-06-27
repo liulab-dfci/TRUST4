@@ -62,7 +62,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 
 ### Input/Output
 
-The primary input to TURST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
+The primary input to TRUST4 is the alignment of RNA-seq reads in BAM format(-b), the file containing the genomic sequence and coordinate of V,J,C genes(-f), and the reference database sequence containing annotation information, such as IMGT (--ref).
 
 An alternative input to TRUST4 is the raw RNA-seq files in fasta/fastq format (-1/-2 for paired; -u for single-end). You still need the files like -f, --ref from above. In this case, you can directly use IMGT's seuqence file for -f. 
 
