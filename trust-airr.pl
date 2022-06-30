@@ -315,7 +315,8 @@ while (<FP>)
 	my @cdr3s = @{$seqCDR3s{$seqId}} ;
 	if ($format eq "barcoderep")
 	{
-		$cellId = (split /_/, $seqId)[0] ;
+		my @tmp = split /_/, $seqId ;
+		$cellId = join("_", @tmp[0..scalar(@tmp)-2]) ;
 	}
 	
 	my $sequenceAlignment = "" ;
