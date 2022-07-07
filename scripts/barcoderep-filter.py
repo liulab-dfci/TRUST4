@@ -4,10 +4,10 @@ import sys
 import argparse
 
 parser = argparse.ArgumentParser(description="Filter TRUST4 barcode report file for noise like diffused mRNAs. Output to stdout")
-parser.add_argument('-b', help="", required=True, dest="barcode_report")
-parser.add_argument('-a', help="", dest="annot")
-parser.add_argument('--highAbund', help="", default=50.0, dest="highAbund")
-parser.add_argument('--diffuseFrac', help="", default=0.02, dest="diffuseFrac")
+parser.add_argument('-b', help="barcode_report file", required=True, dest="barcode_report")
+parser.add_argument('-a', help="annotation file", dest="annot")
+parser.add_argument('--highAbund', help="The minimum abundance to be regarded as potential source of diffusion", default=50.0, dest="highAbund")
+parser.add_argument('--diffuseFrac', help="The maximum fraction of the diffusion source abundance to be regarded as noise", default=0.02, dest="diffuseFrac")
 
 args = parser.parse_args()
 
