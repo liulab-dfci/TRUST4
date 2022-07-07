@@ -47,9 +47,9 @@ def GetCellType(v, j, c, defaultType = "*"):
 	chainType = GetChainType(v, j, c)
 	if (chainType <= 2):
 		return "B"
-	elif (chaintype <= 4):
+	elif (chainType <= 4):
 		return "abT"
-	elif (chaintype <= 6):
+	elif (chainType <= 6):
 		return "gdT"
 	else:
 		return defaultType
@@ -58,11 +58,11 @@ def GetCellType(v, j, c, defaultType = "*"):
 fp = open(barcodeReport)
 for line in fp:
 	if (line[0] == "#"):
+		print(line.rstrip())
 		continue
 
 	cols = line.rstrip().split() 
 	barcode = cols[0]
-	primaryAbund = float(cols[1 + chain].split(',')[6])
 
 	# Output the primary chain
 	outputCols = cols[:]
@@ -71,8 +71,9 @@ for line in fp:
 	print(len(cols))
 	# Expand the secondary chain
 	secondaryEntry = cols[3 + chain]
-	if (secondaryEntry == "*"):
+	if (cols[1 + chain] == "*" or secondaryEntry == "*"):
 		continue
+	primaryAbund = float(cols[1 + chain].split(',')[6])
 	secondaryCols = secondaryEntry.split(";")
 	for i in range(2,len(outputCols)):
 		outputCols[i] = "*"
