@@ -68,7 +68,7 @@ for line in fp:
 	outputCols = cols[:]
 	outputCols[0] = barcode + "_0"
 	print("\t".join(outputCols))
-	print(len(cols))
+	
 	# Expand the secondary chain
 	secondaryEntry = cols[3 + chain]
 	if (cols[1 + chain] == "*" or secondaryEntry == "*"):
