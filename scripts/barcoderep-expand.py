@@ -23,10 +23,10 @@ def GetChainType(v, j, c):
 	elif (v != "*" and v != "."):
 		s = v
 	else:
-		return -1
+		return 7
 	
 	if (s[0:3] == "IGH"):
-		return (0, isotypeRanks[c.split("*")[0]])
+		return 0
 	elif (s[0:3] == "IGK"):
 		return 1
 	elif (s[0:3] == "IGL"):
@@ -40,7 +40,7 @@ def GetChainType(v, j, c):
 	elif (s[0:3] == "TRD"):
 		return 6
 	else:
-		return -1
+		return 7
 
 
 def GetCellType(v, j, c, defaultType = "*"):

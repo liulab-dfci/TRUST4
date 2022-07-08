@@ -503,6 +503,8 @@ foreach my $barcode (@barcodeList )
 		next if ( ($tag&3) == 3 || ($tag&5) == 5 || ($tag&24) == 24 ) ;
 	}
 
+	my @otherList = (0, 1, 2, 3, 4, 5, 6) ;
+	my @representativeUsed = (0, 0, 0, 0, 0, 0, 0, 0) ;
 	if ( $maxTag <= 2 )
 	{
 		$mainType = 0 ;
@@ -510,33 +512,32 @@ foreach my $barcode (@barcodeList )
 		my $keyK = $barcode."_1" ;
 		my $keyL = $barcode."_2" ;
 		$chain1 = $barcodeChainRepresent{ $keyH } if ( defined $barcodeChainRepresent{ $keyH } ) ;
-		$secondaryChain1 = join( ";", @{$barcodeChainOther{$keyH}}) if (defined $barcodeChainOther{$keyH} );
+		$representativeUsed[0] = 1 ;
 
 		if ( defined $barcodeChainRepresent{ $keyK } && defined $barcodeChainRepresent{ $keyL } )
 		{
 			if ( $barcodeChainAbund{ $keyK } >= $barcodeChainAbund{ $keyL } )
 			{
 				$chain2 = $barcodeChainRepresent{ $keyK } ;
-				$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyK}}) if (defined $barcodeChainOther{$keyK} );
+				$representativeUsed[1] = 1 ;
 			}
 			else
 			{
 				$chain2 = $barcodeChainRepresent{ $keyL } ;
-				$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyL}}) if (defined $barcodeChainOther{$keyL} );
+				$representativeUsed[2] = 1 ;
 			}
 		}
 		elsif ( defined $barcodeChainRepresent{ $keyK } )
 		{
 			$chain2 = $barcodeChainRepresent{ $keyK } ;
-			$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyK}}) if (defined $barcodeChainOther{$keyK} );
+			$representativeUsed[1] = 1 ;
 		}
 		elsif ( defined $barcodeChainRepresent{ $keyL } )
 		{
 			$chain2 = $barcodeChainRepresent{ $keyL } ;
-			$secondaryChain2 = join( ";", @{$barcodeChainOther{$keyL}}) if (defined $barcodeChainOther{$keyL} );
+			$representativeUsed[2] = 1 ;
 		}
 		
-
 		$cellType = "B" ;
 	}
 	else
@@ -548,17 +549,65 @@ foreach my $barcode (@barcodeList )
 			$key1 = $barcode."_4" ;
 			$key2 = $barcode."_3" ;
 			$cellType = "abT" ;
+			@otherList = (3, 4, 5, 6, 0, 1, 2) ;
+			$representativeUsed[3] = 1 ;
+			$representativeUsed[4] = 1 ;
 		}
 		elsif ( $maxTag <= 6 )
 		{
 			$key1 = $barcode."_6" ;
 			$key2 = $barcode."_5" ;
 			$cellType = "gdT" ;
+			@otherList = (5, 6, 3, 4, 0, 1, 2) ;
+			$representativeUsed[5] = 1 ;
+			$representativeUsed[6] = 1 ;
 		}
 		$chain1 = $barcodeChainRepresent{ $key1 } if ( defined $barcodeChainRepresent{ $key1 } ) ;
 		$chain2 = $barcodeChainRepresent{ $key2 } if ( defined $barcodeChainRepresent{ $key2 } ) ;
-		$secondaryChain1 = join( ";", @{$barcodeChainOther{$key1}}) if (defined $barcodeChainOther{$key1} );
-		$secondaryChain2 = join( ";", @{$barcodeChainOther{$key2}}) if (defined $barcodeChainOther{$key2} );
+	}
+
+	# Add other chains to the secondary chain field.
+	foreach $i (@otherList)
+	{
+		my $key = $barcode."_".$i ;
+		if ( defined $barcodeChainRepresent{ $key } ) 
+		{
+			my $addition = "" ;
+			$addition = $barcodeChainRepresent{$key} if ($representativeUsed[$i] == 0);
+			if ($addition ne "")
+			{
+				$addition = $addition.";".join(";", @{$barcodeChainOther{$key}}) if (defined $barcodeChainOther{$key}) ;
+			}
+			else
+			{
+				$addition = join(";", @{$barcodeChainOther{$key}}) if (defined $barcodeChainOther{$key}) ;
+			}
+
+			next if ($addition eq "") ;
+
+			if ($i == 0 || $i == 4 || $i == 6)
+			{
+				if ($secondaryChain1 eq "*")
+				{
+					$secondaryChain1 = $addition ;
+				}
+				else
+				{
+					$secondaryChain1 = $secondaryChain1.";".$addition ;
+				}
+			}
+			else
+			{
+				if ($secondaryChain2 eq "*")
+				{
+					$secondaryChain2 = $addition ;
+				}
+				else
+				{
+					$secondaryChain2 = $secondaryChain2.";".$addition ;
+				}
+			}
+		}
 	}
 	next if ( $chain1 eq "*" && $chain2 eq "*" ) ;
 	#print( join( "\t", ($barcode, $cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2 ) ), "\n" ) ;
