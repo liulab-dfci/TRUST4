@@ -792,11 +792,6 @@ int main( int argc, char *argv[] )
 		if ( !alignments.IsAligned() ) // when reach here, it is parie-end case, and the other mate is aligned.
 			continue ;
 		
-		alignments.GetReadSeq( buffer ) ;
-		if ( IsLowComplexity( buffer ) )
-			continue ;
-
-		// The aligned reads can reach here.
 		int chrId = alignments.GetChromId() ;
 		int start = (int)alignments.segments[0].a ;
 		int end = (int)alignments.segments[ alignments.segCnt - 1 ].b ;
@@ -812,6 +807,11 @@ int main( int argc, char *argv[] )
 				|| ( chrId == genes[tag].chrId && end <= genes[tag].start ) )
 			continue ;
 		
+		alignments.GetReadSeq( buffer ) ;
+		if ( IsLowComplexity( buffer ) )
+			continue ;
+
+		// The aligned reads can reach here.
 		// overlaps with reference gene location.
 		if ( alignments.fragStdev != 0 )
 		{
