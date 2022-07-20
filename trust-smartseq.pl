@@ -205,7 +205,7 @@ while (<FP1>)
 		my @cols = @{$representativeCols[$i]} ;
 		my $contigId = $cols[8] ;
 		$cols[8] = $cellPrefix."_".$contigId ;
-		$selectedContigs{$contigId} = $i ;
+		$selectedContigs{$contigId} = $i if (!defined $selectedContigs{$contigId}) ;
 		print FPfinalreport join("\t", @cols), "\n" ;
 	}
 	close FPreport ;

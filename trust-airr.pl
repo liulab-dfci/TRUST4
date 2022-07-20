@@ -267,7 +267,7 @@ while (<FP>)
 		$jcall = (split /\(/, $cols[5])[0] ;
 		@jCoord = ($1, $2, $3, $4, $5, length($seq)) ;
 		$jcigar = CoordToCigar(@jCoord) ;
-		$jidentity = (split /:/, $cols[3])[-1] ;
+		$jidentity = (split /:/, $cols[5])[-1] ;
 	}
 	else
 	{
