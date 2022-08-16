@@ -5988,7 +5988,6 @@ public:
 					e = len ;
 					boundS = 1 ;
 				}	
-			
 			}
 			else if ( geneOverlap[2].seqIdx != -1 )
 			{
@@ -7013,7 +7012,6 @@ public:
 			{
 				s = locateS ;
 				e = locateE + 2 ;
-				
 				/*cdr3 = new char[e - s + 2  + 1 ] ;
 				memcpy( cdr3, read + s, e - s + 1 ) ;
 				cdr3[e - s + 1] = '\0' ;*/
@@ -7162,7 +7160,8 @@ public:
 				else if ( forcePartial )
 					cdr3Score = 0 ;
 				
-				if ( strongLocateS && strongLocateE && cdr3Score < 50 )
+				if ( strongLocateS && strongLocateE && cdr3Score < 50 
+						&& (locateS >= 0 && locateE + 2 < len))
 					cdr3Score = 50 ;
 
 				// Now consider whether the gaps could create some false positive score CDR3.
