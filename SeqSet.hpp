@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <algorithm>
 #include <vector>
 #include <queue>
@@ -177,6 +178,7 @@ private:
 	int radius ;
 	int hitLenRequired ;
 	int gapN ;
+	int nomatchGapLimit ;
 	bool isLongSeqSet ; // Whether this seq set is built from long reads. Long reads may require more drastic filtration.
 
 	// Some threshold
@@ -1658,6 +1660,13 @@ private:
 					{
 						matchCnt += 2 * kmerLength ; 
 						
+						if (hitCoords[j].b - (hitCoords[j - 1].b + kmerLength) > nomatchGapLimit
+								|| hitCoords[j].a - (hitCoords[j - 1].a + kmerLength) > nomatchGapLimit)
+						{
+							similarity = 0 ;
+							break ;
+						}
+
 						if ( seqs[ overlaps[i].seqIdx ].isRef  )
 						{
 							//printf( "Use ref %d %d.\n", hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ),
@@ -1763,6 +1772,13 @@ private:
 					else
 					{
 						matchCnt += 2 * kmerLength ;
+						
+						if (hitCoords[j].b - (hitCoords[j - 1].b + kmerLength) > nomatchGapLimit
+								|| hitCoords[j].a - (hitCoords[j - 1].a + kmerLength) > nomatchGapLimit)
+						{
+							similarity = 0 ;
+							break ;
+						}
 						 
 						if ( seqs[ overlaps[i].seqIdx ].isRef )
 						{
@@ -2268,6 +2284,14 @@ private:
 				++posWeight[i + offset].count[ nucToNum[ read[i] - 'A' ] ] ;
 		}
 	}
+	
+	int ComputeNomatchGapLimit()
+	{
+		double readAccuracy = 0.8 ;
+		double kmerHitProb = pow(readAccuracy, kmerLength) ;
+		int ret = int(kmerLength * (log(0.01) / log(1 - kmerHitProb))) + 1;
+		return ret ;
+	}
 public:
 	SeqSet( int kl ) 
 	{
@@ -2283,6 +2307,8 @@ public:
 		gapN = 7 ;
 
 		prevAddInfo.readStart = -1 ;
+	
+		nomatchGapLimit = ComputeNomatchGapLimit() ;
 	}
 	~SeqSet() 
 	{
@@ -3902,6 +3928,7 @@ public:
 	void ChangeKmerLength( int kl )
 	{
 		kmerLength = kl ;
+		nomatchGapLimit = ComputeNomatchGapLimit() ;
 		Clean( false ) ;
 	}
 	
