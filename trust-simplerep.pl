@@ -9,6 +9,7 @@ die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n".
 	"\t--barcodeCnt: the count column is the number of barcode instead of read support. (default: not used)\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
 	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
+	"\t--filterBarcoderep: only summarize the main CDR3s in the barcode report file. (default: not used)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n".
 	"\t--filterBcrError FLOAT: filter BCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0)\n"
 	if ( @ARGV == 0 ) ;
@@ -183,6 +184,7 @@ sub InferConstantGene
 
 my $i ;
 my $annotFile = "" ;
+my $barcodeRepFile = "" ;
 my $reportJunctionInfo = 0 ;
 my $tcrErrorFilter = 0.05 ;
 my $bcrErrorFilter = 0 ;
@@ -207,6 +209,11 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 		$bcrErrorFilter = $ARGV[$i + 1] ;
 		++$i ;
 	}
+	elsif ( $ARGV[$i] eq "--filterBarcoderep" )
+	{
+		$barcodeRepFile = $ARGV[$i + 1] ;
+		++$i ;
+	}
 	elsif ( $ARGV[$i] eq "--decimalCnt" )
 	{
 		$roundDownCount = 0 ;
@@ -223,6 +230,11 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	{
 		die "Unknown option ", $ARGV[$i], "\n" ;
 	}
+}
+
+if ($barcodeRepFile ne "" && $useBarcodeCnt == 0)
+{
+	die "Require --barcodeCnt option when using --filterBarcoderep option.\n" ;
 }
 
 my %junctionInfo ; # key: assembly id. Values: V-end, V-del, VD(J)-Ins, D-Ldel, D-start, D-end, D-Rdel, DJ-Ins, J-del, J-start
@@ -334,6 +346,32 @@ while ( <FP1> )
 }
 close FP1 ;
 
+my %barcodeRepCDR3 ; # Store whether a "chain_cdr3_barcode" is in the barcode report file.
+if ($barcodeRepFile ne "")
+{
+	open FPbarcoderep, $barcodeRepFile ;
+	my $header = <FPbarcoderep> ;
+	while (<FPbarcoderep>)
+	{
+		chomp ;
+		my @cols = split ;
+		for (my $i = 2 ; $i <= 3 ; ++$i)
+		{
+			if ($cols[$i] ne "*")
+			{
+				my @cols2 = split /,/, $cols[$i] ;
+				my $type = GetDetailChainType($cols2[0], $cols2[2], $cols2[3]) ;
+				my @barcodeCols = split /_/, $cols2[7] ;
+				my $barcode = join( "_", @barcodeCols[0..scalar(@barcodeCols)-2] ) ;
+				my $key = $type."_".$cols2[4]."_".$barcode ;
+				
+				$barcodeRepCDR3{$key} = 1 ;
+			}
+		}
+	}
+	close FPbarcoderep ;
+}
+
 # Read in the input
 open FP1, $ARGV[0] ;
 my @totalCnt = (0, 0, 0) ;
@@ -389,6 +427,8 @@ while ( <FP1> )
 		my @cols2 = split/_/, $assemblyId ;
 		my $barcode = join( "_", @cols2[0..scalar(@cols2)-2] ) ;
 		my $tmp = $type."_".$cols[8]."_".$barcode ;
+		next if ($barcodeRepFile ne "" && !defined $barcodeRepCDR3{$tmp}) ;
+
 		if ( defined $cdr3Barcode{$tmp} )
 		{
 			next ;
