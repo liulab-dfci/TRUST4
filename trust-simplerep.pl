@@ -350,9 +350,9 @@ my %barcodeRepCDR3 ; # Store whether a "chain_cdr3_barcode" is in the barcode re
 if ($barcodeRepFile ne "")
 {
 	open FPbarcoderep, $barcodeRepFile ;
-	my $header = <FPbarcoderep> ;
 	while (<FPbarcoderep>)
 	{
+		next if ($_ =~ "^#") ;
 		chomp ;
 		my @cols = split ;
 		for (my $i = 2 ; $i <= 3 ; ++$i)
@@ -402,7 +402,6 @@ while ( <FP1> )
 	$cgene = InferConstantGene( $vgene, $jgene, $cgene ) ;
 	my $key = join( "\t", ( $vgene, $dgene, $jgene, $cgene, $cols[8] ) ) ;
 	my $type = GetDetailChainType( $vgene, $jgene, $cgene ) ;
-	
 	if ($type > 2) # TCR, ignore the low abundance 
 	{
 		if ($cols[10] < $assemblyMostReads{$assemblyId} * $tcrErrorFilter ) 
@@ -426,7 +425,7 @@ while ( <FP1> )
 	{
 		my @cols2 = split/_/, $assemblyId ;
 		my $barcode = join( "_", @cols2[0..scalar(@cols2)-2] ) ;
-		my $tmp = $type."_".$cols[8]."_".$barcode ;
+		my $tmp = GetDetailChainType($vgene, $jgene, $cgene)."_".$cols[8]."_".$barcode ;
 		next if ($barcodeRepFile ne "" && !defined $barcodeRepCDR3{$tmp}) ;
 
 		if ( defined $cdr3Barcode{$tmp} )

@@ -146,7 +146,9 @@ The script will create two files: TRUST_report.tsv for general summary and TRUST
 
 * #### UMI
 
-TRUST4 supports UMI-based abundance estimation. You can use --UMI to specify the UMI sequence file or the field in the BAM file. If the sequence contains non-UMI information, you can use --umiRange to specify the UMI sequence range. The rule is similar to the --barcode and --barcodeRange options in the single-cell section above.
+FOr 10x Genomics data, TRUST4 supports UMI-based abundance estimation. You can use --UMI to specify the UMI sequence file or the field in the BAM file. If the sequence contains non-UMI information, you can use --umiRange to specify the UMI sequence range. The rule is similar to the --barcode and --barcodeRange options in the single-cell section above.
+
+In 10x Genomics data, UMI and the cell barcode is the real unique molecular identifier. In other platforms, the UMI can be real unique and be regarded as molecule barcode. You can run trust4 with "--barcode UMIfile --barcodeLevel molecule" to specify use UMI as molecule barcode. In this output, the represented chain information is in the chain1 column of the trust_barcode_report.tsv file.
 
 * #### Simple report
 
