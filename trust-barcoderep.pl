@@ -438,6 +438,11 @@ while ( <FP1> )
 			$barcodeChainAa{$key} = $aa ;
 			$barcodeChainRepresent{ $key } = $info ; 
 		}
+		else
+		{
+			@{$barcodeChainOther{$key}} = () if (!defined $barcodeChainOther{$key}) ;
+			push @{$barcodeChainOther{$key}}, $info ; 
+		}
 	}
 	else
 	{
@@ -626,11 +631,32 @@ foreach my $barcode (@barcodeList )
 			my $abund2 = (split /,/, $chain2)[6] ;
 			if ($abund2 > $abund1)
 			{
+				if ($secondaryChain2 ne "*")
+				{
+					$secondaryChain2 .= ";$chain1" ;
+				}
+				else
+				{
+					$secondaryChain2 = "$chain1" ;
+				}
+				$secondaryChain2 .= ";$secondaryChain1" if ($secondaryChain1 ne "*") ;
 				$chain1 = $chain2 ;
-				$chain2 = "*" ;
 				$secondaryChain1 = $secondaryChain2 ;
-				$secondaryChain2 = "*" ;
 			}
+			else
+			{
+				if ($secondaryChain1 ne "*")
+				{
+					$secondaryChain1 .= ";$chain2" ;
+				}
+				else
+				{
+					$secondaryChain1 = "$chain2" ;
+				}
+				$secondaryChain1 .= ";$secondaryChain2" if ($secondaryChain2 ne "*") ;
+			}
+			$chain2 = "*" ;
+			$secondaryChain2 = "*" ;
 		}
 	}
 	@{$barcodeOutput{$barcode}} = ($cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2) ;

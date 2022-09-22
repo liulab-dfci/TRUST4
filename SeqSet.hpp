@@ -2411,6 +2411,8 @@ public:
 				if ( sw.consensus[i] != '.' )
 				{
 					sw.consensus[k] = sw.consensus[i] ;
+					if (sw.consensus[k] >= 'a' && sw.consensus[k] <= 'z') // lower case to upper case
+						sw.consensus[k] -= 'a' + 'A' ;
 					++k ;
 				}
 			sw.consensus[k] = '\0' ;

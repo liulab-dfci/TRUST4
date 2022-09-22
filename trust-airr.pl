@@ -3,7 +3,9 @@
 use strict ;
 use warnings ;
 
-die "usage: trust-airr.pl trust_report.tsv trust_annot.fa [--format simplerep|cdr3|barcoderep] [--airr-align trust_airr_align.tsv] > trust_airr.tsv\n" if (@ARGV == 0) ;
+die "usage: trust-airr.pl trust_report.tsv trust_annot.fa [OPTIONS] > trust_airr.tsv\n".
+	"\t--format STRING: simplerep, cdr3 or barcoderep\n".
+	"\t--airr-align STRING: file of trust_airr_align.tsv\n" if (@ARGV == 0) ;
 
 my %DnaToAa = (
 		'TCA' => 'S',    # Serine

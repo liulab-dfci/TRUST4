@@ -27,7 +27,7 @@ die "TRUST4 v1.0.8-beta usage: ./run-trust4 [OPTIONS]:\n".
     "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
     "\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
     "\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)\n".
-		"\t--barcode-level STRING: barcode is for cell or molecule (default: cell)".
+		"\t--barcodeLevel STRING: barcode is for cell or molecule (default: cell)".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
@@ -245,7 +245,7 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$mainArgs .= " --trimLevel 2 --skipMateExtension" ;
 	}
-	elsif ($ARGV[$i] eq "--barcode-level")
+	elsif ($ARGV[$i] eq "--barcode-level" || $ARGV[$i] eq "--barcodeLevel")
 	{
 		$chainsInBarcode = 1 if ($ARGV[$i + 1] eq "molecule") ;
 		++$i ;
@@ -408,12 +408,26 @@ else
 
 if ( $hasBarcode == 1 )
 {
-	$mainArgs .= " --barcode ${prefix}_toassemble_bc.fa" ;
+	if ($noExtraction == 0)
+	{
+		$mainArgs .= " --barcode ${prefix}_toassemble_bc.fa" ;
+	}
+	else
+	{
+		$mainArgs .= " --barcode ".$barcodeFiles[0] ;
+	}
 }
 
 if ( $hasUmi == 1 )
 {
-	$mainArgs .= " --UMI ${prefix}_toassemble_umi.fa" ;
+	if ($noExtraction == 0)
+	{
+		$mainArgs .= " --UMI ${prefix}_toassemble_umi.fa" ;
+	}
+	else
+	{
+		$mainArgs .= " --UMI ".$umiFiles[0] ;
+	}
 }
 
 # Run the assembly 
@@ -465,11 +479,16 @@ if ( $stage <= 2 )
 # Generate the report table
 if ( $stage <= 3 )
 {
-	system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs > ${prefix}_report.tsv" ) ;
-	system_call( "perl $WD/trust-airr.pl ${prefix}_report.tsv ${prefix}_annot.fa --airr-align ${prefix}_airr_align.tsv > ${prefix}_airr.tsv" ) ;
-	if ( $hasBarcode == 1 )
+	if ($hasBarcode == 0)
+	{
+		system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs > ${prefix}_report.tsv" ) ;
+		system_call( "perl $WD/trust-airr.pl ${prefix}_report.tsv ${prefix}_annot.fa --airr-align ${prefix}_airr_align.tsv > ${prefix}_airr.tsv" ) ;
+	}
+	else #if ( $hasBarcode == 1 )
 	{
 		system_call( "perl $WD/trust-barcoderep.pl ${prefix}_cdr3.out -a ${prefix}_annot.fa --chainsInBarcode $chainsInBarcode > ${prefix}_barcode_report.tsv" ) ;
+		system_call( "perl $WD/trust-simplerep.pl ${prefix}_cdr3.out $simpleRepArgs --filterBarcoderep ${prefix}_barcode_report.tsv > ${prefix}_report.tsv" ) ;
+		system_call( "perl $WD/trust-airr.pl ${prefix}_report.tsv ${prefix}_annot.fa --airr-align ${prefix}_airr_align.tsv > ${prefix}_airr.tsv" ) ;
 		system_call( "perl $WD/trust-airr.pl ${prefix}_barcode_report.tsv ${prefix}_annot.fa --format barcoderep --airr-align ${prefix}_airr_align.tsv > ${prefix}_barcode_airr.tsv" ) ;
 	}
 }
