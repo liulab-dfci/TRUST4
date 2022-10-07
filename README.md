@@ -164,7 +164,7 @@ The directory './example' in this distribution contains one BAM files as input f
 
 	./run-trust4 -b example/example.bam -f hg38_bcrtcr.fa --ref human_IMGT+C.fa
 
-The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa, TRUST_example_cdr3.out, TRUST_example_report.tsv and several fq/fa files in seconds. The results should be the same as the files in the example folder.
+The run will generate the files TRUST_example_raw.out, TRUST_example_final.out, TRUST_example_annot.fa, TRUST_example_cdr3.out, TRUST_example_report.tsv and several fq/fa files in seconds. The results should be the same as the files in the example folder. You can check whether TRUST4 is properly installed by running the command "sh trust-example-test.sh" in the TRUST4 folder using this example data.
 
 The directory also contains two fastq files, and you can run TRUST4 with:
 
