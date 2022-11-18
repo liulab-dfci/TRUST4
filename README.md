@@ -170,7 +170,7 @@ The directory also contains two fastq files, and you can run TRUST4 with:
 
 	./run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -1 example/example_1.fq -2 example/example_2.fq -o TRUST_example
 
-Note that the requirement of the hg38_bcrtcr.fa is it containing genomic coordinate of the V, D, J and C genes which is crucial for extracting candidate reads in alignment BAM files. The coordinate information is not needed for fastq input, so you can use the IMGT reference file for the -f option. This is useful when analyzing species without reference genomes or genome annotations. The example command can be: 
+Note that the requirement of the hg38_bcrtcr.fa is that it contains genomic coordinates of the V, D, J and C genes which are crucial for extracting candidate reads in alignment BAM files. The coordinate information is not needed for fastq input, so you can use the IMGT reference file for the -f option. This is useful when analyzing species without reference genomes or genome annotations. The example command can be: 
 
 	./run-trust4 -f human_IMGT+C.fa --ref human_IMGT+C.fa -1 example/example_1.fq -2 example/example_2.fq -o TRUST_example
 
