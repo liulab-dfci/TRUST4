@@ -10,6 +10,7 @@
 #include "KmerCount.hpp"
 #include "SeqSet.hpp"
 #include "AlignAlgo.hpp"
+#include "FileLineReader.hpp"
 
 char usage[] = "./annotator [OPTIONS]:\n"
 		"Required:\n"
@@ -41,8 +42,6 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10241] = "" ;
 char bufferHeader[10241] = "" ;
-char weightBuffer[100241] = "" ;
-char seq[10241] = "" ;
 
 static const char *short_options = "f:a:r:p:o:t:" ;
 static struct option long_options[] = {
@@ -346,7 +345,7 @@ void *AnnotateReads_Thread( void *pArg )
 	{
 		if ( arg.needRC )
 		{
-			int strand = arg.refSet->HasHitInSet( arg.seqSet->GetSeqConsensus(i), buffer) ;
+			int strand = arg.refSet->HasHitInSet( arg.seqSet->GetSeqConsensus(i)) ;
 			if ( strand == -1 )
 				arg.seqSet->ReverseComplementInSeqSet( i ) ;
 		}
@@ -397,14 +396,14 @@ int main( int argc, char *argv[] )
 	SeqSet refSet( 7 ) ;
 	SeqSet seqSet( 17 ) ;
 	int c, option_index ;
-	FILE *fpAssembly = NULL ;
+	FileLineReader flrAssembly ;
 	FILE *fpReadAssignment = NULL ;
 	struct _overlap geneOverlap[4] ;
 	struct _overlap cdr[3] ; // the coordinate for cdr1,2,3
 	option_index = 0 ;
 	bool ignoreWeight = false ;
 	char outputPrefix[1024] = "trust" ;
-	FILE *fpReads = NULL ;
+	FileLineReader flrReads ;
 	int threadCnt = 1 ;
 	bool includePartial = true ;
 	bool isIMGT = true ;
@@ -432,11 +431,11 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 'a' )
 		{
-			fpAssembly = fopen( optarg, "r" ) ;
+			flrAssembly.Open( optarg ) ;
 		}
 		else if ( c == 'r' )
 		{
-			fpReads = fopen( optarg, "r" ) ;
+			flrReads.Open(optarg) ;
 		}
 		else if ( c == 'o' )
 		{
@@ -517,7 +516,7 @@ int main( int argc, char *argv[] )
 		return EXIT_FAILURE ;
 	}
 	
-	if ( fpAssembly == NULL )
+	if ( !flrAssembly.IsOpen() )
 	{
 		fprintf( stderr, "Need to use -a to specify the assembly file.\n" ) ;
 		return EXIT_FAILURE ;
@@ -526,32 +525,30 @@ int main( int argc, char *argv[] )
 	refSet.SetHitLenRequired( 17 ) ;
 	refSet.SetRadius( radius ) ;
 	PrintLog( "Start to annotate assemblies." ) ;
-	while ( fgets( buffer, sizeof( buffer ), fpAssembly ) != NULL )
+	while ( flrAssembly.ReadLine() != NULL )
 	{
+		strcpy(buffer, flrAssembly.GetLinePtr()) ;
 		if ( (format != 2 && buffer[0] != '>') 
 			|| (format == 2 && buffer[0] != '@') )
 		{
 			printf( "%s", buffer ) ;
 			continue ;
 		}
-
-		fgets( seq, sizeof( seq ), fpAssembly ) ;
+		
+		flrAssembly.ReadLine() ;
+		char *seq = strdup( flrAssembly.GetLinePtr() ) ;
 		int len = strlen( seq ) ;
-		if ( seq[len - 1] == '\n' )
-		{
-			seq[len - 1] = '\0' ;
-			--len ;
-		}
 
 		// Read in the four line of pos weight
 		SimpleVector<struct _posWeight> posWeight ;
 		double depthSum = 0 ;
 		if ( !ignoreWeight )
 		{
-			posWeight.ExpandTo( strlen( seq ) ) ;
+			posWeight.ExpandTo( len ) ;
 			for ( k = 0 ; k < 4 ; ++k )
 			{
-				fgets( weightBuffer, sizeof( weightBuffer ), fpAssembly ) ;
+				flrAssembly.ReadLine() ;
+				const char *weightBuffer = flrAssembly.GetLinePtr() ;
 
 				int num = 0 ;
 				i = 0 ;
@@ -581,14 +578,15 @@ int main( int argc, char *argv[] )
 		}
 		else
 			seqSet.InputNovelRead( buffer + 1, seq, 1, -1 ) ;
+		free(seq) ;
 
 		if (format == 2) // fastq
 		{
-			fgets(buffer, sizeof(buffer), fpAssembly) ;
-			fgets(buffer, sizeof(buffer), fpAssembly) ;
+			flrAssembly.ReadLine() ;
+			flrAssembly.ReadLine() ;
 		}
 	}
-	fclose( fpAssembly ) ;
+	flrAssembly.Close() ;
 		
 	if ( hasBarcode )
 		seqSet.SetBarcodeFromSeqName( barcodeStrToInt ) ;
@@ -601,7 +599,7 @@ int main( int argc, char *argv[] )
 		{
 			if ( needRC )
 			{
-				int strand = refSet.HasHitInSet( seqSet.GetSeqConsensus(i), buffer ) ;
+				int strand = refSet.HasHitInSet( seqSet.GetSeqConsensus(i) ) ;
 				if ( strand == -1 )
 					seqSet.ReverseComplementInSeqSet( i ) ;
 			}
@@ -681,7 +679,7 @@ int main( int argc, char *argv[] )
 	}
 	
 	// Output more CDR3 information 
-	if ( fpReads != NULL )
+	if ( flrReads.IsOpen() )
 	{
 		struct _overlap assign ;
 		std::vector< std::vector<struct _CDR3info> > cdr3Infos ;
@@ -696,12 +694,11 @@ int main( int argc, char *argv[] )
 		int assembledReadCnt ;
 		
 		//while ( fscanf( fpReads, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) != EOF )	
-		while ( fgets( bufferHeader, sizeof( bufferHeader ), fpReads ) != NULL )
+		while ( flrReads.ReadLine() != NULL )
 		{
+			strcpy(bufferHeader, flrReads.GetLinePtr()) ;
 			sscanf( bufferHeader, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) ;
 			//fscanf( fpReads, "%s", seq ) ; 
-			fgets( seq, sizeof(seq), fpReads ) ;
-			seq[strlen(seq) - 1] = '\0' ;
 			
 			struct _assignRead nr ;
 			nr.barcode = -1 ;
@@ -733,7 +730,8 @@ int main( int argc, char *argv[] )
 			}
 
 			nr.id = strdup( buffer + 1 ) ; // skip the > sign
-			nr.read = strdup( seq ) ;
+			flrReads.ReadLine() ;
+			nr.read = strdup( flrReads.GetLinePtr() ) ;
 			nr.overlap.strand = strand ;
 			assembledReads.push_back( nr ) ;
 		}
@@ -1075,7 +1073,7 @@ int main( int argc, char *argv[] )
 		}
 
 		fclose( fpOutput ) ;
-		fclose( fpReads ) ; 
+		flrReads.Close() ; 
 	}
 	else if ( outputCDR3File ) // force output cdr3 file
 	{

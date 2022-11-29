@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS= -O3 #-pg #-Wall #-O3
+CXXFLAGS= -O3 -Wall -g #-pg -g #-Wall #-O3
 LINKPATH= -I./samtools-0.1.19 -L./samtools-0.1.19
 LINKFLAGS = -lpthread -lz 
 DEBUG=
@@ -32,7 +32,7 @@ annotator: Annotator.o
 main.o: main.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerIndex.hpp SimpleVector.hpp defs.h KmerCode.hpp KmerCount.hpp
 BamExtractor.o: BamExtractor.cpp alignments.hpp defs.h SeqSet.hpp
 FastqExtractor.o: FastqExtractor.cpp ReadFiles.hpp defs.h SeqSet.hpp BarcodeCorrector.hpp SimpleVector.hpp
-Annotator.o: Annotator.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerIndex.hpp SimpleVector.hpp defs.h KmerCode.hpp KmerCount.hpp
+Annotator.o: Annotator.cpp AlignAlgo.hpp ReadFiles.hpp kseq.h SeqSet.hpp KmerIndex.hpp SimpleVector.hpp defs.h KmerCode.hpp KmerCount.hpp FileLineReader.hpp
 #Alignment.o: Alignment.cpp Alignment.h SimpleVector.h defs.h StatsTests.h KmerTree.h ReadSet.h KmerIndex.h poa.h
 
 clean:
