@@ -2618,15 +2618,16 @@ public:
 	
 	// Test whether the read share a kmer hit on the seqs.
 	// 0-no hit. Other wise return the strand
-	int HasHitInSet( char *read, char *rcRead )
+	int HasHitInSet( char *read )
 	{
 		int i, j, k ;
 		int len = strlen( read ) ;
 		if ( len < kmerLength )
 			return 0 ;
-
+		char *rcRead = strdup(read) ;
 		SimpleVector<struct _hit> hits ;	
 		GetHitsFromRead( read, rcRead, 0, -1, false, hits, NULL  ) ;
+		free(rcRead) ;
 
 		int hitCnt = hits.Size() ;
 		if ( hitCnt == 0 )

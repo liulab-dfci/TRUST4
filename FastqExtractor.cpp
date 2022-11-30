@@ -120,7 +120,7 @@ bool IsLowComplexity( char *seq )
 
 int IsGoodCandidate( char *read, char *buffer, SeqSet *refSet )
 {
-	if ( !IsLowComplexity( read ) && refSet->HasHitInSet( read, buffer ) != 0)
+	if ( !IsLowComplexity( read ) && refSet->HasHitInSet( read ) != 0)
 		return 1 ;
 	return 0 ;
 }
