@@ -18,3 +18,6 @@ Put the secondary chains in the barcode_report.tsv file in its own barcode line.
 
 #### trust-barcoderep-to-10X.pl
 Convert the barcode_report.tsv file to 10x CellRanger vdj format (the format used at least in CellRanger3).
+
+#### airr-imgtgap.py
+Add the gaps defined in the IMGT file to sequence_alignment and germline_alignment fields in the AIRR output.
