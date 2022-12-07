@@ -174,7 +174,7 @@ Note that the requirement of the hg38_bcrtcr.fa is that it contains genomic coor
 
 	./run-trust4 -f human_IMGT+C.fa --ref human_IMGT+C.fa -1 example/example_1.fq -2 example/example_2.fq -o TRUST_example
 
-The run will generate the files mentioned above from BAM input. Your results should be like the files example_annot.fa, 
+The run will generate the same files as from BAM input 
 
 ### Miscellaneous
 
