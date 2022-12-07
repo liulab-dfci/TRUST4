@@ -25,7 +25,7 @@ You will find the executable files in the downloaded directory. If you want to r
 
 TRUST4 depends on [pthreads](http://en.wikipedia.org/wiki/POSIX_Threads) and samtools depends on [zlib](http://en.wikipedia.org/wiki/Zlib). For MacOS, TRUST4 has been successfully compiled with gcc_darwin17.7.0 and gcc_9.2.0 installed by Homebrew.
 
-TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). You can install TRUST4 with `conda install -c bioconda trust4`
+TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). You can install TRUST4 with `conda install -c bioconda trust4` or use the docker container `docker pull quay.io/biocontainers/trust4:<tag>` (see [trust4/tags](https://quay.io/repository/biocontainers/trust4?tab=tags) for valid values for <tag>). 
 
 ### Usage
 
@@ -199,4 +199,4 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  
 ### Support
 
-Create a [GitHub issue](https://github.com/liulab-dfci/TRUST4/issues).
+Create a [GitHub issue](https://github.com/liulab-dfci/TRUST4/issues). We will typically respond within a day or two, but it could take longer, e.g. a month, for fixing bugs and adding features.
