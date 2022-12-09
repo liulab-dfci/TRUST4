@@ -40,6 +40,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			-o STRING: prefix of output files. (default: inferred from file prefix)
 			--od STRING: the directory for output files. (default: ./)
 			-t INT: number of threads (default: 1)
+			-k INT: the starting k-mer size for indexing contigs (default: 9)
 			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
 			--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)
 			--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)

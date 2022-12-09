@@ -25,6 +25,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-o STRING: prefix of the output file (default: trust)\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
+		"\t-k INT: the starting k-mer size for indexing contigs (default: 9)\n"
 		"\t--skipMateExtension: skip the step of extension assemblies with mate-pair information\n"
 		///"\t--noV: do not assemble the full length V gene (default: not used)\n"
 		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
@@ -41,7 +42,7 @@ char numToNuc[26] = {'A', 'C', 'G', 'T'} ;
 
 char buffer[10240] = "" ;
 
-static const char *short_options = "f:u:1:2:b:o:c:t:" ;
+static const char *short_options = "f:u:1:2:b:o:c:t:k:" ;
 static struct option long_options[] = {
 			{ "debug-ns", required_argument, 0, 10000 },
 			{ "trimLevel", required_argument, 0, 10001 },
@@ -273,6 +274,11 @@ int main( int argc, char *argv[] )
 		else if ( c == 't' )
 		{
 			threadCnt = atoi( optarg ) ;
+		}
+		else if ( c == 'k' )
+		{
+			indexKmerLength = atoi( optarg ) ;
+			seqSet.ChangeKmerLength( indexKmerLength ) ;
 		}
 		else if ( c == 10000 ) //debug-ns
 		{

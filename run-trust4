@@ -7,7 +7,7 @@ use Cwd 'cwd' ;
 use Cwd 'abs_path' ;
 use File::Basename ;
 
-die "TRUST4 v1.0.8-r419 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.8-r424 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -19,6 +19,7 @@ die "TRUST4 v1.0.8-r419 usage: ./run-trust4 [OPTIONS]:\n".
     "\t-o STRING: prefix of output files. (default: inferred from file prefix)\n".
     "\t--od STRING: the directory for output files. (default: ./)\n".
     "\t-t INT: number of threads (default: 1)\n".
+		"\t-k INT: the starting k-mer size for indexing contigs (default: 9)\n".
     #"\t-h: print help message and exit.\n"
     "\t--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (default: not used)\n".
     "\t--barcodeRange INT INT CHAR: start, end(-1 for length-1), strand in a barcode is the true barcode (default: 0 -1 +)\n".
@@ -147,6 +148,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "-t" )
 	{
 		$threadCnt = $ARGV[$i + 1] ;
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "-k" )
+	{
 		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
