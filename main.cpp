@@ -902,7 +902,7 @@ int main( int argc, char *argv[] )
 		}
 
 		bool mayTrim = false ;
-		if ( gidx == 3 && geneOverlap[3].seqStart < indexKmerLength && geneOverlap[3].similarity > 0.95 )
+		if ( gidx == 3 && geneOverlap[3].seqStart < 9 && geneOverlap[3].similarity > 0.95 )
 				//&& geneOverlap[3].readEnd + indexKmerLength >= sortedReads[i].len 
 				//&& refSet.GetSeqName( geneOverlap[3].seqIdx )[2] != 'H' )
 			mayTrim  = true ;
