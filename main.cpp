@@ -26,6 +26,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t-t INT: number of threads (default: 1)\n"
 		"\t-c STRING: the path to the kmer count file\n"
 		"\t-k INT: the starting k-mer size for indexing contigs (default: 9)\n"
+		"\t--minHitLen INT: the minimal hit length for a valid overlap (default: auto)\n"
 		"\t--skipMateExtension: skip the step of extension assemblies with mate-pair information\n"
 		///"\t--noV: do not assemble the full length V gene (default: not used)\n"
 		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
@@ -50,6 +51,7 @@ static struct option long_options[] = {
 			{ "keepNoBarcode", no_argument, 0, 10003 },
 			{ "UMI", required_argument, 0, 10004},
 			{ "skipMateExtension", no_argument, 0, 10005},
+			{ "minHitLen", required_argument, 0, 10006},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -227,6 +229,7 @@ int main( int argc, char *argv[] )
 	int maxReadLen = -1 ;
 	int firstReadLen = -1 ;
 	int trimLevel = 1 ;
+	int minHitLen = -1 ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
 	bool hasUmi = false ;
@@ -305,6 +308,10 @@ int main( int argc, char *argv[] )
 		else if ( c == 10005 ) // skipMateExtension
 		{
 			skipMateExtension = true ;
+		}
+		else if ( c == 10006 ) // minHitLen
+		{
+			minHitLen = atoi( optarg ) ;
 		}
 		else
 		{
@@ -1074,6 +1081,11 @@ int main( int argc, char *argv[] )
 			seqSet.SetHitLenRequired( 13 ) ;
 		else
 			seqSet.SetHitLenRequired( 17 ) ;
+	}
+	
+	if (minHitLen != -1)
+	{
+		seqSet.SetHitLenRequired( minHitLen ) ;
 	}
 
 	if ( firstReadLen > 200 || trimLevel > 1 )
