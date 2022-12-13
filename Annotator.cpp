@@ -315,9 +315,9 @@ int IsFullLengthAssembly(char *seq, struct _annotate &annotation, SeqSet &refSet
 	if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3 
 		|| geneOverlap[2].readEnd > geneOverlap[3].readStart + 6 )
 		return 0 ;
-	if (geneOverlap[0].seqStart >= 10 || geneOverlap[0].readEnd < cdr[2].readStart)
+	if (geneOverlap[0].seqStart > 0 || geneOverlap[0].readEnd < cdr[2].readStart)
 		return 0 ;
-	if (geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].seqEnd < refSet.GetSeqConsensusLen(geneOverlap[2].seqIdx) - 3)
+	if (geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].seqEnd < refSet.GetSeqConsensusLen(geneOverlap[2].seqIdx) - 1)
 		return 0 ;
 	if (geneOverlap[3].seqStart > 10)
 		return 0 ;
@@ -699,6 +699,7 @@ int main( int argc, char *argv[] )
 			strcpy(bufferHeader, flrReads.GetLinePtr()) ;
 			sscanf( bufferHeader, "%s %d %d %d", buffer, &strand, &minCnt, &medCnt ) ;
 			//fscanf( fpReads, "%s", seq ) ; 
+			flrReads.ReadLine() ;
 			
 			struct _assignRead nr ;
 			nr.barcode = -1 ;
@@ -710,7 +711,7 @@ int main( int argc, char *argv[] )
 				char barcodeBuffer[1024] ;
 				if (p == NULL)
 				{
-					fprintf( stderr, "%s has not barcode field", bufferHeader) ;
+					fprintf( stderr, "%s has not barcode field\n", bufferHeader) ;
 					exit(1) ;
 				}
 				for ( i = 0 ; *p && *p != ' ' && *p != '\n' ; ++i, ++p )
@@ -730,7 +731,6 @@ int main( int argc, char *argv[] )
 			}
 
 			nr.id = strdup( buffer + 1 ) ; // skip the > sign
-			flrReads.ReadLine() ;
 			nr.read = strdup( flrReads.GetLinePtr() ) ;
 			nr.overlap.strand = strand ;
 			assembledReads.push_back( nr ) ;

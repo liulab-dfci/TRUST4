@@ -78,6 +78,8 @@ public:
 			}
 		}
 		buffer[len] = '\0' ;
+		if (len == 0 && feof(fp))
+			return NULL ;
 		return GetLinePtr() ;
 	}
 
