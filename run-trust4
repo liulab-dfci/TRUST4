@@ -7,7 +7,7 @@ use Cwd 'cwd' ;
 use Cwd 'abs_path' ;
 use File::Basename ;
 
-die "TRUST4 v1.0.8-r426 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.8-r429 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -28,13 +28,14 @@ die "TRUST4 v1.0.8-r426 usage: ./run-trust4 [OPTIONS]:\n".
     "\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
     "\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
     "\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)\n".
+    "\t--repseq: the data is from TCR-seq or BCR-seq (default: not set)\n".
 		"\t--barcodeLevel STRING: barcode is for cell or molecule (default: cell)\n".
 		"\t--minHitLen INT: the minimal hit length for a valid overlap (default: auto)\n".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
-    "\t--repseq: the data is from TCR-seq or BCR-seq (default: not set)\n".
+    "\t--assembleWithRef: conduct the assembly with --ref file (default: use -f file)\n".
 		"\t--outputReadAssignment: output read assignment results to the prefix_assign.out file (default: no output)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
     "\t\t0: start from beginning (candidate read extraction)\n".
@@ -89,6 +90,7 @@ my $hasUmi = 0 ;
 my $outputDirectory = "" ;
 my $outputReadAssignment = 0 ;
 my $chainsInBarcode = 2 ;
+my $assembleWithRef = 0 ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 for ( $i = 0 ; $i < @ARGV ; ++$i )
@@ -128,7 +130,6 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "-f" )
 	{	
 		$vdjcFasta = $ARGV[$i + 1] ;
-		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "-o" )
@@ -262,6 +263,10 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$chainsInBarcode = 1 if ($ARGV[$i + 1] eq "molecule") ;
 		++$i ;
 	}
+	elsif ($ARGV[$i] eq "--assembleWithRef")
+	{
+		$assembleWithRef = 1 ;
+	}
 	else
 	{
 		die "Unknown parameter ".$ARGV[$i]."\n" ;
@@ -281,6 +286,16 @@ if ( @bamFiles > 0 && $noExtraction == 1 )
 if ( $vdjcFasta eq "" )
 {
 	die "Need to use -f to specify the sequence of annotated V/D/J/C genes' sequence.\n" ;
+}
+
+if ( $assembleWithRef == 1 )
+{
+	die "Need to use --ref to specify the comprehensive V/D/J/C reference file when using --assembleWithRef option.\n" if ($vdjcRef eq "") ;
+	$mainArgs .= " -f $vdjcRef" ;
+}
+else
+{
+	$mainArgs .= " -f $vdjcFasta" ;
 }
 
 # Check the existence of files
