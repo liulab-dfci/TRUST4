@@ -470,9 +470,48 @@ if ( $annotFile ne "" )
 	}
 }
 
+# Remove the redundant entries in the secondary chains
+foreach my $key (keys %barcodeChainOther)
+{
+	next if (!defined $barcodeChainOther{$key} || @{$barcodeChainOther{$key}} == 0
+						|| !defined $barcodeChainRepresent{$key}) ;
+	my $representative = $barcodeChainRepresent{$key} ;
+	my %abundAa ;
+	my %AaAssembleId ;
+	my @newInfos = ();
+	my @cols = split /,/,$representative ;
+	if (!defined $cols[5])
+	{
+		print("$representative $key ".@{$barcodeChainOther{$key}}."\n") ;
+	}
+	$abundAa{$cols[5]} = $cols[6] ;
+	$AaAssembleId{$cols[5]} = $cols[7] ;
+	foreach my $info (@{$barcodeChainOther{$key}})
+	{
+		my @cols = split /,/,$info ;
+		if (!defined $abundAa{$cols[5]} ||
+			$cols[6] > $abundAa{$cols[5]} )
+		{
+			$abundAa{$cols[5]} = $cols[6] ;
+			$AaAssembleId{$cols[5]} = $cols[7] ;
+		}
+	}
+
+	foreach my $info (@{$barcodeChainOther{$key}})
+	{
+		my @cols = split /,/,$info ;
+		if ($AaAssembleId{$cols[5]} eq $cols[7])
+		{
+			push @newInfos, $info ;
+		}
+	}
+
+	@{$barcodeChainOther{$key}} = @newInfos ;
+}
+
 # Generate the output content.
 my %barcodeOutput ;
-foreach my $barcode (@barcodeList )
+foreach my $barcode (@barcodeList)
 {
 	# Determine type
 	my $i ;
@@ -616,7 +655,7 @@ foreach my $barcode (@barcodeList )
 	}
 	next if ( $chain1 eq "*" && $chain2 eq "*" ) ;
 	#print( join( "\t", ($barcode, $cellType, $chain1, $chain2, $secondaryChain1, $secondaryChain2 ) ), "\n" ) ;
-	if ($chainsInBarcode == 1)
+	if ($chainsInBarcode == 1) # Only one chain in the barcode (UMI tech)
 	{
 		if ($chain1 eq "*" && $chain2 ne "*")
 		{
