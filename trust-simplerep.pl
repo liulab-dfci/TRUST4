@@ -9,7 +9,7 @@ die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n".
 	"\t--barcodeCnt: the count column is the number of barcode instead of read support. (default: not used)\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
 	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
-	"\t--filterBarcoderep: only summarize the main CDR3s in the barcode report file. (default: not used)\n".
+	"\t--filterBarcoderep barcode_report.tsv: only summarize the main CDR3s in the barcode report file. (default: not used)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n".
 	"\t--filterBcrError FLOAT: filter BCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0)\n"
 	if ( @ARGV == 0 ) ;
