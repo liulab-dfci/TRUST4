@@ -1,7 +1,7 @@
 Scripts in TRUST4
 =======
 
-The detailed information for each python scripts can be found by running "python3 the_script.py -h". The detailed information for perl scripts can be found by running "perl the_script.pl".
+This folder contains scripts and comments for post processing TRUST4's results. The detailed information for each python scripts can be found by running "python3 the_script.py -h". The detailed information for perl scripts can be found by running "perl the_script.pl".
 
 #### trust-stats.py
 
