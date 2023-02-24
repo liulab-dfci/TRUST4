@@ -21,3 +21,10 @@ Convert the barcode_report.tsv file to 10x CellRanger vdj format (the format use
 
 #### airr-imgtgap.py
 Add the gaps defined in the IMGT file to sequence_alignment and germline_alignment fields in the AIRR output.
+
+#### epitope annotation
+TRUST4's report file and the AIRR output format is compatible with eptiope prediction methods, such as [TCRMatch](https://github.com/IEDB/TCRMatch). You can use command like
+
+`./tcrmatch -i trust_report.tsv -d CEDAR_data.tsv -t 8 -r > trust_with_epitope.txt`
+or
+`./tcrmatch -i trust_airr_report.tsv -d CEDAR_data.tsv -t 8 -a > trust_with_epitope.txt`
