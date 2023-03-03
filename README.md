@@ -95,7 +95,7 @@ The output trust_report.tsv is a tsv file. The fileds are:
 	
 	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C	consensus_id consensus_id_full_length
 
-For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. 
+For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. In the amino acid sequence, "_" represents stop codon, and "?" represents ambiguous nucleotide "N" in codon.
 
 The output trust_airr.tsv follows [the AIRR format](https://docs.airr-community.org/en/latest/datarep/rearrangements.html). 
 
