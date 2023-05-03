@@ -1,4 +1,4 @@
-#/usr/bin/env perl
+#!/usr/bin/env perl
 
 use warnings ;
 use strict ;
@@ -62,15 +62,15 @@ sub OutputGene
 	my $end = $range[-1] ;
 
 	my $output = "" ;
-	
-	if ($strand eq "-" ) 
+
+	if ($strand eq "-" )
 	{
 		$start = $range[-2] ;
 		$end = $range[2] ;
 	}
 	die "Unknown chrom id $chrom " if ( !defined $genome{ $chrom } ) ;
-	
-	print ">$gname $chrom $start $end $strand\n" ; 
+
+	print ">$gname $chrom $start $end $strand\n" ;
 	for ( $i = 0 ; $i < scalar( @range ) ; $i += 3 )
 	{
 		my $tmp = uc( substr( $genome{ $range[$i] }, $range[$i + 1] - 1, $range[$i + 2] - $range[$i + 1] + 1 ) ) ;
@@ -91,10 +91,10 @@ while ( <FP1> )
 	my @cols = split /\t/ ;
 	next if ( $cols[2] ne "exon" ) ;
 
-	my $tname ;	
+	my $tname ;
 	if ( $cols[8] =~ /transcript_name \"(.*?)\"/ )
 	{
-		#print $1, "\n" ; 
+		#print $1, "\n" ;
 		$tname = $1 ;
 	}
 	else
@@ -113,7 +113,7 @@ while ( <FP1> )
 		$prevTname = $tname ;
 		if ( $cols[8] =~ /gene_name \"(.*?)\"/ )
 		{
-			#print $1, "\n" ; 
+			#print $1, "\n" ;
 			$gname = uc($1) ;
 		}
 		else
@@ -123,7 +123,7 @@ while ( <FP1> )
 		$strand = $cols[6] ;
 		undef @range ;
 	}
-	
+
 	if ( $hasChrPrefix == 1 && !( $cols[0] =~ /^c/) )
 	{
 		$cols[0] = "chr".$cols[0] ;
@@ -132,7 +132,7 @@ while ( <FP1> )
 	{
 		$cols[0] = substr( $cols[0], 3 ) ;
 	}
-	push @range, $cols[0], $cols[3], $cols[4] ;			
+	push @range, $cols[0], $cols[3], $cols[4] ;
 }
 
 if ( (defined $interestedGeneName{ $gname } ) && @range > 0 )
