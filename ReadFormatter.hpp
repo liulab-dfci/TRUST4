@@ -162,6 +162,9 @@ public:
     ns.strand = strand ;
     _segs[category].push_back(ns) ;
     std::sort(_segs[ category ].begin(), _segs[ category ].end()) ;
+    
+		if (_buffers.GetBufferCount() == 0)
+      AllocateBuffers(2) ;
   }
 
   int NeedExtract(int category)
