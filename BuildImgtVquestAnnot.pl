@@ -11,11 +11,11 @@ sub system_call
 	system(@_) == 0
 		or die "system @_ failed: $?";
 	#print STDERR " finished\n";
-} 
+}
 
 my $species = $ARGV[2] ;
 # Download
-system_call( "wget -np -nd -r -A fasta -P tmp_download http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/".$species."/" ) ;
+system_call( "wget -np -nd -r -A fasta -P tmp_download https://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/".$species."/" ) ;
 system_call( "cat tmp_download/*.fasta > tmp_download/vquest.fa") ;
 
 # Reformat
@@ -41,4 +41,4 @@ system_call( "grep -A 1 --no-group-separator -f ".$ARGV[1]." ".$ARGV[0]." >> IMG
 
 
 # remove the temporary download directory
-rmdir "tmp_download"
+system_call( "rm -r tmp_download" ) ;
