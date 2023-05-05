@@ -42,14 +42,11 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			-t INT: number of threads (default: 1)
 			-k INT: the starting k-mer size for indexing contigs (default: 9)
 			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
-			--barcodeRange INT INT CHAR: start, end(-1 for lenght-1), strand in a barcode is the true barcode (default: 0 -1 +)
 			--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)
-			--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)
-			--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)
 			--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)
-			--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)
+			--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)
 			--repseq: the data is from TCR-seq or BCR-seq (default: not set)
-			--barcode-level STRING: barcode is for cell or molecule (default: cell)
+			--barcodeLevel STRING: barcode is for cell or molecule (default: cell)
 			--minHitLen INT: the minimal hit length for a valid overlap (default: auto)
 			--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)
 			--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)
@@ -123,9 +120,15 @@ The IMGT+C.fa can also be used to generate "bcr_tcr_gene_name.txt" file with com
 
 When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
 
-If your input is raw FASTQ files, you can use "--barcode" to specify the barcode file and use "--barcodeRange" to tell TRUST4 how to extract barcode information. If the barcode or UMI sequence is in the read sequence, you may use "--read1Range", "--read2Range" to tell TRUST4 how to extract sequence information in the reads. TRUST4 supports using wildcard in the -1 -2/-u option, so a typical way to run 10X Genomics single-end data is by:
+If your input is raw FASTQ files, you can use "--barcode" to specify the barcode file and use "--readFormat" to tell TRUST4 how to extract barcode information. The "--readFormat" option can also specify the extraction for read1, read2 and UMI. The value for this argument is a comma-separated string, each field in the string is also a semi-comma-splitted string
 
-	run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -u path_to_10X_fastqs/*_R2_*.fastq.gz --barcode path_to_10X_fastqs/*_R1_*.fastq.gz --barcodeRange 0 15 + --barcodeWhitelist cellranger_folder/cellranger-cs/VERSION/lib/python/cellranger/barcodes/737K-august-2016.txt [other options]
+	[r1|r2|bc|um]:start:end:strand
+
+The start and end are inclusive and -1 means the end of the read. You may use multiple fields to specify non-consecutive segments, e.g. bc:0:15,bc:32:-1. The strand is presented by '+' and '-' symbol, if '-' the barcode will be reverse-complemented after extraction. The strand symbol can be omitted if it is '+' and is ignored on r1 and r2. For example, when the barcode is in the first 16bp of read1, one can use the option `-1 read1.fq.gz -2 read2.fq.gz --barcode read1.fq.gz --read-format bc:0:15,r1:16:-1`.
+
+TRUST4 supports using wildcard in the -1 -2/-u option, so a typical way to run 10X Genomics single-end data is by:
+
+	run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -u path_to_10X_fastqs/*_R2_*.fastq.gz --barcode path_to_10X_fastqs/*_R1_*.fastq.gz --readFormat bc:0:15 --barcodeWhitelist cellranger_folder/cellranger-cs/VERSION/lib/python/cellranger/barcodes/737K-august-2016.txt [other options]
 
 The exact options depend on your 10X Genomics kit.
 
