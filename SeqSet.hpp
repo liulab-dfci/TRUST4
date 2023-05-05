@@ -8559,7 +8559,7 @@ public:
 	// Extend seq where one mate is aligned the other mate is missing, and the mates overlap with each other.
 	void ExtendSeqFromMissingOverlapMate( std::vector< struct _assignRead> reads )
 	{
-		int i, j, k ;
+		int i ;
 		int readCnt = reads.size() ;
 		int seqCnt = seqs.size() ;
 		for ( i = 0 ; i < readCnt ; ++i )
