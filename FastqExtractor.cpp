@@ -132,7 +132,7 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, ReadFormatter
 {
 	if ( qual != NULL )
 		fprintf( fp, "@%s\n%s\n+\n%s\n", name, readFormatter.Extract(seq, readCategory, true, 0),
-				readFormatter.Extract(seq, readCategory, false, 1)) ;
+				readFormatter.Extract(qual, readCategory, false, 1)) ;
 	else
 		fprintf( fp, ">%s\n%s\n", name, readFormatter.Extract(seq, readCategory, true, 0) ) ;
 }
@@ -365,7 +365,7 @@ int main( int argc, char *argv[] )
 	if (read2Start != 0 || read2End != -1)
 		readFormatter.AddSegment(read1Start, read1End, 1, FORMAT_READ2) ;
 	if (barcodeStart != 0 || barcodeEnd != -1 || barcodeRevComp)
-		readFormatter.AddSegment(read1Start, read1End, barcodeRevComp ? -1 : 1, FORMAT_BARCODE) ;
+		readFormatter.AddSegment(barcodeStart, barcodeEnd, barcodeRevComp ? -1 : 1, FORMAT_BARCODE) ;
 	if (umiStart != 0 || umiEnd != -1 || umiRevComp)
 		readFormatter.AddSegment(umiStart, umiEnd, umiRevComp ? -1 : 1, FORMAT_UMI) ;
 	
@@ -393,7 +393,7 @@ int main( int argc, char *argv[] )
 	
 	if ( hasBarcode && hasBarcodeWhitelist )
 	{
-		barcodeCorrector.CollectBackgroundDistribution(barcodeFile, barcodeStart, barcodeEnd, barcodeRevComp) ;
+		barcodeCorrector.CollectBackgroundDistribution(barcodeFile, readFormatter) ;
 	}
 
 	FILE *fp1 = NULL ;
