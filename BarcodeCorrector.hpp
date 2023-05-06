@@ -5,6 +5,7 @@
 #include "ReadFiles.hpp"
 #include "SimpleVector.hpp"
 #include "defs.h"
+#include "ReadFormatter.hpp"
 
 struct _trie
 {
@@ -103,41 +104,6 @@ class BarcodeCorrector
 {
 private:
 	Trie barcodeFreq ;
-
-	void ReverseComplement( char *rcSeq, char *seq, int len )
-	{
-		int i ;
-		for ( i = 0 ; i < len ; ++i )
-		{
-			if ( seq[len - 1 - i] != 'N' )
-				rcSeq[i] = numToNuc[ 3 - nucToNum[seq[len - 1 - i] - 'A'] ];
-			else
-				rcSeq[i] = 'N' ;
-		}
-		rcSeq[i] = '\0' ;
-	}
-	
-	// Put the reformatted raw barcode into buffer
-	void FormatBarcode(char *raw, int start, int end, bool revcomp, char *buffer)
-	{
-		if ( start == 0 && end == -1 && revcomp == false )
-			strcpy(buffer, raw) ;
-		else
-		{
-			int i ;
-			int s = start ;
-			int e = ( end == -1 ? strlen( raw ) - 1 : end ) ;
-
-			if ( revcomp == false )
-			{
-				for ( i = s ; i <= e ; ++i )
-					buffer[i - s] = raw[i] ;
-				buffer[i - s] = '\0' ;
-			}
-			else
-				ReverseComplement( buffer, raw + s, e - s + 1 ) ;
-		}
-	}
 public:
 	BarcodeCorrector() {}
 	~BarcodeCorrector() {}
@@ -151,13 +117,13 @@ public:
 		fclose(fp) ;
 	}
 
-	void CollectBackgroundDistribution(ReadFiles &barcodeFile, int start, int end, bool revcomp, int caseCnt = 2000000) 
+	void CollectBackgroundDistribution(ReadFiles &barcodeFile, ReadFormatter &readFormatter, int caseCnt = 2000000) 
 	{
 		int readCnt = 0 ;
 		char buffer[256] ;
 		while (barcodeFile.Next())
 		{	
-			FormatBarcode(barcodeFile.seq, start, end, revcomp, buffer) ;
+			strcpy(buffer, readFormatter.Extract(barcodeFile.seq, FORMAT_BARCODE, true));
 			barcodeFreq.SearchAndUpdate(buffer, 1) ;
 			readCnt += 1 ;
 			if (readCnt >= caseCnt) 

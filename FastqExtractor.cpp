@@ -8,6 +8,8 @@
 #include "SeqSet.hpp"
 #include "ReadFiles.hpp"
 #include "BarcodeCorrector.hpp"
+#include "ReadFormatter.hpp"
+#include "BarcodeTranslator.hpp"
 
 char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"Required:\n"
@@ -19,18 +21,20 @@ char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"\t-o STRING: prefix to the output file (default: toassemble)\n"
 		"\t-t INT: number of threads (default: 1)\n" 
 		"\t--barcode STRING: path to the raw barcode file (default: not used)\n"
-		"\t--barcodeStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
-		"\t--barcodeEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
-		"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
+		//"\t--barcodeStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
+		//"\t--barcodeEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
+		//"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
 		"\t--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)\n"
-		"\t--read1Start INT: the start position of sequence in read 1 (default: 0)\n"
-		"\t--read1End INT: the end position of sequence in read 1 (default: length-1)\n"
-		"\t--read2Start INT: the start position of sequence in read 2 (default: 0)\n"
-		"\t--read2End INT: the end position of sequence in read 2 (default: length-1)\n"
+		"\t--barcodeTranslate STRING: path to the barcode translate file (default: not used)\n"
+		//"\t--read1Start INT: the start position of sequence in read 1 (default: 0)\n"
+		//"\t--read1End INT: the end position of sequence in read 1 (default: length-1)\n"
+		//"\t--read2Start INT: the start position of sequence in read 2 (default: 0)\n"
+		//"\t--read2End INT: the end position of sequence in read 2 (default: length-1)\n"
 		"\t--UMI STRING: path to the raw UMI file (default: not used)\n"
-		"\t--umiStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
-		"\t--umiEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
-		"\t--umiRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
+		//"\t--umiStart INT: the start position of barcode in the barcode sequence (default: 0)\n"
+		//"\t--umiEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
+		//"\t--umiRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
+		"\t--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)\n"
 		;
 
 static const char *short_options = "f:u:1:2:o:t:" ;
@@ -48,6 +52,8 @@ static struct option long_options[] = {
 			{ "umiStart", required_argument, 0, 10010},
 			{ "umiEnd", required_argument, 0, 10011},
 			{ "umiRevComp", no_argument, 0, 10012},
+			{ "readFormat", required_argument, 0, 10013},
+			{ "barcodeTranslate", required_argument, 0, 10014},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -125,80 +131,39 @@ int IsGoodCandidate( char *read, char *buffer, SeqSet *refSet )
 	return 0 ;
 }
 
-void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, int start, int end )
+void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, ReadFormatter &readFormatter, int readCategory )
 {
-	if ( start == 0 && end == -1 )
-	{
-		if ( qual != NULL )
-			fprintf( fp, "@%s\n%s\n+\n%s\n", name, seq, qual ) ;
-		else
-			fprintf( fp, ">%s\n%s\n", name, seq ) ;
-	}
+	if ( qual != NULL )
+		fprintf( fp, "@%s\n%s\n+\n%s\n", name, readFormatter.Extract(seq, readCategory, true, 0),
+				readFormatter.Extract(qual, readCategory, false, 1)) ;
 	else
-	{
-		int i ;
-		int s = start ;
-		int e = ( end == -1 ? strlen( seq ) - 1 : end ) ;
-		
-		for ( i = s ; i <= e ; ++i )
-			buffer[i - s] = seq[i] ;
-		buffer[i - s] = '\0' ;
-
-		if (qual == NULL)
-		{
-			fprintf( fp, ">%s\n%s\n", name, buffer ) ;	
-		}
-		else
-		{
-			fprintf( fp, "@%s\n%s\n+\n", name, buffer ) ;	
-			
-			for ( i = s ; i <= e ; ++i )
-				buffer[i - s] = qual[i] ;
-			buffer[i - s] = '\0' ;
-			fprintf( fp, "%s\n", buffer ) ;
-		}
-	}
+		fprintf( fp, ">%s\n%s\n", name, readFormatter.Extract(seq, readCategory, true, 0) ) ;
 }
 
 // Maybe barcode read quality could be useful in future.
 void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual, 
-	int start, int end, bool revcomp, BarcodeCorrector *barcodeCorrector, SeqSet &seqSet )
+	ReadFormatter &readFormatter, int readCategory, BarcodeCorrector *barcodeCorrector,
+	BarcodeTranslator *barcodeTranslator)
 {
-	if ( barcode && barcode[0] != '\0')
+	if (barcode && barcode[0] != '\0')
 	{
-		if ( start == 0 && end == -1 && revcomp == false )
+		char *bcBuffer = readFormatter.Extract(barcode, readCategory, true, 0) ;
+		int result = 0 ;
+		if ( barcodeCorrector != NULL )	
+			result = barcodeCorrector->Correct(bcBuffer, qual ) ;
+		if (result >= 0)
 		{
-			int result = 0 ;
-			if ( barcodeCorrector != NULL )	
-				result = barcodeCorrector->Correct( barcode, qual ) ;
-			if (result >= 0)
-				fprintf( fp, ">%s\n%s\n", name, barcode ) ;
-			else
-				fprintf(fp, ">%s\nmissing_barcode\n", name) ;
-		}
-		else
-		{
-			int i ;
-			int s = start ;
-			int e = ( end == -1 ? strlen( barcode ) - 1 : end ) ;
-
-			if ( revcomp == false )
+			if (barcodeTranslator)
 			{
-				for ( i = s ; i <= e ; ++i )
-					buffer[i - s] = barcode[i] ;
-				buffer[i - s] = '\0' ;
+				std::string newbc = barcodeTranslator->Translate(bcBuffer, strlen(bcBuffer)) ;
+				fprintf( fp, ">%s\n%s\n", name, newbc.c_str()) ;
+
 			}
 			else
-				seqSet.ReverseComplement( buffer, barcode + s, e - s + 1 ) ;
-			
-			int result = 0 ;
-			if ( barcodeCorrector != NULL )	
-				result = barcodeCorrector->Correct( buffer, qual ) ;
-			if (result >= 0)
-				fprintf( fp, ">%s\n%s\n", name, buffer ) ;
-			else
-				fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
+				fprintf( fp, ">%s\n%s\n", name, bcBuffer ) ;
 		}
+		else
+			fprintf(fp, ">%s\nmissing_barcode\n", name) ;
 	}
 	else
 		fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
@@ -286,6 +251,7 @@ int main( int argc, char *argv[] )
 	ReadFiles barcodeFile ;
 	ReadFiles umiFile ;
 	BarcodeCorrector barcodeCorrector ;
+	BarcodeTranslator barcodeTranslator ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
 	bool hasBarcodeWhitelist = false ;
@@ -300,6 +266,7 @@ int main( int argc, char *argv[] )
 	int umiStart = 0 ;
 	int umiEnd = -1 ;
 	bool umiRevComp = false ;
+	ReadFormatter readFormatter ;
 
 	while ( 1 )
 	{
@@ -390,6 +357,14 @@ int main( int argc, char *argv[] )
 		{
 			umiRevComp = true ;
 		}
+		else if (c == 10013) // readFormat
+		{
+			readFormatter.Init(optarg) ;
+		}
+		else if (c == 10014) // barcodeTranslate
+		{
+			barcodeTranslator.SetTranslateTable(optarg) ;
+		}
 		else
 		{
 			fprintf( stderr, "Unknown parameter %s\n", optarg ) ;
@@ -397,12 +372,20 @@ int main( int argc, char *argv[] )
 		}
 	}
 
-
 	if ( fpRef == NULL )
 	{
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+
+	if (read1Start != 0 || read1End != -1)
+		readFormatter.AddSegment(read1Start, read1End, 1, FORMAT_READ1) ;
+	if (read2Start != 0 || read2End != -1)
+		readFormatter.AddSegment(read1Start, read1End, 1, FORMAT_READ2) ;
+	if (barcodeStart != 0 || barcodeEnd != -1 || barcodeRevComp)
+		readFormatter.AddSegment(barcodeStart, barcodeEnd, barcodeRevComp ? -1 : 1, FORMAT_BARCODE) ;
+	if (umiStart != 0 || umiEnd != -1 || umiRevComp)
+		readFormatter.AddSegment(umiStart, umiEnd, umiRevComp ? -1 : 1, FORMAT_UMI) ;
 	
 	PrintLog( "Start to extract candidate reads from read files." ) ;
 	
@@ -428,7 +411,7 @@ int main( int argc, char *argv[] )
 	
 	if ( hasBarcode && hasBarcodeWhitelist )
 	{
-		barcodeCorrector.CollectBackgroundDistribution(barcodeFile, barcodeStart, barcodeEnd, barcodeRevComp) ;
+		barcodeCorrector.CollectBackgroundDistribution(barcodeFile, readFormatter) ;
 	}
 
 	FILE *fp1 = NULL ;
@@ -490,16 +473,17 @@ int main( int argc, char *argv[] )
 				++goodCandidate ;
 			if ( goodCandidate )
 			{
-				OutputSeq( fp1, reads.id, reads.seq, reads.qual, read1Start, read1End ) ;
+				OutputSeq( fp1, reads.id, reads.seq, reads.qual, readFormatter, FORMAT_READ1 ) ;
 				if ( hasMate )
-					OutputSeq( fp2, reads.id, mateReads.seq, mateReads.qual, read2Start, read2End ) ;
+					OutputSeq( fp2, reads.id, mateReads.seq, mateReads.qual, readFormatter, FORMAT_READ2 ) ;
 				if ( hasBarcode )
 					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
-						barcodeStart, barcodeEnd, barcodeRevComp, 
-						hasBarcodeWhitelist ? &barcodeCorrector : NULL, refSet ) ;
+						readFormatter, FORMAT_BARCODE, 
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
+						barcodeTranslator.isSet() ? &barcodeTranslator : NULL) ;
 				if ( hasUmi )
 					OutputBarcode( fpUmi, reads.id, umiFile.seq, umiFile.qual,
-							umiStart, umiEnd, umiRevComp, NULL, refSet ) ;
+							readFormatter, FORMAT_UMI, NULL, NULL) ;
 			}
 		}
 	}
@@ -594,17 +578,18 @@ int main( int argc, char *argv[] )
 			{
 				if ( readBatch[i].id[0] == '\0' )
 					continue ;
-				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual, read1Start, read1End ) ;
+				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual, readFormatter, FORMAT_READ1 ) ;
 				if ( readBatch2 != NULL )
-					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual, read2Start, read2End ) ;
+					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual, readFormatter, FORMAT_READ2) ;
 				if ( hasBarcode )
 					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
-						barcodeStart, barcodeEnd, barcodeRevComp, 
-						hasBarcodeWhitelist ? &barcodeCorrector : NULL, refSet ) ; 
+						readFormatter, FORMAT_BARCODE,
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
+						barcodeTranslator.isSet() ? &barcodeTranslator : NULL) ;
 				
 				if ( hasUmi )
 					OutputBarcode( fpUmi, readBatch[i].id, umiBatch[i].seq, umiBatch[i].qual, 
-						umiStart, umiEnd, umiRevComp, NULL, refSet ) ; 
+						readFormatter, FORMAT_UMI, NULL, NULL) ; 
 			}
 		}
 		
