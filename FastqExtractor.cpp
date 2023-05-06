@@ -9,6 +9,7 @@
 #include "ReadFiles.hpp"
 #include "BarcodeCorrector.hpp"
 #include "ReadFormatter.hpp"
+#include "BarcodeTranslator.hpp"
 
 char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		"Required:\n"
@@ -24,6 +25,7 @@ char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		//"\t--barcodeEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
 		//"\t--barcodeRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
 		"\t--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)\n"
+		"\t--barcodeTranslate STRING: path to the barcode translate file (default: not used)\n"
 		//"\t--read1Start INT: the start position of sequence in read 1 (default: 0)\n"
 		//"\t--read1End INT: the end position of sequence in read 1 (default: length-1)\n"
 		//"\t--read2Start INT: the start position of sequence in read 2 (default: 0)\n"
@@ -51,6 +53,7 @@ static struct option long_options[] = {
 			{ "umiEnd", required_argument, 0, 10011},
 			{ "umiRevComp", no_argument, 0, 10012},
 			{ "readFormat", required_argument, 0, 10013},
+			{ "barcodeTranslate", required_argument, 0, 10014},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -139,7 +142,8 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, ReadFormatter
 
 // Maybe barcode read quality could be useful in future.
 void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual, 
-	ReadFormatter &readFormatter, int readCategory, BarcodeCorrector *barcodeCorrector )
+	ReadFormatter &readFormatter, int readCategory, BarcodeCorrector *barcodeCorrector,
+	BarcodeTranslator *barcodeTranslator)
 {
 	if (barcode && barcode[0] != '\0')
 	{
@@ -148,7 +152,16 @@ void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual,
 		if ( barcodeCorrector != NULL )	
 			result = barcodeCorrector->Correct(bcBuffer, qual ) ;
 		if (result >= 0)
-			fprintf( fp, ">%s\n%s\n", name, bcBuffer ) ;
+		{
+			if (barcodeTranslator)
+			{
+				std::string newbc = barcodeTranslator->Translate(bcBuffer, strlen(bcBuffer)) ;
+				fprintf( fp, ">%s\n%s\n", name, newbc.c_str()) ;
+
+			}
+			else
+				fprintf( fp, ">%s\n%s\n", name, bcBuffer ) ;
+		}
 		else
 			fprintf(fp, ">%s\nmissing_barcode\n", name) ;
 	}
@@ -238,6 +251,7 @@ int main( int argc, char *argv[] )
 	ReadFiles barcodeFile ;
 	ReadFiles umiFile ;
 	BarcodeCorrector barcodeCorrector ;
+	BarcodeTranslator barcodeTranslator ;
 	bool hasMate = false ;
 	bool hasBarcode = false ;
 	bool hasBarcodeWhitelist = false ;
@@ -343,9 +357,13 @@ int main( int argc, char *argv[] )
 		{
 			umiRevComp = true ;
 		}
-		else if (c == 10013)
+		else if (c == 10013) // readFormat
 		{
 			readFormatter.Init(optarg) ;
+		}
+		else if (c == 10014) // barcodeTranslate
+		{
+			barcodeTranslator.SetTranslateTable(optarg) ;
 		}
 		else
 		{
@@ -461,10 +479,11 @@ int main( int argc, char *argv[] )
 				if ( hasBarcode )
 					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
 						readFormatter, FORMAT_BARCODE, 
-						hasBarcodeWhitelist ? &barcodeCorrector : NULL) ;
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
+						barcodeTranslator.isSet() ? &barcodeTranslator : NULL) ;
 				if ( hasUmi )
 					OutputBarcode( fpUmi, reads.id, umiFile.seq, umiFile.qual,
-							readFormatter, FORMAT_UMI, NULL) ;
+							readFormatter, FORMAT_UMI, NULL, NULL) ;
 			}
 		}
 	}
@@ -565,11 +584,12 @@ int main( int argc, char *argv[] )
 				if ( hasBarcode )
 					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
 						readFormatter, FORMAT_BARCODE,
-						hasBarcodeWhitelist ? &barcodeCorrector : NULL ) ; 
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
+						barcodeTranslator.isSet() ? &barcodeTranslator : NULL) ;
 				
 				if ( hasUmi )
 					OutputBarcode( fpUmi, readBatch[i].id, umiBatch[i].seq, umiBatch[i].qual, 
-						readFormatter, FORMAT_UMI, NULL) ; 
+						readFormatter, FORMAT_UMI, NULL, NULL) ; 
 			}
 		}
 		
