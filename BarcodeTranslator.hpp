@@ -78,7 +78,7 @@ class BarcodeTranslator {
 			khiter_t barcode_translate_table_iter =
           kh_get(barcodeHash, barcode_translate_table_, bc_from.c_str());
       if (barcode_translate_table_iter == kh_end(barcode_translate_table_)) {
-        std::cerr << "Barcode does not exist in the translation table."
+        std::cerr << "Barcode " << bc_from << " does not exist in the translation table."
                   << std::endl;
         exit(-1);
       }

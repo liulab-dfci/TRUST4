@@ -43,6 +43,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			-k INT: the starting k-mer size for indexing contigs (default: 9)
 			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
 			--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)
+			--barcodeTranslate STRING: path to the barcode translate file (default: not used)
 			--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)
 			--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)
 			--repseq: the data is from TCR-seq or BCR-seq (default: not set)
@@ -116,7 +117,7 @@ The IMGT+C.fa can also be used to generate "bcr_tcr_gene_name.txt" file with com
 
 	grep ">" IMGT+C.fa | cut -f2 -d'>' | cut -f1 -d'*' | sort | uniq > bcr_tcr_gene_name.txt  
 
-* #### 10X Genomics data
+* #### 10X Genomics data and barcode-based single-cell data
 
 When given barcode, TRUST4 only assembles the reads with the same barcode together. For 10X Genomics data, usually the input is the BAM file from cell-ranger, and you can use "--barcode" to specify the field in the BAM file to specify the barcode: e.g. "--barcode CB".
 
@@ -130,7 +131,9 @@ TRUST4 supports using wildcard in the -1 -2/-u option, so a typical way to run 1
 
 	run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -u path_to_10X_fastqs/*_R2_*.fastq.gz --barcode path_to_10X_fastqs/*_R1_*.fastq.gz --readFormat bc:0:15 --barcodeWhitelist cellranger_folder/cellranger-cs/VERSION/lib/python/cellranger/barcodes/737K-august-2016.txt [other options]
 
-The exact options depend on your 10X Genomics kit.
+The exact options depend on your 10X Genomics ikit.
+
+Besides, TRUST4 can translate input cell barcodes to another set of barcodes. You can specify the translation file through the option --barcodeTranslate. The translation file is a two-column tsv/csv file with the translated barcode on the first column and the original barcode on the second column. This option also supports combinatorial barcoding, such as SHARE-seq. TRUST4 can translate each barcode segment provided in the second column to the ID in the first column and add "-" to concatenate the IDs in the output.
 
 In the output, the abundance in the report will use the number of barcodes for the CDR3 instead of read count. TRUST4 will also generate the file trust_barcode_report.tsv. In this file, TRUST4 will pick the most abundance pair of chains as the representative for the barcode(cell). The format is:
 
