@@ -1,9 +1,7 @@
 #ifndef _MOURISL_BARCODETRANSLATOR
 #define _MOURISL_BARCODETRANSLATOR
 
-#include <cinttypes>
 #include <cstring>
-#include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -41,28 +39,19 @@ class BarcodeTranslator {
 
   void SetTranslateTable(const std::string &file) {
     barcode_translate_table_ = kh_init(barcodeHash);
-    
-    if (1) {
-      gzFile barcode_translate_file = gzopen(file.c_str(), "r");
-      const uint32_t line_buffer_size = 512;
-      char file_line[line_buffer_size];
-      while (gzgets(barcode_translate_file, file_line, line_buffer_size) != NULL) {
-        int line_len = strlen(file_line);
-        if (file_line[line_len - 1] == '\n') {
-          file_line[line_len - 1] = '\0';
-        }
-        std::string tmp_string(file_line);
-        ProcessTranslateFileLine(tmp_string);
+
+    gzFile barcode_translate_file = gzopen(file.c_str(), "r");
+    const uint32_t line_buffer_size = 512;
+    char file_line[line_buffer_size];
+    while (gzgets(barcode_translate_file, file_line, line_buffer_size) != NULL) {
+      int line_len = strlen(file_line);
+      if (file_line[line_len - 1] == '\n') {
+        file_line[line_len - 1] = '\0';
       }
-			gzclose(barcode_translate_file) ;
-    } else {
-      // Old implementation, which does not support gzipped input.
-      std::ifstream file_stream(file);
-      std::string file_line;
-      while (getline(file_stream, file_line)) {
-        ProcessTranslateFileLine(file_line);
-      }
+      std::string tmp_string(file_line);
+      ProcessTranslateFileLine(tmp_string);
     }
+    gzclose(barcode_translate_file) ;
   }
 
   std::string Translate(char *bc, uint32_t bc_length) {
