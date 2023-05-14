@@ -531,7 +531,6 @@ public:
 			//printf( "%d %d %d\n", tagi, tagj, mat ) ;
 			if ( mat == 0 )
 			{
-				int max = e[tagi * bmax + tagj] ;
 				int a = EDIT_INSERT ;
 
 				if ( f[tagi * bmax + tagj] >= m[tagi * bmax + tagj] )
@@ -983,7 +982,7 @@ public:
 	static void VisualizeAlignment( char *t, int lent, char *p, int lenp, char *align )
 	{
 		int i, k, j;
-		int tagt, tagp, taga ;
+		int taga ;
 		taga = 0 ;
 		int width = 100 ;
 		k = j = 0 ;

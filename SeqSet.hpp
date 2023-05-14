@@ -235,7 +235,7 @@ private:
 	{
 		int i, j ;
 		int len = strlen( a ) ;
-		if ( len != strlen( b) ) 
+		if ( len != (int)strlen( b) ) 
 			return false ;
 		for ( i = 0, j = len - 1 ; i < len ; ++i, --j )
 			if ( a[i] == 'N' && b[j] == 'N' )
@@ -312,7 +312,7 @@ private:
 		// Only use the first hit of each qhit
 		// Bias towards left
 
-		int i, j, k ;
+		int i, k ;
 		int ret = 0 ;
 		int size = hits.Size() ;
 
@@ -423,7 +423,7 @@ private:
 				continue ;
 			++cnt[ nucToNum[ r[i] - 'A' ] ] ;
 		}
-		int len = o.readEnd - o.readStart + 1 ;
+		//int len = o.readEnd - o.readStart + 1 ;
 		int lowCnt = 0 ; 
 		int lowTotalCnt = 0 ;
 		for ( i = 0 ; i < 4 ; ++i )
@@ -886,7 +886,7 @@ private:
 	// Find the overlaps from hits if it possibly span the CDR3 region and anchor paritally on V and J gene 
 	int GetVJOverlapsFromHits( SimpleVector<struct _hit> &hits, std::vector<struct _overlap> &overlaps )
 	{
-		int i, j, k ;
+		int i, j ;
 		SimpleVector<struct _hit> VJhits ; 		
 		
 		int hitSize = hits.Size() ;
@@ -1127,7 +1127,7 @@ private:
 	void SortHits( SimpleVector<struct _hit> &hits, bool alreadyReadOrder )
 	{
 		int i, k ;
-		if ( hits.Size() > 2 * seqs.size() && alreadyReadOrder ) 
+		if ( (unsigned int)hits.Size() > 2 * seqs.size() && alreadyReadOrder ) 
 		{
 			// Bucket sort.
 			int hitCnt = hits.Size() ;
@@ -1990,7 +1990,6 @@ private:
 
 					for ( j = 0 ; j < size ; ++j )
 					{
-						struct _hit nh ;
 						if ( indexHit[j].idx == k 
 							|| seqs[indexHit[j].idx].barcode != seqs[k].barcode)
 							continue ;
@@ -2065,7 +2064,7 @@ private:
 	int BuildSeqOverlapGraph( int overlapLength, std::vector<struct _overlap> *adj )
 	{
 		// Build overlap graph.
-		int i, j, k ;
+		int i, j ;
 		int seqCnt = seqs.size() ;
 		int maxLen = 0 ;
 		char *align ;
@@ -2179,7 +2178,6 @@ private:
 					continue ;
 
 				struct _overlap extendedOverlap ;
-				int addMatchCnt = 0 ;				
 				// Locally extend the overlap. In this case, the overlap actually just means share.
 				// Allow "radius" overhang.
 				int seqIdx = overlaps[j].seqIdx ;
@@ -2363,7 +2361,6 @@ public:
 		char *buffer = strdup(seqs[idx].consensus) ;
 		ReverseComplement(seqs[idx].consensus, buffer, seqs[idx].consensusLen) ;
 		int i ;
-		struct _posWeight tmp ;
 
 		seqs[idx].posWeight.SetZero( 0, seqs[idx].consensusLen ) ;
 		for ( i = 0 ; i < seqs[idx].consensusLen ; ++i )
@@ -2378,7 +2375,7 @@ public:
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename, bool isIMGT = false ) 
 	{
-		int i, j, k ;
+		int i, k ;
 		ReadFiles fa ;
 		fa.AddReadFile( filename, false ) ;
 		
@@ -2529,20 +2526,29 @@ public:
 	
 	int InputNovelRead( const char *id, char *read, int strand, int barcode )
 	{
+		int i ;
 		struct _seqWrapper ns ;
 		ns.name = strdup( id ) ;
 		ns.isRef = false ;
 		
 		int seqIdx = seqs.size() ;
+
+		int seqLen = strlen( read ) ;
+		ns.consensus = strdup( read ) ;
+		if ( strand == -1 )
+			ReverseComplement( ns.consensus, read, seqLen ) ;
+		ns.consensusLen = seqLen ;	
+		ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
+		ns.barcode = barcode ;
+		for (i = 0 ; i < 3 ; ++i)
+		{
+			struct _triple nt ;
+			nt.a = nt.b = nt.c = 0 ;
+			ns.info[i] = nt ;
+		}
 		seqs.push_back( ns ) ;
 
 		struct _seqWrapper &sw = seqs[ seqIdx ] ;
-		int seqLen = strlen( read ) ;
-		sw.consensus = strdup( read ) ;
-		if ( strand == -1 )
-			ReverseComplement( sw.consensus, read, seqLen ) ;
-		sw.consensusLen = seqLen ;	
-		int i ;
 		sw.posWeight.ExpandTo( sw.consensusLen ) ;
 		sw.posWeight.SetZero( 0, sw.consensusLen ) ;
 		for ( i = 0 ; i < sw.consensusLen ; ++i )
@@ -2553,8 +2559,6 @@ public:
 		KmerCode kmerCode( kmerLength ) ;
 		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
 	
-		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
-		sw.barcode = barcode ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, strand ) ;
 
 
@@ -2570,17 +2574,24 @@ public:
 		ns.name = strdup( name ) ;
 		ns.isRef = false ;
 		int seqIdx = seqs.size() ;
+		//struct _seqWrapper &sw = seqs[ seqIdx ] ;
+		int seqLen = strlen( seq ) ;
+		ns.consensus = strdup( seq ) ;
+		ns.consensusLen = seqLen ;	
+		ns.barcode = -1 ;	
+		ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
+		for (int i = 0 ; i < 3 ; ++i)
+		{
+			struct _triple nt ;
+			nt.a = nt.b = nt.c = 0 ;
+			ns.info[i] = nt ;
+		}
 		seqs.push_back( ns ) ;
 
-		struct _seqWrapper &sw = seqs[ seqIdx ] ;
-		int seqLen = strlen( seq ) ;
-		sw.consensus = strdup( seq ) ;
-		sw.consensusLen = seqLen ;	
-		sw.posWeight = posWeight ;
+		seqs[ seqIdx].posWeight = posWeight ;
+		
 		KmerCode kmerCode( kmerLength ) ;
-		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
-		sw.barcode = -1 ;	
-		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
+		seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, seqLen, seqIdx ) ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 
 		return seqIdx ;
@@ -2589,7 +2600,7 @@ public:
 	// Input sequence from another SeqSet
 	void InputSeqSet( const SeqSet &in, bool inputRef )
 	{
-		int i, k ;
+		int i ;
 		int seqCnt = in.seqs.size() ;
 		KmerCode kmerCode( kmerLength ) ;
 		
@@ -2673,7 +2684,8 @@ public:
 		GetOverlapsFromHits( buckets[maxTag][maxSeqIdx], hitLenRequired, 1, overlaps ) ;
 		delete[] buckets[0] ;
 		delete[] buckets[1] ;
-		for ( i = 0 ; i < overlaps.size() ; ++i )
+		int size = overlaps.size() ;
+		for ( i = 0 ; i < size ; ++i )
 		{
 			//printf( "%s\n", seqs[ overlaps[i].seqIdx ].name ) ;
 			delete overlaps[i].hitCoords ;
@@ -3277,7 +3289,6 @@ public:
 				
 				// Compute the location of the seqs in the new merged seq
 				int *seqOffset = new int[ eOverlapCnt ] ; 
-				int base = 0 ;
 				
 				if ( extendedOverlaps[0].readStart > 0 )
 				{
@@ -3362,7 +3373,6 @@ public:
 
 					for ( j = 0 ; j < seqs[ seqIdx ].consensusLen ; ++j )
 					{
-						int l ;
 						posWeight[ seqOffset[i] + j ] += seqs[ seqIdx ].posWeight[j] ;
 					}
 				}
@@ -3898,7 +3908,7 @@ public:
 	// Remove unneeded entries and rebuild the index.
 	void Clean( bool removeRefSeq )
 	{
-		int i, j, k ;
+		int i, k ;
 		int seqCnt = seqs.size() ;
 		k = 0 ;
 		KmerCode kmerCode( kmerLength ) ;
@@ -3976,7 +3986,6 @@ public:
 		  {
 		  printf( "- %d %d: %d %d %d %lf\n", i + 1, j, mateOverlaps[j].seqIdx, mateOverlaps[j].seqStart, mateOverlaps[j].seqEnd, mateOverlaps[j].similarity) ;
 		  }*/
-		int extendCnt = 0 ;
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
 			//printf( "%d %d: %d-%d %d-%d %lf\n", i, overlaps[i].seqIdx, overlaps[i].readStart, overlaps[i].readEnd,
@@ -4219,7 +4228,7 @@ public:
 				ns.posWeight.SetZero( 0, newConsensusLen ) ;
 				for ( j = 0 ; j < k ; ++j )
 				{
-					int l, c ;
+					int l ;
 					int seqIdx = path[j] ;
 					for ( l = 0 ; l < seqs[ seqIdx ].consensusLen ; ++l )
 						ns.posWeight[l + seqOffset[j] ] += seqs[ seqIdx ].posWeight[l] ; 
@@ -4700,7 +4709,7 @@ public:
 	int ImputeAnchorCDR3( char *read, char *nr, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
 			std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
-		int i, j, k ;
+		int i, j ;
 		// Locate the insert position
 		int insertAt = -1 ; // Every position >= insertAt will be shifted
 		int insertLen = -1 ;
@@ -4947,7 +4956,7 @@ public:
 	int ImputeInternalCDR3( char *read, char *nr, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
 			std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
-		int i, j, k ;
+		int i, j ;
 		if ( geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1 )
 			return -1 ;
 		int vSeqIdx = geneOverlap[0].seqIdx ;
@@ -4960,7 +4969,7 @@ public:
 		
 		// Make sure there is exactly one gap.
 		int gapCnt = 0 ;
-		int gapStart, gapEnd ;
+		int gapStart = -1, gapEnd = -1 ;
 		for ( i = 0 ; i < contigCnt - 1 ; ++i )
 		{
 			if ( contigs[i].b >= cdr[2].readStart && contigs[i].b <= cdr[2].readEnd 
@@ -4993,7 +5002,7 @@ public:
 		{
 			bool valid = true ;
 			struct _seqWrapper &seq = seqs[ vSeqIdx ] ;
-			for ( i = seq.info[2].a, j = cdr[2].readStart ; i < seq.consensusLen, j < gapStart ; ++i, ++j )
+			for ( i = seq.info[2].a, j = cdr[2].readStart ; i < seq.consensusLen && j < gapStart ; ++i, ++j )
 				if ( seq.consensus[i] != read[j] )
 					valid = false ;
 			if ( valid == false )
@@ -5114,7 +5123,7 @@ public:
 	int AnnotateReadDGene( char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
 		std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
-		int i, j, k ;
+		int i, j ;
 		std::vector< std::vector<struct _overlap> > overlaps ;
 		SimpleVector<int> dGeneSeqIdx ;
 
@@ -5816,7 +5825,7 @@ public:
 					 	> geneOverlap[2].readStart + 6 ) 
 					 && GetContigIdx(geneOverlap[0].readEnd, contigs) == GetContigIdx(geneOverlap[2].readStart, contigs))) ) 
 				{
-					struct _overlap orig = geneOverlap[0] ;
+					//struct _overlap orig = geneOverlap[0] ;
 					geneOverlap[0].seqIdx = -1 ;
 					geneOverlap[0].matchCnt = -1 ;
 					for ( i = 0 ; i < size ; ++i )
@@ -5879,7 +5888,7 @@ public:
 				{
 					i = vgene.readStart - 1 ;
 					j = vgene.seqStart - 1 ;
-					int readRangeStart, readRangeEnd ;
+					int readRangeStart = 0, readRangeEnd = 0 ;
 					int matchCnt = 0 ;
 					for ( k = 0 ; vAlign[k] != -1 ; ++k )	
 					{
@@ -6124,7 +6133,7 @@ public:
 			int locateS = -1 ;
 			int locateE = -1 ;
 			int extendS = -1 ;
-			int extendE = -1 ;
+			//int extendE = -1 ;
 
 			if ( geneOverlap[0].seqIdx != -1 )
 			{
@@ -6437,8 +6446,8 @@ public:
 							{
 								locateE = i - ( j - dest ) ;
 							}
-							else if ( j > dest && j - dest < 10 )
-								extendE = i - ( j - dest ) - 5 ;
+							//else if ( j > dest && j - dest < 10 )
+							//	extendE = i - ( j - dest ) - 5 ;
 						}
 						delete[] align ;
 					}
@@ -8077,7 +8086,6 @@ public:
 		}
 
 		// Break up the Seq 
-		int newSeqId = seqCnt ;
 		KmerCode kmerCode( kmerLength ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
@@ -8148,7 +8156,7 @@ public:
 					ns.posWeight.PushBack( seqs[i].posWeight[l] ) ;	
 
 				seqs.push_back( ns ) ;
-				printf( "Break %d to %d.\n", i, seqs.size() - 1 ) ;
+				//printf( "Break %d to %d.\n", i, seqs.size() - 1 ) ;
 			}
 			// Clean up original seq
 			seqIndex.RemoveIndexFromRead( kmerCode, seqs[i].consensus, seqs[i].consensusLen, i, 0 ) ;
@@ -8206,7 +8214,7 @@ public:
 			std::vector<struct _overlap> *prevAdj, std::vector<struct _overlap> *nextAdj, 
 			std::vector<struct _assignRead> &reads )
 	{
-		int i, j, k ;
+		int i, j ;
 		int seqCnt = seqs.size() ;
 
 		for ( i = 0 ; i < seqCnt ; ++i )
@@ -8561,7 +8569,6 @@ public:
 	{
 		int i ;
 		int readCnt = reads.size() ;
-		int seqCnt = seqs.size() ;
 		for ( i = 0 ; i < readCnt ; ++i )
 		{
 			bool paired = false ;
@@ -8697,7 +8704,6 @@ public:
 		double backupNovelSeqSimilarity = novelSeqSimilarity ;
 
 		novelSeqSimilarity = 1.00 ;
-		int ret = 0 ;
 
 		std::vector<struct _overlap> *branchAdj = new std::vector<struct _overlap>[ seqCnt ] ;
 
@@ -9208,7 +9214,7 @@ public:
 			uniqueSuccessorOf[i] = -1 ;
 			
 			int prevTag = matePrevNext[i].a ;
-			int nextTag = matePrevNext[i].b ;
+			//int nextTag = matePrevNext[i].b ;
 			//if ( i == 47 )
 			//	fprintf( stderr, "hi %d %d %d %d\n", prevTag, nextTag,
 			//		prevAdj[i][prevTag].seqIdx, nextAdj[i][nextTag].seqIdx ) ;
@@ -9297,8 +9303,8 @@ public:
 				continue ;
 			}
 			
-			int first = i ;
-			int firstPrevTag = matePrevNext[i].a ;
+			//int first = i ;
+			//int firstPrevTag = matePrevNext[i].a ;
 			int last = i ;
 			int lastNextTag = matePrevNext[i].b ;
 			
@@ -9768,7 +9774,7 @@ public:
 			if ( seqs[i].isRef || seqs[i].consensus == NULL )
 				continue ;
 			
-			if ( barcodeIntToStr == NULL || seqs[i].barcode == -1 || seqs[i].barcode >= barcodeIntToStr->size() )
+			if ( barcodeIntToStr == NULL || seqs[i].barcode == -1 || seqs[i].barcode >= (int)barcodeIntToStr->size() )
 				fprintf( fp, ">assemble%d %s\n%s\n", i, seqs[i].name, seqs[i].consensus ) ;
 			else
 				fprintf( fp, ">%s_%d %s\n%s\n", barcodeIntToStr->at( seqs[i].barcode ).c_str(), i, seqs[i].name, 
@@ -9785,7 +9791,7 @@ public:
 
 	void OutputRef( FILE *fp )
 	{
-		int i, j, k ;
+		int i ;
 		int size = seqs.size() ;
 		for ( i = 0 ; i < size ; ++i )
 		{

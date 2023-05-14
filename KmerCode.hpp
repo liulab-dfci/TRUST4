@@ -4,9 +4,6 @@
 #include <stdio.h>
 #include "defs.h"
 
-extern char nucToNum[26] ;
-extern char numToNuc[26] ;
-
 class KmerCode
 {
 	private:

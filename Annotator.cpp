@@ -33,7 +33,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t--needReverseComplement: reverse complement sequences on another strand (default: no)\n"
 		"\t--readAssignment STRING: output the read assignment to the file (default: no output)\n";
 
-char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
+int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
 	-1, -1, -1, -1, -1, -1 } ;
@@ -177,7 +177,7 @@ bool IsSameFragment(char *id1, char *id2, char *s1, char *s2)
 // Could be improved by using BitTable and compress the read covering the same set of CDR3s.
 void AbundanceEstimation( std::vector< SimpleVector<int> > &compat, std::vector< struct _CDR3info >& info )
 {
-	int i, j, k, t ;
+	int i, j, t ;
 	double endD = 1e-6 ;
 	int cCnt = info.size() ;
 	int rCnt = compat.size() ;
@@ -398,8 +398,6 @@ int main( int argc, char *argv[] )
 	int c, option_index ;
 	FileLineReader flrAssembly ;
 	FILE *fpReadAssignment = NULL ;
-	struct _overlap geneOverlap[4] ;
-	struct _overlap cdr[3] ; // the coordinate for cdr1,2,3
 	option_index = 0 ;
 	bool ignoreWeight = false ;
 	char outputPrefix[1024] = "trust" ;

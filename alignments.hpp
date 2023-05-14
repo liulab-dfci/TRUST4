@@ -186,7 +186,7 @@ public:
 			//if ( bam_cigar2qlen( &b->core, rawCigar ) != b->core.l_qseq ) 
 			//	continue ;
 
-			bool clipMiddle = false ;
+			//bool clipMiddle = false ;
 			int clipSum = 0 ;
 			hasClipHead = hasClipTail = false ;
 			len = 0 ;
@@ -209,8 +209,8 @@ public:
 							hasClipHead = true ;
 						else if ( i == b->core.n_cigar - 1 )
 							hasClipTail = true ;
-						else 
-							clipMiddle = true ;
+						//else 
+						//	clipMiddle = true ;
 					
 						clipSum += num ;
 					}

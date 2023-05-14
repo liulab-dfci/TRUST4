@@ -107,7 +107,7 @@ private:
   {
     int i ;
     for (i = 0 ; i < len ; ++i)
-      buffer[i] = _compChar[ buffer[i] ] ;
+      buffer[i] = _compChar[ (int)buffer[i] ] ;
   }
 
 public:

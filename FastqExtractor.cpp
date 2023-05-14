@@ -59,7 +59,7 @@ static struct option long_options[] = {
 
 char buffer[100001] ;
 char seqBuffer[100001] ;
-char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
+int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
 	-1, -1, -1, -1, -1, -1 } ;
@@ -171,7 +171,7 @@ void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual,
 
 void *ProcessReads_Thread( void *pArg )
 {
-	int i, j ;	
+	int i ;	
 	struct _threadArg &arg = *((struct _threadArg *)pArg ) ;
 	for ( i = 0 ; i < arg.batchSize ; ++i )
 	{
@@ -596,7 +596,6 @@ int main( int argc, char *argv[] )
 		// Release memory.
 		for ( i = 0 ; i < maxBatchSize ; ++i )
 		{
-			int j ;
 			free( readBatch[i].id ) ;
 			free( readBatch[i].seq ) ;
 			if ( readBatch[i].qual )

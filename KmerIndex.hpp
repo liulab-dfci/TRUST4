@@ -37,7 +37,7 @@ public:
 
 	~KmerIndex()
 	{
-		int sum = 0 ;
+		//int sum = 0 ;
 		//for ( int i = 0 ; i < hashSize ; ++i )
 		//{
 		//	sum += /*sizeof( hash[i] ) +*/ hash[i].Memory() ;
@@ -161,9 +161,9 @@ public:
 					}
 				}
 			}
-			SimpleVector<struct _indexInfo> &list = *Search( kmerCode ) ;	
-			int size = list.Size() ;
 
+			//SimpleVector<struct _indexInfo> &list = *Search( kmerCode ) ;	
+			//int size = list.Size() ;
 			//for ( j = 0 ; j < size ; ++j )
 			//	printf( "test %d %d\n", list[j].idx, list[j].offset ) ;
 		}
@@ -172,7 +172,7 @@ public:
 
 	void RemoveIndexFromRead( KmerCode &kmerCode, char *s, int len, int id, int offset )
 	{
-		int i, j ;
+		int i ;
 		int kl = kmerCode.GetKmerLength() ;
 		if ( len < kl )
 			return ;

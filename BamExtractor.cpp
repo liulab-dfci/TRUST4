@@ -38,7 +38,7 @@ char buffer2[100001] ;
 char bufferQual[100001] ;
 char bufferQual2[100001] ;
 char seqBuffer[100001] ;
-char nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
+int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
 	-1, -1, -1, -1, -1, -1 } ;
@@ -240,7 +240,7 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 		arg.candidates[k].name = NULL ;
 	}
 
-	if ( *info.oqCnt > 2 * arg.candidates.size() )
+	if ( *info.oqCnt > 2 * (int)arg.candidates.size() )
 	{
 		for ( i = 0 ; i < *info.oqCnt ; ++i )
 		{
@@ -308,7 +308,7 @@ void *ProcessUnmappedReads_Thread( void *pArg )
 void InitWork( pthread_t **threads, struct _threadArg **threadArgs, pthread_attr_t &attr, int threadCnt )
 {
 	int i ;
-	struct _threadInfo info ;
+	//struct _threadInfo info ;
 	
 	*threads = new pthread_t[ threadCnt ] ;
 	*threadArgs = new struct _threadArg[ threadCnt ] ;
@@ -393,7 +393,7 @@ void AddWorkQueue( struct _unmappedCandidate &c, std::vector<struct _unmappedCan
 	struct _threadArg *threadArgs, pthread_t *threads, pthread_attr_t &attr, int workLoad, int threadCnt )
 {
 	work.push_back( c ) ;
-	if ( work.size() >= workLoad )
+	if ( (int)work.size() >= workLoad )
 		DistributeWork( work, threadArgs, threads, attr, threadCnt ) ; 
 }
 
