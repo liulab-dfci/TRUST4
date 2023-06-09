@@ -480,10 +480,10 @@ foreach my $key (keys %barcodeChainOther)
 	my %AaAssembleId ;
 	my @newInfos = ();
 	my @cols = split /,/,$representative ;
-	if (!defined $cols[5])
-	{
-		print("$representative $key ".@{$barcodeChainOther{$key}}."\n") ;
-	}
+	#if (!defined $cols[5])
+	#{
+	#	print("$representative $key ".@{$barcodeChainOther{$key}}."\n") ;
+	#}
 	$abundAa{$cols[5]} = $cols[6] ;
 	$AaAssembleId{$cols[5]} = $cols[7] ;
 	foreach my $info (@{$barcodeChainOther{$key}})
@@ -505,8 +505,14 @@ foreach my $key (keys %barcodeChainOther)
 			push @newInfos, $info ;
 		}
 	}
-
-	@{$barcodeChainOther{$key}} = @newInfos ;
+	if (scalar(@newInfos) > 0)
+	{
+		@{$barcodeChainOther{$key}} = @newInfos ;
+	}
+	else
+	{
+		delete($barcodeChainOther{$key}) ;
+	}
 }
 
 # Generate the output content.
