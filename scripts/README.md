@@ -31,4 +31,4 @@ or
 
 `./tcrmatch -i trust_airr_report.tsv -d CEDAR_data.tsv -t 8 -a > trust_with_epitope.txt`
 
-You can also upload the trust_report.tsv to TCRMatch's web portal on IEDB [http://tools.iedb.org/tcrmatch/](http://tools.iedb.org/tcrmatch/).  
+You can also upload the trust_report.tsv to TCRMatch's web portal on IEDB: [http://tools.iedb.org/tcrmatch/](http://tools.iedb.org/tcrmatch/).  
