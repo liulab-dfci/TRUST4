@@ -1,4 +1,4 @@
-Scripts in TRUST4
+Scripts and other post-analysis for TRUST4
 =======
 
 This folder contains scripts and comments for post processing TRUST4's results. The detailed information for each python scripts can be found by running "python3 the_script.py -h". The detailed information for perl scripts can be found by running "perl the_script.pl".
@@ -26,5 +26,9 @@ Add the gaps defined in the IMGT file to sequence_alignment and germline_alignme
 TRUST4's report file and the AIRR output format is compatible with eptiope prediction methods, such as [TCRMatch](https://github.com/IEDB/TCRMatch). You can use command like
 
 `./tcrmatch -i trust_report.tsv -d CEDAR_data.tsv -t 8 -r > trust_with_epitope.txt`
+
 or
+
 `./tcrmatch -i trust_airr_report.tsv -d CEDAR_data.tsv -t 8 -a > trust_with_epitope.txt`
+
+You can also upload the trust_report.tsv to TCRMatch's web portal on IEDB [http://tools.iedb.org/tcrmatch/](http://tools.iedb.org/tcrmatch/).  
