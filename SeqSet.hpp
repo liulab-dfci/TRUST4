@@ -464,9 +464,9 @@ private:
 	char DnaToAa( char a, char b, char c )
 	{
 		if ( a == 'N' || b == 'N' || c == 'N' )
-			return '-' ;
+			return '?' ;
 		if ( a == 'M' || b == 'M' || c == 'M' )
-			return '-' ;
+			return '?' ;
 
 		if ( a == 'A' )
 		{
@@ -546,7 +546,7 @@ private:
 			if ( b == 'A' )
 			{
 				if ( c == 'A' || c == 'G' )
-					return '*' ;
+					return '_' ;
 				else
 					return 'Y' ;
 			}
@@ -557,7 +557,7 @@ private:
 			else if ( b == 'G' )
 			{
 				if ( c == 'A' )
-					return '*' ;
+					return '_' ;
 				else if ( c == 'G' )
 					return 'W' ;
 				else
@@ -7837,13 +7837,16 @@ public:
 		free( r ) ;
 	}
 
-	// Output the information for AIRR format: vcigar, dcigar, jcigar, sequence_alignment, germline_alignment, cdr3_start in the sequence_alignment string.
-	void AnnotationToAirrAlign(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], char *buffer)
+	// Output the information for AIRR alignmend format: vcigar, dcigar, jcigar, sequence_alignment, germline_alignment, cdr3_start in the sequence_alignment string.
+  // return: the airr alignment string. Need to be release externally.
+	char *AnnotationToAirrAlign(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], bool includeCDR3Coordinate)
 	{
 		int i, j, k, l, m ;
-		char *align[3] ; // align part for v, d, j genes.
-		char *buffer2 = new char[10023] ;
-		char *buffer3 = new char[10023] ;
+		int len = strlen(read) ;
+    char *align[3] ; // align part for v, d, j genes.
+    char *buffer = (char *)malloc(sizeof(char) * 5 * len) ;
+    char *buffer2 = new char[2 * len] ; // sequence_align
+		char *buffer3 = new char[2 * len] ; // germline_align
 		align[0] = align[1] = align[2] = NULL ;
 		for (i = 0 ; i < 3 ; ++i)
 			align[i] = GetGeneOverlapAlignment(read, geneOverlap[i]) ;
@@ -7942,14 +7945,136 @@ public:
 		}
 		buffer2[i] = '\0' ;
 		buffer3[i] = '\0' ;
-		sprintf(buffer + strlen(buffer), "%s\t%s\t%d\t%d", buffer2, buffer3, cdr3AdjustedStart, cdr3AdjustedEnd) ;
+    if (includeCDR3Coordinate)
+      sprintf(buffer + strlen(buffer), "%s\t%s\t%d\t%d", buffer2, buffer3, cdr3AdjustedStart, cdr3AdjustedEnd) ;
+    else
+      sprintf(buffer + strlen(buffer), "%s\t%s", buffer2, buffer3) ;
 
 		for (i = 0 ; i < 3 ; ++i)
 			if (align[i])
 				delete[] align[i] ;
 		delete[] buffer2 ;
 		delete[] buffer3 ;
+
+    return buffer ;
 	}
+
+  // sequence_id, isfulllength, etc will be handled outside
+  // this is only the information generated internally by seqset
+  void GetPartAirrHeader(char *buffer)
+  {
+    // 18 columns
+    strcpy(buffer, "sequence\trev_comp\tv_call\td_call\tj_call\tc_call\tv_cigar\td_cigar\tj_cigar\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tproductive\tv_identity\tj_identity") ;
+  }
+
+  // Notice the difference to AirrAlign, which is part of the airr fields focusing on the alignment information
+  // sequence_id will be printed externally
+	char *AnnotationToAirrString(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3])
+  {
+    int i ;
+    int len = strlen(read) ;
+    char *buffer = (char *)malloc(sizeof(char) * 20 * len) ;
+    
+    sprintf(buffer, "%s", read) ;
+
+    int gidx = 0 ;
+    for (gidx = 0 ; gidx < 4 ; ++gidx)
+      if (geneOverlap[gidx].seqIdx != -1)
+        break ;
+    
+    if (gidx >= 4 && cdr[2].seqIdx == -1)
+    {
+      // sequence is already written
+      for (i = 1 ; i < 18 ; ++i)
+      {
+        if (i != 15)
+          sprintf(buffer + strlen(buffer), "\t") ;
+        else
+          sprintf(buffer + strlen(buffer), "\tF") ;
+      }
+    }
+
+    char revComp = 'F' ;
+    if (geneOverlap[gidx].strand == -1)
+      revComp = 'T' ;
+    sprintf(buffer + strlen(buffer), "\t%c", revComp) ;
+    
+    //v,d,j,c calls
+    for (i = 0 ; i < 4 ; ++i)
+    {
+      if (geneOverlap[i].seqIdx == -1)
+        sprintf(buffer + strlen(buffer), "\t") ;
+      else
+        sprintf(buffer + strlen(buffer), "\t%s", GetSeqName(geneOverlap[i].seqIdx)) ;
+    }
+    
+    //v,d,j cigar, sequen align, germline align
+    char *alignStr = AnnotationToAirrAlign(read, geneOverlap, cdr, false) ;
+    sprintf(buffer + strlen(buffer), "\t%s", alignStr) ;
+    free(alignStr) ;
+    
+    //cdr1, 2
+    char cdrBuffer[1024] ;
+    for (i = 0 ; i <= 1 ; ++i)
+    {
+      if (cdr[i].seqIdx == -1)
+      {
+        sprintf(buffer + strlen(buffer), "\t") ;
+        continue ;
+      }
+      else
+      {
+        memcpy(cdrBuffer, read + cdr[i].readStart, cdr[i].readEnd - cdr[i].readStart + 1) ;
+        cdrBuffer[cdr[i].readEnd - cdr[i].readStart + 1] = '\0' ;
+        sprintf(buffer + strlen(buffer), "\t%s", cdrBuffer) ;
+      }
+    }
+
+    // cdr3 (junction) nt, aa, productive
+    if (cdr[2].seqIdx == -1)
+    {
+      sprintf(buffer + strlen(buffer), "\t\t\tF") ;
+    }
+    else
+    {
+      int cdrLen = cdr[2].readEnd - cdr[2].readStart + 1 ;
+      memcpy(cdrBuffer, read + cdr[2].readStart, cdrLen) ;
+      cdrBuffer[cdrLen] = '\0' ;
+      sprintf(buffer + strlen(buffer), "\t%s", cdrBuffer) ;
+
+      if (cdrLen % 3 != 0)
+      {
+        sprintf(buffer + strlen(buffer), "\tout_of_frame\tF") ;
+      }
+      else
+      {
+        int k = 0 ;
+        char productive = 'T' ;
+        for (i = cdr[2].readStart ; i <= cdr[2].readEnd ; i += 3)
+        {
+          char aa = DnaToAa(read[i], read[i + 1], read[i + 2]) ;
+          if (aa < 'A' || aa > 'Z')
+            productive = 'F' ;
+
+          cdrBuffer[k] = aa ;
+          ++k ;
+        }
+        cdrBuffer[k] = '\0' ;
+        sprintf(buffer + strlen(buffer), "\t%s\t%c", cdrBuffer, productive) ;
+      }
+    }
+
+    //v,j identitiy
+    for (i = 0 ; i <= 2 ; i += 2)
+    {
+      if (geneOverlap[i].seqIdx != -1)
+        sprintf(buffer + strlen(buffer), "\t%.2lf", geneOverlap[i].similarity * 100) ;
+      else
+        sprintf(buffer + strlen(buffer), "\t") ;
+    }
+
+    return buffer ;
+  }
 
 	char *GetGeneOverlapAlignment(char *read, const struct _overlap gene )
 	{

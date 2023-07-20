@@ -31,6 +31,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n"
 		"\t--outputCDR3File: output CDR3 file when not using -r option (default: no output)\n"
 		"\t--needReverseComplement: reverse complement sequences on another strand (default: no)\n"
+    "\t--outputFormat INT: 0-fasta, 1-AIRR. (default: 0 (fasta))\n" 
 		"\t--readAssignment STRING: output the read assignment to the file (default: no output)\n";
 
 int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -58,6 +59,7 @@ static struct option long_options[] = {
 			{ "needReverseComplement", no_argument, 0, 10010 },
 			{ "fastq", no_argument, 0, 10011 },
 			{ "airrAlignment", no_argument, 0, 10012 }, 
+			{ "outputFormat", required_argument, 0, 10013 }, 
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -413,7 +415,8 @@ int main( int argc, char *argv[] )
 	bool outputCDR3File = false ; // whether output the cdr3 file when the input is fasta
 	bool needRC = false ; // need reverse complment
 	int format = 0 ; // 0-trust4 format. 1-fasta, 2-fastq
-	std::map<std::string, int> barcodeStrToInt ;
+	int outputFormat = 0 ; //0-fasta, 1-airr
+  std::map<std::string, int> barcodeStrToInt ;
 
 	while ( 1 )
 	{
@@ -497,6 +500,10 @@ int main( int argc, char *argv[] )
 		{
 			outputAirrAlignment = true ;
 		}
+    else if (c == 10013) // outputFormat
+    {
+      outputFormat = atoi(optarg) ;
+    }
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -643,39 +650,57 @@ int main( int argc, char *argv[] )
 	// Use global information to break ties
 	AnnotationTieBreak( annotations, seqSet, refSet ) ;
 
-	// Output the annotation of consensus assemblies
-	FILE *fpAirrAlignment = NULL ;
-	if (outputAirrAlignment) 
-	{
-		sprintf(buffer, "%s_airr_align.tsv", outputPrefix) ;
-		fpAirrAlignment = fopen(buffer, "w") ;
-	}
-
-	for ( i = 0 ; i < seqCnt ; ++i )
-	{
-		int weightSum = seqSet.GetSeqWeightSum( i ) ; 
-		int len = seqSet.GetSeqConsensusLen( i ) ;
-		sprintf( buffer, ">%s %d %.2lf", seqSet.GetSeqName( i ), len, (double)weightSum / 500.0 ) ;
-		refSet.AnnotationToString( seqSet.GetSeqConsensus( i ), annotations[i].geneOverlap, 
-			annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, outputGeneAlignment, buffer + strlen( buffer ) ) ;
-		printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
-
-		if (outputAirrAlignment && annotations[i].cdr[2].seqIdx != -1)
-		{
-			refSet.AnnotationToAirrAlign(seqSet.GetSeqConsensus(i), annotations[i].geneOverlap, annotations[i].cdr, buffer) ;
-			fprintf(fpAirrAlignment, "%s\t%s\n", seqSet.GetSeqName(i), buffer) ;
-		}
-	}
-
-	if (outputAirrAlignment)
-		fclose( fpAirrAlignment ) ;
-	
-	// Add other informations for annotation.
+  // Add other informations for annotation.
 	for ( i = 0 ;i < seqCnt ; ++i )
 	{
 		annotations[i].isFullLength = IsFullLengthAssembly( seqSet.GetSeqConsensus(i), annotations[i], refSet ) ;
 	}
-	
+
+	// Output the annotation of consensus assemblies
+  if (outputFormat == 1)
+  {
+    refSet.GetPartAirrHeader(buffer) ;
+    printf("sequence_id\t%s\tcomplete_vdj\n", buffer) ;
+  }
+
+	for ( i = 0 ; i < seqCnt ; ++i )
+	{
+		if (outputFormat != 1)
+    {
+      int weightSum = seqSet.GetSeqWeightSum( i ) ; 
+      int len = seqSet.GetSeqConsensusLen( i ) ;
+      sprintf( buffer, ">%s %d %.2lf", seqSet.GetSeqName( i ), len, (double)weightSum / 500.0 ) ;
+      refSet.AnnotationToString( seqSet.GetSeqConsensus( i ), annotations[i].geneOverlap, 
+          annotations[i].cdr, &annotations[i].secondaryGeneOverlaps, outputGeneAlignment, buffer + strlen( buffer ) ) ;
+      printf( "%s\n%s\n", buffer, seqSet.GetSeqConsensus( i ) ) ;
+    }
+    else
+    {
+      char *airrStr = refSet.AnnotationToAirrString( seqSet.GetSeqConsensus( i ), annotations[i].geneOverlap, annotations[i].cdr) ;
+      printf("%s\t%s\t%c\n", seqSet.GetSeqName( i ), 
+          airrStr, annotations[i].isFullLength ? 'T' : 'F') ;    
+      free(airrStr) ;
+    }
+	}
+
+	if (outputAirrAlignment)
+  {
+    FILE *fpAirrAlignment = NULL ;
+		sprintf(buffer, "%s_airr_align.tsv", outputPrefix) ;
+		fpAirrAlignment = fopen(buffer, "w") ;
+
+    for (i = 0 ; i < seqCnt ; ++i)
+    {
+      if (annotations[i].cdr[2].seqIdx != -1)
+      {
+        char *airrAlignStr = refSet.AnnotationToAirrAlign(seqSet.GetSeqConsensus(i), annotations[i].geneOverlap, annotations[i].cdr, true) ;
+        fprintf(fpAirrAlignment, "%s\t%s\n", seqSet.GetSeqName(i), airrAlignStr) ;
+        free(airrAlignStr) ;
+      }
+    }
+		fclose( fpAirrAlignment ) ;
+  }
+		
 	// Output more CDR3 information 
 	if ( flrReads.IsOpen() )
 	{
