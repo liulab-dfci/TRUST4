@@ -171,7 +171,7 @@ If you are interested in a subset of chains, you can "grep" those from trust_cdr
 
 You can use the "annotator" from TRUST4 to annotate the V,D,J,C genes and CDRs for any given sequences, just like using IgBLAST or IMGT/VQuest. To obtain the annotation in AIRR format for human sequences with eight threads, you can use the command
 
-  ./annotator -f human_IMGT+C.fa -a input.fa --fasta -t 8 --needReveserComplement --noImpute --outputFormat 1 > annotation.tsv 
+	./annotator -f human_IMGT+C.fa -a input.fa --fasta -t 8 --needReveserComplement --noImpute --outputFormat 1 > annotation.tsv 
  
 ### Example
 
