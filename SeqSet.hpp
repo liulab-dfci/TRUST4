@@ -5382,24 +5382,36 @@ public:
 		k = 0 ;
 		memset( seqUsed, -1, sizeof( int ) * seqs.size() ) ;	
 		overlapCnt = overlaps.size() ;
-		//int geneUsed[4] = {-1, -1, -1, -1} ; //V, D, J, C gene
 		double geneSimilarity[4] = {0.8, 0.8, 0.8, 0.8} ; // cut off for different genes
+		
 		// Handle the case a secondary assignment may have high similairty due to short
 		//   alignment range, so we will lower the similarity threshhold to the best
 		//   prelminarty assignment.
-		/*for (i = 0 ; i < overlapCnt ; ++i)
+		if (detailLevel >= 2)
 		{
-			int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
-			if (geneUsed[geneType] == -1 || geneType != 0)
-				geneUsed[geneType] = i ;
-			else
+			int geneUsed[4] = {-1, -1, -1, -1} ; //V, D, J, C gene
+			int geneCompared[4] = {0, 0, 0, 0} ; // whether this gene has bee compared or not.
+			for (i = 0 ; i < overlapCnt ; ++i)
 			{
-				if (overlaps[i].similarity >= geneSimilarity[geneType] 
-						&& overlaps[ geneUsed[geneType] ].similarity < geneSimilarity[geneType]
-						&& overlaps[i].matchCnt <= overlaps[ geneUsed[geneType] ].matchCnt - 4 * hitLenRequired)
-					geneSimilarity[geneType] = overlaps[ geneUsed[geneType] ].similarity ;
+				int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
+				if (geneCompared[geneType] == 1)
+					continue ;
+
+				if (geneUsed[geneType] == -1)
+					geneUsed[geneType] = i ;
+				else
+				{
+					if (overlaps[i].similarity >= geneSimilarity[geneType])
+					{
+						// If the first gene get pass the similarity threshold but due to short read alignment, we need to lower the similarity threshold to retain the real gene hit.
+						if (overlaps[ geneUsed[geneType] ].similarity < geneSimilarity[geneType]
+								&& overlaps[i].matchCnt <= overlaps[ geneUsed[geneType] ].matchCnt - 4 * hitLenRequired)
+							geneSimilarity[geneType] = overlaps[ geneUsed[geneType] ].similarity ;
+						geneCompared[geneType] = 1 ;
+					}	
+				}
 			}
-		}*/
+		}
 
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
