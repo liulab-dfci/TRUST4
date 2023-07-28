@@ -5382,14 +5382,35 @@ public:
 		k = 0 ;
 		memset( seqUsed, -1, sizeof( int ) * seqs.size() ) ;	
 		overlapCnt = overlaps.size() ;
+		//int geneUsed[4] = {-1, -1, -1, -1} ; //V, D, J, C gene
+		double geneSimilarity[4] = {0.8, 0.8, 0.8, 0.8} ; // cut off for different genes
+		// Handle the case a secondary assignment may have high similairty due to short
+		//   alignment range, so we will lower the similarity threshhold to the best
+		//   prelminarty assignment.
+		/*for (i = 0 ; i < overlapCnt ; ++i)
+		{
+			int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
+			if (geneUsed[geneType] == -1 || geneType != 0)
+				geneUsed[geneType] = i ;
+			else
+			{
+				if (overlaps[i].similarity >= geneSimilarity[geneType] 
+						&& overlaps[ geneUsed[geneType] ].similarity < geneSimilarity[geneType]
+						&& overlaps[i].matchCnt <= overlaps[ geneUsed[geneType] ].matchCnt - 4 * hitLenRequired)
+					geneSimilarity[geneType] = overlaps[ geneUsed[geneType] ].similarity ;
+			}
+		}*/
+
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
 			// Remove the hits on the D gene
-			if ( GetGeneType( seqs[ overlaps[i].seqIdx ].name ) == 1 )
+			int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
+      if ( geneType == 1 )
 				continue ;
 
 			// Remove those overlaps that was secondary as well.
-			if ( seqUsed[ overlaps[i].seqIdx ] == -1 && overlaps[i].similarity >= 0.8 )
+			if ( seqUsed[ overlaps[i].seqIdx ] == -1 
+          && overlaps[i].similarity >= geneSimilarity[geneType] )
 			{
 				seqUsed[ overlaps[i].seqIdx ] = k ; // Store the index where this is copied to
 				overlaps[k] = overlaps[i] ;
@@ -5434,7 +5455,7 @@ public:
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
 			char *name = seqs[ overlaps[i].seqIdx ].name ;
-			if ( BT && name[0] != BT )
+      if ( BT && name[0] != BT )
 				continue ;
 			BT = name[0] ;
 			if ( chain && !( name[2] == chain 
@@ -7842,11 +7863,16 @@ public:
 	char *AnnotationToAirrAlign(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], bool includeCDR3Coordinate)
 	{
 		int i, j, k, l, m ;
-		int len = strlen(read) ;
-    char *align[3] ; // align part for v, d, j genes.
-    char *buffer = (char *)malloc(sizeof(char) * 5 * len) ;
-    char *buffer2 = new char[2 * len] ; // sequence_align
-		char *buffer3 = new char[2 * len] ; // germline_align
+		int len = strlen(read) ; 
+		int bufferSize = len ;
+		for (i = 0 ; i < 4 ; ++i)
+			if (geneOverlap[i].seqIdx != -1)
+				bufferSize += geneOverlap[i].seqEnd - geneOverlap[i].seqStart + 1 ;
+
+		char *align[3] ; // align part for v, d, j genes.
+		char *buffer = (char *)malloc(sizeof(char) * 5 * bufferSize) ;
+		char *buffer2 = new char[2 * bufferSize] ; // sequence_align
+		char *buffer3 = new char[2 * bufferSize] ; // germline_align
 		align[0] = align[1] = align[2] = NULL ;
 		for (i = 0 ; i < 3 ; ++i)
 			align[i] = GetGeneOverlapAlignment(read, geneOverlap[i]) ;
@@ -7915,7 +7941,7 @@ public:
 						++j ;
 						continue ;
 					}
-
+					
 					buffer2[i] = read[j] ;
 					if (cdr[2].seqIdx != -1 && cdr[2].readStart == j)
 						cdr3AdjustedStart = i ;
