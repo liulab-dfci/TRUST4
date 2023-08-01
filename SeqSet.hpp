@@ -5221,7 +5221,10 @@ public:
 	}
 
 	// Figure out the gene composition for the read. 
-	// Return successful or not.
+	// detailLevel: 0: very quick annotation, could be error-prone
+  //              1: get a good V,J,C gene annotation
+  //              2: obtain the sequences for CDR1,2,3
+  // Return successful or not.
 	int AnnotateRead( char *read, int detailLevel, struct _overlap geneOverlap[4], struct _overlap cdr[3], 
 		std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
@@ -5387,7 +5390,7 @@ public:
 		// Handle the case a secondary assignment may have high similairty due to short
 		//   alignment range, so we will lower the similarity threshhold to the best
 		//   prelminarty assignment.
-		if (detailLevel >= 2)
+		if (detailLevel >= 1)
 		{
 			int geneUsed[4] = {-1, -1, -1, -1} ; //V, D, J, C gene
 			int geneCompared[4] = {0, 0, 0, 0} ; // whether this gene has bee compared or not.
