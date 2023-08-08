@@ -6427,9 +6427,9 @@ public:
 					char *align ;
 
 					int dest = seqs[ geneOverlap[2].seqIdx ].info[2].a  ;
-					if ( dest != -1 /*&& dest >= geneOverlap[2].seqStart*/ )
+					if ( dest != -1 /*&& dest >= geneOverlap[2].seqStart*/)
 					{
-						// Left to right scan should be more stable.
+						// Right to left scan should be more stable.
 						struct _overlap jgene = geneOverlap[2] ; // Overlap with j-gene
 						align = new char[ len + seqs[ jgene.seqIdx ].consensusLen + 2 ] ;
 						AlignAlgo::GlobalAlignment( seqs[ jgene.seqIdx ].consensus + jgene.seqStart, 
@@ -6437,7 +6437,7 @@ public:
 								read + jgene.readStart, jgene.readEnd - jgene.readStart + 1, align ) ;
 						//AlignAlgo::VisualizeAlignment( seqs[ jgene.seqIdx ].consensus + jgene.seqStart, 
 						//		jgene.seqEnd - jgene.seqStart + 1,
-						//		read + jgene.readStart, jgene.readEnd - jgene.readStart + 1, align ) ;
+						//	read + jgene.readStart, jgene.readEnd - jgene.readStart + 1, align ) ;
 						for ( k = 0 ; align[k] != -1 ; ++k )
 							;
 						for ( i = jgene.readEnd + 1, j = jgene.seqEnd + 1 ; 
@@ -6476,7 +6476,7 @@ public:
 							if ( j == dest )
 							{
 								locateE = i ;
-								strongLocateE = true ;
+                strongLocateE = true ;
 							}
 							else if ( j == dest + 1 && read[ i - (j - dest)] != 'M' )
 							{
@@ -6546,9 +6546,11 @@ public:
 
 
 					if (locateE == -1 && geneOverlap[2].seqIdx != -1 
-						&& seqs[ geneOverlap[2].seqIdx ].info[2].a != -1 )
+						&& seqs[ geneOverlap[2].seqIdx ].info[2].a != -1) 
 					{
 						// Use the gene sequence information to infer the location
+						// This might be useful in case the J gene is identify in another contig
+						//   but CDR3 is in the previous contig
 						struct _seqWrapper &seq = seqs[ geneOverlap[2].seqIdx ] ;
 						for ( i = e ; i < boundE ; ++i )
 						{
@@ -6560,14 +6562,15 @@ public:
 										seq.consensus, seq.info[2].a + 1,
 										read, i + 1,
 										locatePartialMatchMinLen, matchLen ) ;
-								if ( geneOffset != -1 )
+								// There probably a better way to handle this.
+								if ( geneOffset != -1 
+										&& geneOffset + matchLen - 1 == seq.info[2].a)
 								{
 									locateE = i ;
 									strongLocateE = true ;
 									break ;
 								}
 							}
-							
 						}
 					}
 
