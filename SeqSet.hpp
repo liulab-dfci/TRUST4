@@ -2384,13 +2384,15 @@ public:
 		{
 			// Insert the kmers 
 			struct _seqWrapper ns ;
-			// Filter the gene with "/" sign
-			for ( i = 0 ; fa.id[i] ; ++i )
-				if ( fa.id[i] == '/' && fa.id[i + 1] == 'O' && fa.id[i + 2] == 'R') // no need to worry about access outside memory
-					break ;
-			if ( fa.id[i] == '/' )
-				continue ;
-
+			// Filter the gene with "/" sign for non-D gene
+			if (GetGeneType(fa.id) != 1)
+			{
+				for ( i = 0 ; fa.id[i] ; ++i )
+					if ( fa.id[i] == '/' && fa.id[i + 1] == 'O' && fa.id[i + 2] == 'R') // no need to worry about access outside memory
+						break ;
+				if ( fa.id[i] == '/' )
+					continue ;
+			}
 			ns.name = strdup( fa.id ) ;
 			ns.isRef = true ;
 
