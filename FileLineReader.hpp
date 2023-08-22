@@ -34,7 +34,7 @@ public:
 			free(buffer) ;
 	}
 
-	int Open(char *filename)
+	int Open(const char *filename)
 	{
 		fp = fopen(filename, "r") ;
 		if (fp == NULL)

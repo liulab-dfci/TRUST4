@@ -11,6 +11,7 @@
 #include "SeqSet.hpp"
 #include "AlignAlgo.hpp"
 #include "FileLineReader.hpp"
+#include "ReadFiles.hpp"
 
 char usage[] = "./annotator [OPTIONS]:\n"
 		"Required:\n"
@@ -70,6 +71,11 @@ struct _annotate
 	std::vector<struct _overlap> secondaryGeneOverlaps ;
 	
 	int isFullLength ;
+
+	_annotate()
+	{
+		isFullLength = 0 ;
+	}
 } ;
 
 struct _CDR3info
@@ -398,10 +404,8 @@ int main( int argc, char *argv[] )
 	SeqSet refSet( 7 ) ;
 	SeqSet seqSet( 17 ) ;
 	int c, option_index ;
-	FileLineReader flrAssembly ;
 	FILE *fpReadAssignment = NULL ;
 	option_index = 0 ;
-	bool ignoreWeight = false ;
 	char outputPrefix[1024] = "trust" ;
 	FileLineReader flrReads ;
 	int threadCnt = 1 ;
@@ -417,6 +421,7 @@ int main( int argc, char *argv[] )
 	int format = 0 ; // 0-trust4 format. 1-fasta, 2-fastq
 	int outputFormat = 0 ; //0-fasta, 1-airr
   std::map<std::string, int> barcodeStrToInt ;
+	std::string assemblyFileName ;
 
 	while ( 1 )
 	{
@@ -432,7 +437,8 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 'a' )
 		{
-			flrAssembly.Open( optarg ) ;
+			std::string s(optarg) ;
+			assemblyFileName = s ;
 		}
 		else if ( c == 'r' )
 		{
@@ -448,12 +454,10 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 10000 ) // --fasta
 		{
-			ignoreWeight = true ;
 			format = 1 ;
 		}
 		else if ( c == 10011) // --fastq
 		{
-			ignoreWeight = true ;
 			format = 2 ;
 		}
 		else if ( c == 10001 ) // --radius
@@ -521,7 +525,7 @@ int main( int argc, char *argv[] )
 		return EXIT_FAILURE ;
 	}
 	
-	if ( !flrAssembly.IsOpen() )
+	if ( assemblyFileName.length() == 0 )
 	{
 		fprintf( stderr, "Need to use -a to specify the assembly file.\n" ) ;
 		return EXIT_FAILURE ;
@@ -530,25 +534,21 @@ int main( int argc, char *argv[] )
 	refSet.SetHitLenRequired( 17 ) ;
 	refSet.SetRadius( radius ) ;
 	PrintLog( "Start to annotate assemblies." ) ;
-	while ( flrAssembly.ReadLine() != NULL )
+	if (format == 0)
 	{
-		strcpy(buffer, flrAssembly.GetLinePtr()) ;
-		if ( (format != 2 && buffer[0] != '>') 
-			|| (format == 2 && buffer[0] != '@') )
+		FileLineReader flrAssembly ;
+		flrAssembly.Open(assemblyFileName.c_str()) ;
+		while ( flrAssembly.ReadLine() != NULL )
 		{
-			printf( "%s", buffer ) ;
-			continue ;
-		}
-		
-		flrAssembly.ReadLine() ;
-		char *seq = strdup( flrAssembly.GetLinePtr() ) ;
-		int len = strlen( seq ) ;
+			strcpy(buffer, flrAssembly.GetLinePtr()) ;
 
-		// Read in the four line of pos weight
-		SimpleVector<struct _posWeight> posWeight ;
-		double depthSum = 0 ;
-		if ( !ignoreWeight )
-		{
+			flrAssembly.ReadLine() ;
+			char *seq = strdup( flrAssembly.GetLinePtr() ) ;
+			int len = strlen( seq ) ;
+
+			// Read in the four line of pos weight
+			SimpleVector<struct _posWeight> posWeight ;
+			double depthSum = 0 ;
 			posWeight.ExpandTo( len ) ;
 			for ( k = 0 ; k < 4 ; ++k )
 			{
@@ -572,27 +572,26 @@ int main( int argc, char *argv[] )
 				posWeight[i].count[k] = num ;
 				depthSum += num ;
 			}
-		}
-		for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
-			;
-		buffer[i] = '\0' ;
-		
-		if ( !ignoreWeight )
-		{
-			seqSet.InputNovelSeq( buffer + 1, seq, posWeight ) ;
-		}
-		else
-			seqSet.InputNovelRead( buffer + 1, seq, 1, -1 ) ;
-		free(seq) ;
+			for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
+				;
+			buffer[i] = '\0' ;
 
-		if (format == 2) // fastq
+			seqSet.InputNovelSeq( buffer + 1, seq, posWeight ) ;
+			free(seq) ;
+
+		}
+		flrAssembly.Close() ;
+	}
+	else
+	{
+		ReadFiles readFile ;
+		readFile.AddReadFile(assemblyFileName.c_str(), false) ;
+		while (readFile.Next())
 		{
-			flrAssembly.ReadLine() ;
-			flrAssembly.ReadLine() ;
+			seqSet.InputNovelRead( readFile.id, readFile.seq, 1, -1 ) ;
 		}
 	}
-	flrAssembly.Close() ;
-		
+
 	if ( hasBarcode )
 		seqSet.SetBarcodeFromSeqName( barcodeStrToInt ) ;
 
@@ -783,7 +782,6 @@ int main( int argc, char *argv[] )
 				{
 					PrintLog( "Realigned %d reads.", i + 1 ) ;
 				}
-
 			}
 		}
 		else

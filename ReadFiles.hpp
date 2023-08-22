@@ -79,7 +79,7 @@ class ReadFiles
 		}
 
 
-		void AddReadFile( char *file, bool fileHasMate )
+		void AddReadFile( const char *file, bool fileHasMate )
 		{
 			if ( fpUsed >= MAX_READ_FILE )
 			{

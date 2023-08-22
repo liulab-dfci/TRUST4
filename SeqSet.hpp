@@ -84,6 +84,18 @@ struct _overlap
 	SimpleVector<int> *info ; // store extra informations 
 	int infoFromHits ; // some information obtained GetOverlapFromHits
 
+	_overlap()
+	{
+		seqIdx = -1 ;
+		readStart = readEnd = seqStart = seqEnd = -1 ;
+		strand = 1 ;
+		matchCnt = 0 ;
+		similarity = 0 ;
+		hitCoords = NULL ;
+		info = NULL ;
+		infoFromHits = 0 ;
+	}
+
 	bool operator<( const struct _overlap &b ) const
 	{
 		// The overlap with more matched bases should come first.
@@ -5248,6 +5260,7 @@ public:
 		geneOverlap[0].seqIdx = geneOverlap[1].seqIdx = geneOverlap[2].seqIdx = geneOverlap[3].seqIdx = -1 ;
 		if ( detailLevel >= 2 )
 			cdr[0].seqIdx = cdr[1].seqIdx = cdr[2].seqIdx = -1 ;
+    geneOverlap[0].strand = geneOverlap[1].strand = geneOverlap[2].strand = geneOverlap[3].strand = 1 ;
 
 		contigCnt = GetContigIntervals( read, contigs ) ;
 		char *contigBuffer = new char[len + 1] ;
