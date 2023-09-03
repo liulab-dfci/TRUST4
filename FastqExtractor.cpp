@@ -134,10 +134,10 @@ int IsGoodCandidate( char *read, char *buffer, SeqSet *refSet )
 void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, ReadFormatter &readFormatter, int readCategory )
 {
 	if ( qual != NULL )
-		fprintf( fp, "@%s\n%s\n+\n%s\n", name, readFormatter.Extract(seq, readCategory, true, 0),
+		fprintf( fp, "@%s\n%s\n+\n%s\n", name, readFormatter.Extract(seq, readCategory, true, true, 0),
 				readFormatter.Extract(qual, readCategory, false, 1)) ;
 	else
-		fprintf( fp, ">%s\n%s\n", name, readFormatter.Extract(seq, readCategory, true, 0) ) ;
+		fprintf( fp, ">%s\n%s\n", name, readFormatter.Extract(seq, readCategory, true, true, 0) ) ;
 }
 
 // Maybe barcode read quality could be useful in future.
@@ -147,7 +147,7 @@ void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual,
 {
 	if (barcode && barcode[0] != '\0')
 	{
-		char *bcBuffer = readFormatter.Extract(barcode, readCategory, true, 0) ;
+		char *bcBuffer = readFormatter.Extract(barcode, readCategory, true, true, 0) ;
 		int result = 0 ;
 		if ( barcodeCorrector != NULL )	
 			result = barcodeCorrector->Correct(bcBuffer, qual ) ;

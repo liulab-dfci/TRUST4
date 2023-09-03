@@ -123,7 +123,7 @@ public:
 		char buffer[256] ;
 		while (barcodeFile.Next())
 		{	
-			strcpy(buffer, readFormatter.Extract(barcodeFile.seq, FORMAT_BARCODE, true));
+			strcpy(buffer, readFormatter.Extract(barcodeFile.seq, FORMAT_BARCODE, true, true));
 			barcodeFreq.SearchAndUpdate(buffer, 1) ;
 			readCnt += 1 ;
 			if (readCnt >= caseCnt) 
