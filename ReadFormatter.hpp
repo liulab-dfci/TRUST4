@@ -193,19 +193,20 @@ public:
     const std::vector<_segInfo> &seg = _segs[category] ;
     int segSize = seg.size() ;
     int strand = 1 ;
-    char *buffer = _buffers.Get(bufferId, len + 1) ;
     
     if (!NeedExtract(category))
     {
-      if (retSeqWhenNoExtraction)
+      if (retSeqWhenNoExtraction) // this implictly require no _buffers initalization
         return seq ;
       else
       {
+        char *buffer = _buffers.Get(bufferId, len + 1) ;
         strcpy(buffer, seq) ;
         return buffer ;
       }
     }
 
+    char *buffer = _buffers.Get(bufferId, len + 1) ;
     i = 0 ;
     for (k = 0 ; k < segSize ; ++k)
     {
