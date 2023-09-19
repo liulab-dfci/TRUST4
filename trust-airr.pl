@@ -113,6 +113,41 @@ sub CoordToCigar
 	return $cigar ;
 } 
 
+sub GetLocusName
+{
+	foreach my $g (@_)
+	{
+		if ( $g =~ /^IGH/ )
+		{
+			return "IGH" ;
+		}
+		elsif ( $g =~ /^IGK/ )
+		{
+			return "IGK" ;
+		}
+		elsif ( $g =~ /^IGL/ )
+		{
+			return "IGL" ;
+		}
+		elsif ( $g =~ /^TRA/ )
+		{
+			return "TRA" ;
+		}
+		elsif ( $g =~ /^TRB/ )
+		{
+			return "TRB" ;
+		}
+		elsif ( $g =~ /^TRG/ )
+		{
+			return "TRG" ;
+		}
+		elsif ( $g =~ /^TRD/ )
+		{
+			return "TRD" ;
+		}
+	}
+}
+
 my $format = "simplerep" ;
 my $i ;
 my $airrAlignFile = "" ;
@@ -208,7 +243,7 @@ if (length($airrAlignFile) > 0)
 }
 
 # Go through the annot file to output 
-print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
+print "sequence_id\tsequence\trev_comp\tproductive\tlocus\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 
 open FP, $ARGV[1] ;
 while (<FP>)
@@ -228,7 +263,8 @@ while (<FP>)
 	my @cCoord ;
 	my @cdr3Coord ;
 	my $cdr3 ;
-	my $vcall = "" ;
+	my $locus = "" ;
+  my $vcall = "" ;
 	my $vcigar = "" ;
 	my $videntity = "" ;
 	my $dcall = "" ;
@@ -286,8 +322,10 @@ while (<FP>)
 		@cCoord = (-1, -1, -1, -1, -1) ;
 	}
 
+  $locus = GetLocusName($ccall, $jcall, $vcall) ;
+
 	next if ( $cols[9] =~ /:0\.00/ ) ; # partial CDR3
-	
+
 	if ($cols[7] =~ /=(\w+?)$/)
 	{
 		if ($1 ne "null")
@@ -343,7 +381,7 @@ while (<FP>)
 		}
 	}
 
-#print "sequence_id\tsequence\trev_comp\tproductive\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
+#print "sequence_id\tsequence\trev_comp\tproductive\tlocus\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 	for (my $i = 0 ; $i < scalar(@cdr3s) ; $i += 3)
 	{
 		my $cdr3aa = Translate($cdr3s[$i]) ;
@@ -396,8 +434,8 @@ while (<FP>)
 		{
 			$outputSeqId .= "_".($i/3) ;
 		}
-
-		print join("\t", ($outputSeqId, $outputSeq, "F", $productive,
+    
+		print join("\t", ($outputSeqId, $outputSeq, "F", $productive, $locus,
 			$vcall, $dcall, $jcall, $ccall, $outputSequenceAlignment, $outputGermlineAlignment, 
 			$cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
 		  $vcigar, $dcigar, $jcigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
