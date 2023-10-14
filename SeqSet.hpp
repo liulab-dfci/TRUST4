@@ -4754,6 +4754,7 @@ public:
 			for ( j = contigs[i].b + 1 ; j < contigs[i + 1].a ; ++j )
 				read[j] = 'M' ;
 		}
+		
 		// Double check whether anchor is in the gap 
 		bool vAnchorInGap = false ;
 		bool jAnchorInGap = false ;
@@ -4802,6 +4803,11 @@ public:
 					read + cdr[2].readStart, cdr[2].readEnd - cdr[2].readStart + 1, 5, matchLen ) ;
 				if ( offset != -1 )
 				{
+					// In this case, putative cdr3 starts is the V gene's start
+					//   this contradict the shape of  V]...[CDR3]
+					if (offset == 0) 
+						return -1 ;
+					
 					seqOffset = offset + seqs[ seqIdx ].info[2].a ;
 					readOffset = cdr[2].readStart ;
 				}
@@ -4878,6 +4884,11 @@ public:
 				{
 					seqOffset = offset + matchLen - 1 ;
 					readOffset = cdr[2].readEnd ;
+
+					// In this case, putative cdr3 ends match is the J gene's CDR3 end
+					//   this contradict the shape of  [CDR3]...[j
+					if (seqOffset == seqs[seqIdx].info[2].a + 2) 
+						return -1 ;
 				}
 				/*for ( k = seqs[ seqIdx ].info[2].a + 2 ; k >= 8 ; --k )
 				{
@@ -7393,6 +7404,7 @@ public:
 							break ;
 						}
 					}
+					
 					for ( i = contigCnt - 2 ; i > 0 ; --i )
 					{
 						/*if ( e <= contigs[i].b && e > contigs[i].b - 18 
