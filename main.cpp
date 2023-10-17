@@ -1426,7 +1426,7 @@ int main( int argc, char *argv[] )
 			assembledReadIdx.push_back( rescueReadIdx[i] ) ;
 		}
 #ifdef DEBUG
-		printf( "done\n" ) ;
+		printf( "rescue done\n" ) ;
 #endif
 	}
 	seqSet.UpdateAllConsensus() ;
@@ -1523,6 +1523,13 @@ int main( int argc, char *argv[] )
 		if ( outputPrefix[0] != '-' )
 			fclose( fp ) ;
 
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			free( sortedReads[i].id ) ;
+			free( sortedReads[i].read ) ;
+			if ( sortedReads[i].qual != NULL )
+				free( sortedReads[i].qual ) ;
+		}
 		return 0 ;	
 	}
 

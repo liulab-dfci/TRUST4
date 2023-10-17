@@ -3524,6 +3524,8 @@ public:
 				// Compute the new consensus.
 				if ( extendedOverlaps[0].readStart > 0 || extendedOverlaps[0].readEnd < len - 1 )
 				{
+					SimpleVector<struct _pair> consensusReplacement ;
+
 					char *newConsensus = (char *)malloc( sizeof( char ) * ( 
 						( extendedOverlaps[0].readStart + len - 1 -extendedOverlaps[0].readEnd ) + seq.consensusLen + 1 ) ) ;
 
@@ -3575,6 +3577,17 @@ public:
 						{
 							if ( i + shift >= len || r[i + shift] == 'N' )
 								continue ;
+							// If the current weight is 1, change the consensus to the newly input nucleotide
+							if (r[i + shift] != newConsensus[i + shift]
+									&& newConsensus[i + shift] != 'N' // The equal to N case will be handled later 
+									&& seq.posWeight[i + shift].count[ nucToNum[newConsensus[i + shift] - 'A']] == 1)
+							{
+								struct _pair np ;
+								np.a = i + shift ;
+								np.b = (int)(r[i + shift]) ;
+								consensusReplacement.PushBack(np) ;	
+							}
+
 							for ( j = 0 ; j < 4 ; ++j )
 								if ( r[i + shift] != numToNuc[j] && seq.posWeight[i + shift].count[j] > 1 )
 									--seq.posWeight[i + shift].count[j] ;
@@ -3590,11 +3603,24 @@ public:
 						for ( i = seq.consensusLen - 2 ; i < seq.consensusLen ; ++i )
 						{
 							int pos = i - extendedOverlaps[0].seqStart ;
+							int seqPos = i + shift ;
 							if ( pos < 0 || r[pos] == 'N' )
 								continue ;
+							
+							// If the current weight is 1, change the consensus to the newly input nucleotide
+							if (r[pos] != newConsensus[seqPos]
+									&& newConsensus[seqPos] != 'N' 
+									&& seq.posWeight[seqPos].count[ nucToNum[newConsensus[seqPos] - 'A']] == 1)
+							{
+								struct _pair np ;
+								np.a = seqPos ;
+								np.b = (int)r[pos] ;
+								consensusReplacement.PushBack(np) ;
+							}
+
 							for ( j = 0 ; j < 4 ; ++j )
-								if ( r[pos] != numToNuc[j] && seq.posWeight[i].count[j] > 1 )
-									--seq.posWeight[i].count[j] ;
+								if ( r[pos] != numToNuc[j] && seq.posWeight[seqPos].count[j] > 1 )
+									--seq.posWeight[seqPos].count[j] ;
 						}
 					}
 					
@@ -3654,6 +3680,13 @@ public:
 					seq.consensus = newConsensus ;
 					seq.consensusLen = newConsensusLen ;	
 					//printf( "new consensus len %d\n", seq.consensusLen ) ;
+					
+					int size = consensusReplacement.Size() ;
+					for (i = 0 ; i < size ; ++i)
+					{
+						struct _pair &p = consensusReplacement[i] ;
+						SubstituteConsensusPos(seqIdx, p.a, (char)p.b, true) ;
+					}
 				}
 				else // the read is inside of the seq.
 					readInConsensusOffset = extendedOverlaps[0].seqStart ;
@@ -10044,6 +10077,31 @@ public:
 		for ( i = start ; i <= end ; ++i )
 			ret += seqs[seqIdx].posWeight[i].count[ nucToNum[seqs[seqIdx].consensus[i] - 'A' ] ] ;
 		return ret ;
+	}
+
+	// Substitue one base of the consensus[seqIdx] to another alphabet c
+	void SubstituteConsensusPos(int seqIdx, int pos, char c, bool updateIndex)
+	{
+		struct _seqWrapper &seq = seqs[seqIdx] ;
+		if (pos >= seq.consensusLen || seq.consensus[pos] == c)
+			return ;
+		
+		KmerCode kmerCode( kmerLength ) ;
+		int start = pos - kmerLength + 1 ;
+		int end = pos + kmerLength - 1 ;
+		if (start < 0)
+			start = 0 ;
+		if (end >= seq.consensusLen)
+			end = seq.consensusLen - 1 ;
+
+		if (updateIndex)
+			seqIndex.RemoveIndexFromRead(kmerCode, seq.consensus + start,
+					end - start + 1, seqIdx, start) ;
+
+		seq.consensus[pos] = c ;
+
+		if (updateIndex)
+			seqIndex.BuildIndexFromRead(kmerCode, seq.consensus + start, end - start + 1, seqIdx, start) ;
 	}
 	
 	void SetIsLongSeqSet( bool in )
