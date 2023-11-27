@@ -540,7 +540,10 @@ int main( int argc, char *argv[] )
 		flrAssembly.Open(assemblyFileName.c_str()) ;
 		while ( flrAssembly.ReadLine() != NULL )
 		{
-			strcpy(buffer, flrAssembly.GetLinePtr()) ;
+      const char *lineBuffer = flrAssembly.GetLinePtr() ;
+      for (i = 0 ; lineBuffer[i] && lineBuffer[i] != '\n' && lineBuffer[i] != ' ' ; ++i)
+        buffer[i] = lineBuffer[i] ;
+      buffer[i] = '\0' ;
 
 			flrAssembly.ReadLine() ;
 			char *seq = strdup( flrAssembly.GetLinePtr() ) ;
@@ -572,9 +575,6 @@ int main( int argc, char *argv[] )
 				posWeight[i].count[k] = num ;
 				depthSum += num ;
 			}
-			for ( i = 0 ; buffer[i] && buffer[i] != '\n' && buffer[i] != ' ' ; ++i )
-				;
-			buffer[i] = '\0' ;
 
 			seqSet.InputNovelSeq( buffer + 1, seq, posWeight ) ;
 			free(seq) ;
