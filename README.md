@@ -101,17 +101,17 @@ The output trust_airr.tsv follows [the AIRR format](https://docs.airr-community.
 
 * #### Build custom V,J,C gene database (files for -f and --ref)
 
-To generate the file specified by "-f", you need the reference genome (e.g. hg38 for human, or mm10 for mouse) of the species you are interested in and corresponding genome annotation GTF file (e.g. gencode v35 for human, or gencode mV21 for mouse). Then you can use command 
-	
-	perl BuildDatabaseFa.pl reference.fa annotation.gtf bcr_tcr_gene_name.txt > bcrtcr.fa
-
-to generate the input for "-f". The "bcr_tcr_gene_name.txt" is provided as "human_vdjc.list" in the repository.
-
 Normally, the file specified by "--ref" is downloaded from IMGT website, For example, for human, you can use command
 
 	perl BuildImgtAnnot.pl Homo_sapien > IMGT+C.fa
 
 The available species name can be found on [IMGT FTP](http://www.imgt.org//download/V-QUEST/IMGT_V-QUEST_reference_directory/).
+
+If your input data for TRUST4 is raw FASTQ files, you can use the IMGT file for the "-f" option. If your input data for TRUST4 is BAM files, you need to generate another file for "-f". To do that, you need the reference genome (e.g. hg38 for human, or mm10 for mouse) of the species you are interested in and corresponding genome annotation GTF file (e.g. gencode v35 for human, or gencode mV21 for mouse). Then you can use command 
+	
+	perl BuildDatabaseFa.pl reference.fa annotation.gtf bcr_tcr_gene_name.txt > bcrtcr.fa
+
+to generate the input for "-f". The "bcr_tcr_gene_name.txt" is provided as "human_vdjc.list" in the repository.
 
 The IMGT+C.fa can also be used to generate "bcr_tcr_gene_name.txt" file with command:
 
