@@ -5973,7 +5973,7 @@ public:
 			//AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
 			//	read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
 
-			// Locate CDR1.
+			// Locate CDR1,2.
 			int cdrIdx ;
 			for ( cdrIdx = 0 ; cdrIdx <= 1 ; ++cdrIdx )
 			{
@@ -7145,7 +7145,8 @@ public:
 			
 			sContigIdx = GetContigIdx( locateS, contigs ) ; 
 			eContigIdx = GetContigIdx( locateE, contigs ) ;
-			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 )
+			if ( locateS != -1 && locateE != -1 && locateE + 2 - locateS + 1 >= 18 
+          && locateE + 2 - locateS + 1 < 7000)
 			{
 				s = locateS ;
 				e = locateE + 2 ;
