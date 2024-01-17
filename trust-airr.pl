@@ -243,7 +243,7 @@ if (length($airrAlignFile) > 0)
 }
 
 # Go through the annot file to output 
-print "sequence_id\tsequence\trev_comp\tproductive\tlocus\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
+print "sequence_id\tsequence\trev_comp\tproductive\tlocus\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tc_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 
 open FP, $ARGV[1] ;
 while (<FP>)
@@ -273,6 +273,7 @@ while (<FP>)
 	my $jcigar = "" ;
 	my $jidentity = "" ;
 	my $ccall = "" ;
+  my $ccigar = "" ;
 	my $cellId = "" ;
 	my $cdr1 = "" ;
 	my $cdr2 = "" ;
@@ -370,10 +371,11 @@ while (<FP>)
 		$vcigar = $airrCols[0] ;
 		$dcigar = $airrCols[1] ;
 		$jcigar = $airrCols[2] ;
-		$sequenceAlignment = $airrCols[3] ;
-		$germlineAlignment = $airrCols[4] ;
-		$alignmentCDR3Start = $airrCols[5] ;
-		$alignmentCDR3End = $airrCols[6] ;
+    $ccigar = $airrCols[3] ;
+		$sequenceAlignment = $airrCols[4] ;
+		$germlineAlignment = $airrCols[5] ;
+		$alignmentCDR3Start = $airrCols[6] ;
+		$alignmentCDR3End = $airrCols[7] ;
 		if ($alignmentCDR3Start == -1 || $alignmentCDR3End == -1)
 		{
 			$sequenceAlignment = "" ;
@@ -381,7 +383,7 @@ while (<FP>)
 		}
 	}
 
-#print "sequence_id\tsequence\trev_comp\tproductive\tlocus\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
+#print "sequence_id\tsequence\trev_comp\tproductive\tlocus\tv_call\td_call\tj_call\tc_call\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tv_cigar\td_cigar\tj_cigar\tc_cigar\tv_identity\tj_identity\tcell_id\tcomplete_vdj\tconsensus_count\n" ;
 	for (my $i = 0 ; $i < scalar(@cdr3s) ; $i += 3)
 	{
 		my $cdr3aa = Translate($cdr3s[$i]) ;
@@ -438,7 +440,7 @@ while (<FP>)
 		print join("\t", ($outputSeqId, $outputSeq, "F", $productive, $locus,
 			$vcall, $dcall, $jcall, $ccall, $outputSequenceAlignment, $outputGermlineAlignment, 
 			$cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
-		  $vcigar, $dcigar, $jcigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
+		  $vcigar, $dcigar, $jcigar, $ccigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
 	}
 }
 close FP ;

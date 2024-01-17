@@ -7937,7 +7937,7 @@ public:
 		free( r ) ;
 	}
 
-	// Output the information for AIRR alignmend format: vcigar, dcigar, jcigar, sequence_alignment, germline_alignment, cdr3_start in the sequence_alignment string.
+	// Output the information for AIRR alignmend format: vcigar, dcigar, jcigar, ccigar, sequence_alignment, germline_alignment, cdr3_start in the sequence_alignment string.
   // return: the airr alignment string. Need to be release externally.
 	char *AnnotationToAirrAlign(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3], bool includeCDR3Coordinate)
 	{
@@ -7948,17 +7948,17 @@ public:
 			if (geneOverlap[i].seqIdx != -1)
 				bufferSize += geneOverlap[i].seqEnd - geneOverlap[i].seqStart + 1 ;
 
-		char *align[3] ; // align part for v, d, j genes.
-		char *buffer = (char *)malloc(sizeof(char) * 5 * bufferSize) ;
+		char *align[4] ; // align part for v, d, j, c genes.
+		char *buffer = (char *)malloc(sizeof(char) * 6 * bufferSize) ;
 		char *buffer2 = new char[2 * bufferSize] ; // sequence_align
 		char *buffer3 = new char[2 * bufferSize] ; // germline_align
-		align[0] = align[1] = align[2] = NULL ;
-		for (i = 0 ; i < 3 ; ++i)
+		align[0] = align[1] = align[2] = align[3] = NULL ;
+		for (i = 0 ; i < 4 ; ++i)
 			align[i] = GetGeneOverlapAlignment(read, geneOverlap[i]) ;
 
-		// Output vcigar, dcigar and jcigar
+		// Output vcigar, dcigar, jcigar and ccigar
 		buffer[0] = '\0' ;
-		for (i = 0 ; i < 3 ; ++i)
+		for (i = 0 ; i < 4 ; ++i)
 		{
 			GetGeneAlignmentAirrCigar(read, geneOverlap[i], align[i], buffer2) ;
 			sprintf(buffer + strlen(buffer), "%s\t", buffer2) ;
@@ -8055,7 +8055,7 @@ public:
     else
       sprintf(buffer + strlen(buffer), "%s\t%s", buffer2, buffer3) ;
 
-		for (i = 0 ; i < 3 ; ++i)
+		for (i = 0 ; i < 4 ; ++i)
 			if (align[i])
 				delete[] align[i] ;
 		delete[] buffer2 ;
@@ -8069,10 +8069,10 @@ public:
   void GetPartAirrHeader(char *buffer)
   {
     // 18 columns
-    strcpy(buffer, "sequence\trev_comp\tv_call\td_call\tj_call\tc_call\tv_cigar\td_cigar\tj_cigar\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tproductive\tv_identity\tj_identity") ;
+    strcpy(buffer, "sequence\trev_comp\tv_call\td_call\tj_call\tc_call\tv_cigar\td_cigar\tj_cigar\tc_cigar\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tproductive\tv_identity\tj_identity") ;
   }
 
-  // Notice the difference to AirrAlign, which is part of the airr fields focusing on the alignment information
+  // Notice the difference to AirrAlign, which is part of the airr fields focusing on the alignment information. AirrAlign don't output the sequence itself, saving disk space
   // sequence_id will be printed externally
 	char *AnnotationToAirrString(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3])
   {
@@ -8113,7 +8113,7 @@ public:
         sprintf(buffer + strlen(buffer), "\t%s", GetSeqName(geneOverlap[i].seqIdx)) ;
     }
     
-    //v,d,j cigar, sequen align, germline align
+    //v,d,j,c cigar, sequen align, germline align
     char *alignStr = AnnotationToAirrAlign(read, geneOverlap, cdr, false) ;
     sprintf(buffer + strlen(buffer), "\t%s", alignStr) ;
     free(alignStr) ;
