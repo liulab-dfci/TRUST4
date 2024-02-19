@@ -44,6 +44,7 @@ die "TRUST4 v1.0.13-r474 usage: ./run-trust4 [OPTIONS]:\n".
     "\t\t1: start from assembly\n".
     "\t\t2: start from annotation\n".
     "\t\t3: start from generating the report table\n".
+    "\t--clean INT: clean up files. 0: no clean. 1: clean intermediate files. 2: only keep AIRR files. (default: 0)\n".
     #"\t--jellyfish: use jellyfish2 to count the kmers. (default: not used)\n"
     "" 
 	if ( @ARGV == 0 ) ;
@@ -93,6 +94,7 @@ my $outputDirectory = "" ;
 my $outputReadAssignment = 0 ;
 my $chainsInBarcode = 2 ;
 my $assembleWithRef = 0 ;
+my $cleanup = 0 ;
 
 print STDERR "[".localtime()."] TRUST4 begins.\n" ;
 for ( $i = 0 ; $i < @ARGV ; ++$i )
@@ -266,6 +268,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$stage = $ARGV[$i + 1] ;
 		++$i ;
 	}
+  elsif ( $ARGV[$i] eq "--clean" )
+  {
+    $cleanup = $ARGV[$i + 1] ;
+    ++$i ;
+  }
 	elsif ( $ARGV[$i] eq "--repseq" )
 	{
 		$mainArgs .= " --trimLevel 2 --skipMateExtension" ;
@@ -530,6 +537,21 @@ if ( $stage <= 3 )
 		system_call( "perl $WD/trust-airr.pl ${prefix}_report.tsv ${prefix}_annot.fa --airr-align ${prefix}_airr_align.tsv > ${prefix}_airr.tsv" ) ;
 		system_call( "perl $WD/trust-airr.pl ${prefix}_barcode_report.tsv ${prefix}_annot.fa --format barcoderep --airr-align ${prefix}_airr_align.tsv > ${prefix}_barcode_airr.tsv" ) ;
 	}
+}
+
+if ($cleanup > 0)
+{
+  print STDERR "[".localtime()."] Remove intermedaite files.\n" ;
+  unlink glob "${prefix}_toassemble_*" ;
+  unlink "${prefix}_assembled_reads.fa", "${prefix}_final.out", "${prefix}_raw.out", "${prefix}_airr_align.tsv" ; 
+  if ($cleanup > 1)
+  {
+    unlink "${prefix}_annot.fa", "${prefix}_report.tsv", "${prefix}_cdr3.out" ;
+    if ($hasBarcode)
+    {
+      unlink "${prefix}_barcode_report.tsv" ;
+    }
+  }
 }
 
 print STDERR "[".localtime()."] TRUST4 finishes.\n" ;
