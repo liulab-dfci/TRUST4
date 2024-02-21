@@ -423,7 +423,9 @@ int main( int argc, char *argv[] )
 			mateR.barcode = barcode ;
 			mateR.umi = umi ;
 			if ( mateReads.qual != NULL )
+      {
 				mateR.qual = strdup( mateReads.qual ) ;
+      }
 			else
 				mateR.qual = NULL ;
 			
@@ -438,6 +440,16 @@ int main( int argc, char *argv[] )
 			int flen = strlen( mateReads.seq ) ;
 			int slen = strlen( nr.read ) ;
 			seqSet.ReverseComplement( mateR.read, mateReads.seq, flen ) ;
+      if (mateR.qual != NULL)
+      {
+        // Reverse the mateR's quality score
+        for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
+        {
+          char tmp = mateR.qual[j] ;
+          mateR.qual[j] = mateR.qual[k] ;
+          mateR.qual[k] = tmp ;
+        }
+      }
 			int minOverlap = ( flen + slen ) / 10 ;
 			int minOverlap2 = ( flen + slen ) / 20 ;
 			if ( minOverlap > 31 )
@@ -563,6 +575,7 @@ int main( int argc, char *argv[] )
 			else
 			{
 				strcpy( mateR.read, mateReads.seq ) ;
+				strcpy( mateR.qual, mateReads.qual ) ;
 			}
 		}
 		else if ( hasMate ) 
