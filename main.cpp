@@ -831,10 +831,13 @@ int main( int argc, char *argv[] )
 		int trimBase = geneOverlap[0].readStart ;
 		if ( trimLevel > 1 && refSet.GetSeqName(geneOverlap[0].seqIdx)[0] == 'T') // Some bad annotation
 		{	
+			//Since TCR may not require full-length assembly, just V gene assignment, we can
+			//  ignore the other part. Comment that out now. We may need those for better 
+			//  allele identification or identify some variants
 			/*if ( geneOverlap[0].seqEnd + 25 < refSet.GetSeqConsensusLen( geneOverlap[0].seqIdx ) )
 				trimBase = geneOverlap[0].readEnd + 2 ;
 			else*/
-      if ( geneOverlap[0].similarity < 0.97 )
+			if ( geneOverlap[0].similarity < 0.97 )
 			{
 				trimBase = ( geneOverlap[0].readStart + geneOverlap[0].readEnd ) / 2 ;
 			}
@@ -938,7 +941,7 @@ int main( int argc, char *argv[] )
 			/*if ( geneOverlap[gidx].seqStart >= 25 )
 				trimBase = len - ( geneOverlap[gidx].readStart - 1 ) ;
 			else*/ 
-      if ( geneOverlap[gidx].similarity < 0.97 )
+			if ( geneOverlap[gidx].similarity < 0.97 )
 			{
 				trimBase = len - ( ( geneOverlap[gidx].readStart + geneOverlap[gidx].readEnd ) / 2 ) - 1 ;
 			}
