@@ -256,6 +256,7 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 		die "Unknown option ", $ARGV[$i], "\n" ;
 	}
 }
+$chainsInBarcode = 2 if ($chainsInBarcode > 2) ;
 
 # Store whether there is good assemblies that haven't got CDR3 from the annotation file.
 my %barcodeChainInAnnot ; 
@@ -419,7 +420,9 @@ while ( <FP1> )
 		$barcodeChainAbund{$key} = $cols[10] ;
 	}
 	# out_of_frame or partial can only be on others part.
-	if ( GetAaType($aa) < 2) 
+	#		out_of_frame might create many false positive reports in single-cell mode so it is filtered.
+	#		out_of_frame is kept when assemble in UMI-mode, where chainInBarcode is 1
+	if ( GetAaType($aa) < $chainsInBarcode) 
 	{
 		@{$barcodeChainOther{$key}} = () if (!defined $barcodeChainOther{$key}) ;
 		push @{$barcodeChainOther{$key}}, $info ;

@@ -9,7 +9,8 @@ die "Usage: ./trust-simplerep.pl xxx_cdr3.out [OPTIONS] > trust_report.out\n".
 	"\t--barcodeCnt: the count column is the number of barcode instead of read support. (default: not used)\n".
 	"\t--junction trust_annot.fa: output junction information for the CDR3 (default: not used)\n".
 	"\t--reportPartial: include partial CDR3 in report. (default: no partial)\n".
-	"\t--filterBarcoderep barcode_report.tsv: only summarize the main CDR3s in the barcode report file. (default: not used)\n".
+	"\t--filterBarcoderep barcode_report.tsv: only summarize primary CDR3s in the barcode report file. (default: not used)\n".
+	"\t--filterBarcoderepReadCnt FLOAT: filter primary CDR3s in the barcode report less than this read count (default: 0)\n".
 	"\t--filterTcrError FLOAT: filter TCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0.05)\n".
 	"\t--filterBcrError FLOAT: filter BCR CDR3s less than the fraction of representative CDR3 in the consensus. (default: 0)\n"
 	if ( @ARGV == 0 ) ;
@@ -191,6 +192,7 @@ my $bcrErrorFilter = 0 ;
 my $roundDownCount = 1 ;
 my $useBarcodeCnt = 0 ;
 my $reportPartial = 0 ;
+my $barcodeRepFilterReadCnt = 0 ;
 for ( $i = 1 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "--junction" )
@@ -212,6 +214,11 @@ for ( $i = 1 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--filterBarcoderep" )
 	{
 		$barcodeRepFile = $ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--filterBarcoderepReadCnt")
+	{
+		$barcodeRepFilterReadCnt = $ARGV[$i + 1] ;
 		++$i ;
 	}
 	elsif ( $ARGV[$i] eq "--decimalCnt" )
@@ -360,9 +367,11 @@ if ($barcodeRepFile ne "")
 			if ($cols[$i] ne "*")
 			{
 				my @cols2 = split /,/, $cols[$i] ;
+				next if ($cols2[6] < $barcodeRepFilterReadCnt) ;
 				my $type = GetDetailChainType($cols2[0], $cols2[2], $cols2[3]) ;
-				my @barcodeCols = split /_/, $cols2[7] ;
-				my $barcode = join( "_", @barcodeCols[0..scalar(@barcodeCols)-2] ) ;
+				#my @barcodeCols = split /_/, $cols2[7] ;
+				#my $barcode = join( "_", @barcodeCols[0..scalar(@barcodeCols)-2] ) ;
+				my $barcode = $cols[0] ;
 				my $key = $type."_".$cols2[4]."_".$barcode ;
 				
 				$barcodeRepCDR3{$key} = 1 ;
