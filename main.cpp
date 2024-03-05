@@ -645,8 +645,21 @@ int main( int argc, char *argv[] )
 		else if ( !countMyself && i % 1000000 == 0 )
 			PrintLog( "Read in %d reads.", i ) ;*/
 	}
+	// empty file
 	if ( maxReadLen <= 0 )
 	{
+		sprintf( buffer, "%s_raw.out", outputPrefix ) ;
+		FILE *fp = fopen( buffer, "w" ) ;
+		fclose(fp) ;
+
+		sprintf( buffer, "%s_assembled_reads.fa", outputPrefix ) ;
+		fp = fopen( buffer, "w" ) ;
+		fclose(fp) ;
+
+		sprintf( buffer, "%s_final.out", outputPrefix ) ;
+		fp = fopen( buffer, "w" ) ;
+		fclose(fp) ;
+
 		return 0 ;
 	}
 #ifdef DEBUG
