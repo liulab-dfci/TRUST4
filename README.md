@@ -60,6 +60,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 				1: start from assembly
 				2: start from annotation
 				3: start from generating the report table
+			--clean INT: clean up files. 0: no clean. 1: clean intermediate files. 2: only keep AIRR files. (default: 0)
 
 ### Input/Output
 
