@@ -6,6 +6,7 @@ use warnings ;
 use Cwd 'cwd' ;
 use Cwd 'abs_path' ;
 use File::Basename ;
+use File::Path qw(make_path);
 
 die "TRUST4 v1.0.14-r488 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
@@ -363,7 +364,7 @@ if ( $prefix eq "" )
 
 if ( $outputDirectory ne "" )
 {
-	mkdir $outputDirectory if ( !-d $outputDirectory ) ;
+	make_path($outputDirectory) if ( !-d $outputDirectory ) ;
 	$prefix = "$outputDirectory/$prefix" ;
 }
 
