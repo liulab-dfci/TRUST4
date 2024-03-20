@@ -3,12 +3,11 @@
 use strict ;
 use warnings ;
 
-use Cwd 'cwd' ;
-use Cwd 'abs_path' ;
+use Cwd qw(cwd abs_path) ;
 use File::Basename ;
-use File::Path qw(make_path);
+use File::Path qw(make_path) ;
 
-die "TRUST4 v1.0.14-r488 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.14-r491 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
