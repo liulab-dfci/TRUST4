@@ -381,7 +381,9 @@ void *AssignReads_Thread( void *pArg )
 	struct _overlap assign ;
 	for ( i = start ; i < end ; ++i )
 	{
-		if ( i == start || strcmp( assembledReads[i].read, assembledReads[i - 1].read ) )
+		if ( i == start || 
+				assembledReads[i].barcode != assembledReads[i - 1].barcode ||
+				strcmp( assembledReads[i].read, assembledReads[i - 1].read )) 
 			arg.seqSet->AssignRead( assembledReads[i].read, assembledReads[i].overlap.strand, 
 				assembledReads[i].barcode, assign ) ;
 		assembledReads[i].overlap = assign ;	
