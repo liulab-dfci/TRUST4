@@ -364,6 +364,8 @@ int main( int argc, char *argv[] )
 			{
 				if ( hasMate )
 					mateReads.Next() ;
+				if ( hasUmi )
+					umiFile.Next() ;
 				continue ;
 			}
 
