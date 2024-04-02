@@ -44,7 +44,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			--barcode STRING: if -b, bam field for barcode; if -1 -2/-u, file containing barcodes (defaul: not used)
 			--barcodeWhitelist STRING: path to the barcode whitelist (default: not used)
 			--barcodeTranslate STRING: path to the barcode translate file (default: not used)
-			--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)
+			--UMI STRING: if -b, bam field for 10x Genomics-like UMI; if -1 -2/-u, file containing 10x Genomics-like UMIs (default: not used)
 			--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)
 			--repseq: the data is from TCR-seq or BCR-seq (default: not set)
 			--barcodeLevel STRING: barcode is for cell or molecule (default: cell)

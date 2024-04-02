@@ -7,7 +7,7 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-die "TRUST4 v1.0.14-r491 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.0.15-r495 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -27,7 +27,7 @@ die "TRUST4 v1.0.14-r491 usage: ./run-trust4 [OPTIONS]:\n".
 		"\t--barcodeTranslate STRING: path to the barcode translate file (default: not used)\n".
 		#"\t--read1Range INT INT: start, end(-1 for length-1) in -1/-u files for genomic sequence (default: 0 -1)\n".
 		#"\t--read2Range INT INT: start, end(-1 for length-1) in -2 files for genomic sequence (default: 0 -1)\n".
-		"\t--UMI STRING: if -b, bam field for UMI; if -1 -2/-u, file containing UMIs (default: not used)\n".
+		"\t--UMI STRING: if -b, bam field for 10x Genomics-like UMI; if -1 -2/-u, file containing 10x Genomics-like UMIs (default: not used)\n".
 		#"\t--umiRange INT INT CHAR: start, end(-1 for lenght-1), strand in a UMI is the true UMI (default: 0 -1 +)\n".
 		"\t--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)\n".
     "\t--repseq: the data is from TCR-seq or BCR-seq (default: not set)\n".
