@@ -392,6 +392,7 @@ while ( <FP1> )
 		}
 	}
 	
+	# cols: 8: CDR3nt, 10:read_count, 0:consensus_id, 11:cdr3 germline similarity, 12:consensus full_length or not 
 	my $info = join( ",", ($vgene, $dgene, $jgene, $cgene, $cols[8], $aa, $cols[10], $cols[0], $cols[11], $cols[12]) ) ;
 
 	if ( $aa eq "partial" )
