@@ -110,11 +110,25 @@ public:
 	
 	void SetWhitelist(char *whitelist)
 	{
-		FILE *fp = fopen(whitelist, "r") ;
+		/*FILE *fp = fopen(whitelist, "r") ;
 		char buffer[256] ;
 		while ( fscanf(fp, "%s", buffer) != EOF)
 			barcodeFreq.Insert(buffer, 1) ;
-		fclose(fp) ;
+		fclose(fp) ;*/
+		
+		char buffer[256] ;
+		gzFile fp = gzopen(whitelist, "r") ;
+		while (gzgets(fp, buffer, sizeof(buffer)) != NULL)
+		{
+			int len = strlen(buffer) ;
+			if (buffer[len - 1] == '\n')
+			{
+				buffer[len - 1] = '\0' ;
+				--len ;
+			}
+			barcodeFreq.Insert(buffer, 1) ;
+		}
+		gzclose(fp) ;
 	}
 
 	void CollectBackgroundDistribution(ReadFiles &barcodeFile, ReadFormatter &readFormatter, int caseCnt = 2000000) 

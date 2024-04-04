@@ -6892,7 +6892,6 @@ public:
 						else
 							geneOffset += seq.info[2].a ;
 					}
-
 					for ( k = locateS - 1, j = geneOffset - 1 ; k >= 0 && j >=0 ; --k, --j )
 					{
 						if ( read[k] == 'M' )
@@ -6945,6 +6944,7 @@ public:
 					anchorType = 3 ;
 				}
 				//printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
+				int originalLocateS = locateS ;
 				if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.9 )
 				{
 					int size = bestTags.Size() ;
@@ -6955,7 +6955,7 @@ public:
 						no.seqIdx = bestTags[i].a ;
 						no.readStart = readStart ;
 						no.readEnd = readStart + bestHitLen - 1 ;
-						no.seqStart = bestTags[i].b - ( locateS - readStart ) ;
+						no.seqStart = bestTags[i].b - ( originalLocateS - readStart ) ;
 						no.seqEnd = no.seqStart + bestHitLen - 1 ;
 						no.matchCnt = 2 * bestMatchCnt ;
 						no.similarity = bestMatchCnt / (double)bestHitLen ;
@@ -7094,13 +7094,14 @@ public:
 					{
 						int size = bestTags.Size() ;
 						bool start = false ;
+						int originalLocateE = locateE ;
 						for ( i = 0 ; i < size ; ++i )
 						{
 							struct _overlap no ;
 							no.seqIdx = bestTags[i].a ;
 							no.readStart = readEnd - bestHitLen + 1 ;
 							no.readEnd = readEnd ;
-							no.seqEnd = bestTags[i].b + ( readEnd - locateE ) ;
+							no.seqEnd = bestTags[i].b + ( readEnd - originalLocateE ) ;
 							no.seqStart = no.seqEnd - bestHitLen + 1 ;
 							no.matchCnt = 2 * bestMatchCnt ;
 							no.similarity = bestMatchCnt / (double)bestHitLen ;
@@ -8050,10 +8051,10 @@ public:
 		}
 		buffer2[i] = '\0' ;
 		buffer3[i] = '\0' ;
-    if (includeCDR3Coordinate)
-      sprintf(buffer + strlen(buffer), "%s\t%s\t%d\t%d", buffer2, buffer3, cdr3AdjustedStart, cdr3AdjustedEnd) ;
-    else
-      sprintf(buffer + strlen(buffer), "%s\t%s", buffer2, buffer3) ;
+		if (includeCDR3Coordinate)
+			sprintf(buffer + strlen(buffer), "%s\t%s\t%d\t%d", buffer2, buffer3, cdr3AdjustedStart, cdr3AdjustedEnd) ;
+		else
+			sprintf(buffer + strlen(buffer), "%s\t%s", buffer2, buffer3) ;
 
 		for (i = 0 ; i < 4 ; ++i)
 			if (align[i])
