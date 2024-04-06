@@ -595,7 +595,11 @@ int main( int argc, char *argv[] )
 	}
 
 	if ( hasBarcode )
+	{
 		seqSet.SetBarcodeFromSeqName( barcodeStrToInt ) ;
+		// Need to check the missing_barcode scenario in future version.
+		seqSet.SetConsiderBarcodeInIndexHash(true) ;
+	}
 
 	int seqCnt = seqSet.Size() ;
 	struct _annotate *annotations = new struct _annotate[ seqCnt ] ;

@@ -1114,6 +1114,11 @@ int main( int argc, char *argv[] )
 			seqSet.SetHitLenRequired( 13 ) ;
 		else
 			seqSet.SetHitLenRequired( 17 ) ;
+
+		if (keepMissingBarcode == false)
+		{
+			seqSet.SetConsiderBarcodeInIndexHash(true) ;
+		}
 	}
 	
 	if (minHitLen != -1)

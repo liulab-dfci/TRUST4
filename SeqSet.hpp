@@ -1206,7 +1206,7 @@ private:
 
 				if ( i == kmerLength - 1 || !prevKmerCode.IsEqual( kmerCode ) )
 				{
-					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode, barcode ) ; 
 
 					int size = indexHit.Size() ;
 					if ( size >= 100 && puse == NULL /*&& barcode == -1*/ && i != kmerLength - 1 && i != len - 1 )
@@ -1272,7 +1272,7 @@ private:
 					continue ;
 				if ( i == kmerLength - 1 || !prevKmerCode.IsEqual( kmerCode ) )
 				{
-					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode, barcode ) ; 
 
 					int size = indexHit.Size() ;
 
@@ -1986,7 +1986,7 @@ private:
 				kmerCode.Append( consensus[i] ) ;
 				if ( i == kmerLength || !prevKmerCode.IsEqual( kmerCode ) )
 				{
-					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode ) ; 
+					SimpleVector<struct _indexInfo> &indexHit = *seqIndex.Search( kmerCode, seqs[k].barcode) ; 
 
 					int size = indexHit.Size() ;
 					if ( size >= 100 )
@@ -2319,6 +2319,8 @@ public:
 		prevAddInfo.readStart = -1 ;
 	
 		nomatchGapLimit = ComputeNomatchGapLimit() ;
+
+		seqIndex.SetConsiderBarcode(false) ;
 	}
 	~SeqSet() 
 	{
@@ -2352,6 +2354,11 @@ public:
 	double SetNovelSeqSimilarity( double s )
 	{
 		return novelSeqSimilarity = s ;
+	}
+	
+	void SetConsiderBarcodeInIndexHash(bool s)
+	{
+		seqIndex.SetConsiderBarcode(s) ;
 	}
 
 	void ReverseComplement( char *rcSeq, char *seq, int len )
@@ -2495,7 +2502,7 @@ public:
 
 			sw.consensusLen = strlen( sw.consensus );
 			sw.barcode = -1 ;
-			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id ) ;
+			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id, -1 ) ;
 		}
 	}
 	
@@ -2530,7 +2537,7 @@ public:
 				sw.posWeight[i].count[ nucToNum[ sw.consensus[i] - 'A' ] ] = 1 ;
 		}
 		KmerCode kmerCode( kmerLength ) ;
-		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
+		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx, -1) ;
 		
 		sw.barcode = -1 ;
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
@@ -2571,7 +2578,7 @@ public:
 				sw.posWeight[i].count[ nucToNum[ sw.consensus[i] - 'A' ] ] = 1 ;
 		}
 		KmerCode kmerCode( kmerLength ) ;
-		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx ) ;
+		seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, seqLen, seqIdx, barcode ) ;
 	
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, strand ) ;
 
@@ -2605,7 +2612,7 @@ public:
 		seqs[ seqIdx].posWeight = posWeight ;
 		
 		KmerCode kmerCode( kmerLength ) ;
-		seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, seqLen, seqIdx ) ;
+		seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, seqLen, seqIdx, -1 ) ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 
 		return seqIdx ;
@@ -2636,7 +2643,7 @@ public:
 			ns.posWeight = in.seqs[i].posWeight ;
 			ns.minLeftExtAnchor = in.seqs[i].minLeftExtAnchor ;
 			ns.minRightExtAnchor = in.seqs[i].minRightExtAnchor ;
-			seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, id ) ;
+			seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, id, ns.barcode) ;
 			seqs.push_back( ns ) ;
 		}
 	}
@@ -3395,7 +3402,7 @@ public:
 				KmerCode kmerCode( kmerLength ) ;
 				for ( i = 0 ; i < eOverlapCnt ; ++i )
 					seqIndex.RemoveIndexFromRead( kmerCode, seqs[ extendedOverlaps[i].seqIdx ].consensus,
-						seqs[ extendedOverlaps[i].seqIdx ].consensusLen, extendedOverlaps[i].seqIdx, 0 ) ;
+						seqs[ extendedOverlaps[i].seqIdx ].consensusLen, extendedOverlaps[i].seqIdx, barcode, 0 ) ;
 				
 				/*if ( seqOffset[0] != 0 )
 				{
@@ -3497,7 +3504,7 @@ public:
 				
 				// Update the index
 				UpdateConsensus( newSeqIdx, false ) ;
-				seqIndex.BuildIndexFromRead( kmerCode, newConsensus, newConsensusLen, newSeqIdx ) ;
+				seqIndex.BuildIndexFromRead( kmerCode, newConsensus, newConsensusLen, newSeqIdx, barcode ) ;
 				
 				// Update the anchor requirement.
 				seqs[ newSeqIdx ].minLeftExtAnchor = seqs[ extendedOverlaps[0].seqIdx ].minLeftExtAnchor ;
@@ -3553,14 +3560,14 @@ public:
 					KmerCode kmerCode( kmerLength ) ;
 					if ( shift > 0 )
 					{
-						seqIndex.BuildIndexFromRead( kmerCode, newConsensus, extendedOverlaps[0].readStart + kmerLength - 1, seqIdx ) ;
-						seqIndex.UpdateIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, shift, seqIdx, seqIdx ) ; 
+						seqIndex.BuildIndexFromRead( kmerCode, newConsensus, extendedOverlaps[0].readStart + kmerLength - 1, seqIdx, barcode ) ;
+						seqIndex.UpdateIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, barcode, shift, seqIdx, seqIdx) ; 
 					}
 					if ( extendedOverlaps[0].readEnd < len - 1 )
 					{
 						int start = extendedOverlaps[0].readStart + extendedOverlaps[0].seqEnd - kmerLength + 2 ;
-						seqIndex.BuildIndexFromRead( kmerCode, newConsensus + start , 
-							( newConsensusLen - start ), seqIdx, 
+						seqIndex.BuildIndexFromRead( kmerCode, newConsensus + start, 
+							( newConsensusLen - start ), seqIdx, barcode,
 							start ) ;
 					}
 					
@@ -3732,7 +3739,7 @@ public:
 					int end = nPos[j - 1] + kmerLength - 1 + readInConsensusOffset ;
 					if ( end >= seq.consensusLen )
 						end = seq.consensusLen - 1 ;
-					seqIndex.BuildIndexFromRead( kmerCode, seq.consensus + start, end - start + 1, seqIdx, start  ) ;
+					seqIndex.BuildIndexFromRead( kmerCode, seq.consensus + start, end - start + 1, seqIdx, barcode, start ) ;
 					i = j ;
 				}
 
@@ -3787,6 +3794,9 @@ public:
 
 		if ( addNew )
 		{
+			// Since now the ref sequence and novel sequence are
+			// split, it won't reach this portion now due to the test
+			// in the previous if block
 			// Add the sequence to SeqSet
 			int idx = seqs.size() ;
 			struct _seqWrapper ns ;
@@ -3800,6 +3810,7 @@ public:
 			if ( overlaps[ anchorSeqIdx ].strand == -1 )
 				ReverseComplement( ns.consensus, read, len ) ;
 			ns.isRef = false ;
+			ns.barcode = barcode ;
 			
 			ns.posWeight.Reserve( len ) ;
 			ns.posWeight.ExpandTo( len ) ;
@@ -3818,7 +3829,7 @@ public:
 
 			// Don't forget to update index.
 			KmerCode kmerCode( kmerLength ) ;
-			seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, len, idx ) ;			
+			seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, len, idx, barcode) ;			
 			
 			SetPrevAddInfo( idx, 0, len - 1, 0, len - 1, overlaps[0].strand ) ; 
 #ifdef DEBUG
@@ -3938,7 +3949,7 @@ public:
 		{
 			// Inefficient implementation, improve in future.
 			KmerCode kmerCode( kmerLength ) ;
-			seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, seqIdx, 0 ) ;
+			seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, seqIdx, seq.barcode, 0 ) ;
 		}
 
 		int size = changes.Size() ;
@@ -3948,7 +3959,7 @@ public:
 		if ( updateIndex )
 		{
 			KmerCode kmerCode( kmerLength ) ;
-			seqIndex.BuildIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, seqIdx, 0 ) ;
+			seqIndex.BuildIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, seqIdx, seq.barcode, 0 ) ;
 		}
 	}
 	
@@ -3978,7 +3989,7 @@ public:
 			seqs[k] = seqs[i] ;
 			//if ( i != k )
 			//	seqIndex.UpdateIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, 0, i, k ) ;
-			seqIndex.BuildIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, k, 0 ) ;
+			seqIndex.BuildIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, k, seqs[k].barcode, 0 ) ;
 			++k ;
 		}
 		SetPrevAddInfo( -1, -1, -1, -1, -1, 0 ) ; 
@@ -4173,7 +4184,7 @@ public:
 					seqs[ seqIdx ].posWeight[ adj[i][0].seqStart + j ] += seqs[i].posWeight[j] ;
 				}
 
-				seqIndex.RemoveIndexFromRead( kmerCode, seqs[i].consensus, seqs[i].consensusLen, i, 0 ) ;	
+				seqIndex.RemoveIndexFromRead( kmerCode, seqs[i].consensus, seqs[i].consensusLen, i, seqs[i].barcode, 0 ) ;	
 				ReleaseSeq( i ) ;
 
 				containedIn[i] = seqIdx ;
@@ -8390,7 +8401,7 @@ public:
 				//printf( "Break %d to %d.\n", i, seqs.size() - 1 ) ;
 			}
 			// Clean up original seq
-			seqIndex.RemoveIndexFromRead( kmerCode, seqs[i].consensus, seqs[i].consensusLen, i, 0 ) ;
+			seqIndex.RemoveIndexFromRead( kmerCode, seqs[i].consensus, seqs[i].consensusLen, i, seqs[i].barcode, 0 ) ;
 			free( seqs[i].consensus ) ;
 			free( seqs[i].name ) ;
 			seqs[i].consensus = seqs[i].name = NULL ;
@@ -10098,12 +10109,12 @@ public:
 
 		if (updateIndex)
 			seqIndex.RemoveIndexFromRead(kmerCode, seq.consensus + start,
-					end - start + 1, seqIdx, start) ;
+					end - start + 1, seqIdx, seq.barcode, start) ;
 
 		seq.consensus[pos] = c ;
 
 		if (updateIndex)
-			seqIndex.BuildIndexFromRead(kmerCode, seq.consensus + start, end - start + 1, seqIdx, start) ;
+			seqIndex.BuildIndexFromRead(kmerCode, seq.consensus + start, end - start + 1, seqIdx, seq.barcode, start) ;
 	}
 	
 	void SetIsLongSeqSet( bool in )

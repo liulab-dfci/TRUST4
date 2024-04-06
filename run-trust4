@@ -7,7 +7,7 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-die "TRUST4 v1.0.15-r496 usage: ./run-trust4 [OPTIONS]:\n".
+die "TRUST4 v1.1.0-r498 usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
