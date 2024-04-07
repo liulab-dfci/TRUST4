@@ -251,7 +251,7 @@ while (<FP1>)
 		my $contigId = (split /_/, $cols[0])[0] ;
 		next if (!defined $selectedContigs{$contigId}) ;
 		my @matchedCols = @{$representativeCols[ $selectedContigs{$contigId} ]} ;
-		if ($matchedCols[2] eq $cols[12])
+		if ($matchedCols[2] eq $cols[13])
 		{
 			$cols[0] = ${cellPrefix}."_".$cols[0] ;
 			print FPfinalairr join("\t", @cols), "\n" ;
