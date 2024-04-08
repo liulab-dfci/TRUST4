@@ -232,13 +232,22 @@ while (<FP1>)
 	# Process the AIRR file
 	open FPairr, "tmp_smartseq_airr.tsv" ;
 	my $lineCnt = 0 ;
+	my %airrNameToCol ;
 	while (<FPairr>)
 	{
 		chomp ;
 		if ($cellProcessed == 0 && $lineCnt == 0)
 		{
 			print FPfinalairr $_,"\n" ;
+			
+			chomp ;
+			my @cols = split /\t/ ;
+			for ($i = 0 ; $i < scalar(@cols) ; ++$i)
+			{
+				$airrNameToCol{ $cols[$i] } = $i ;
+			}
 		}
+
 		if ($lineCnt == 0)
 		{
 			++$lineCnt ;
@@ -254,6 +263,10 @@ while (<FP1>)
 		if ($matchedCols[2] eq $cols[13])
 		{
 			$cols[0] = ${cellPrefix}."_".$cols[0] ;
+			
+			# Add the cell id
+			$cols[ $airrNameToCol{"cell_id"} ] = $cellPrefix ;
+
 			print FPfinalairr join("\t", @cols), "\n" ;
 		}
 	}
