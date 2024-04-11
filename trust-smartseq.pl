@@ -118,6 +118,7 @@ open $FP2, $readFile2 if ($hasMate) ;
 open FPfinalreport, ">${outputPrefix}_report.tsv" ;
 open FPfinalannot, ">${outputPrefix}_annot.fa" ;
 open FPfinalairr, ">${outputPrefix}_airr.tsv" ;
+my %airrNameToCol ;
 
 print FPfinalreport "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\tcid_full_length\n" ;
 my $cellProcessed = 0 ;
@@ -232,7 +233,6 @@ while (<FP1>)
 	# Process the AIRR file
 	open FPairr, "tmp_smartseq_airr.tsv" ;
 	my $lineCnt = 0 ;
-	my %airrNameToCol ;
 	while (<FPairr>)
 	{
 		chomp ;
