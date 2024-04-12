@@ -808,7 +808,10 @@ if ($impute == 1)
 		my $s = ${$barcodeOutput{$candidateOtherBarcode}}[$missingChain + 1] ;
 		# Change the orginated assembly id to "impute".
 		@cols = split /,/, $s ;
-		$cols[7] = "impute_from_$candidateOtherBarcode" ;
+		if (!($cols[7] =~ /impute/))
+		{
+			$cols[7] = "impute_from_".$cols[7] ;
+		}
 		$s = join(",", @cols) ;
 		${$barcodeOutput{$barcode}}[$missingChain + 1] = $s ;
 	}

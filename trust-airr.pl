@@ -171,7 +171,7 @@ for ($i = 2 ; $i < @ARGV ; ++$i)
 
 
 my %seqCDR3s ;
-
+my %seqImputeBarcodeList ; # the sequences used in CDR3 imputation in barcoderep output. 
 open FP, $ARGV[0] ;
 
 if ($format eq "simplerep")
@@ -216,9 +216,17 @@ elsif ($format eq "barcoderep")
 			next if ($cols[$i] eq "*") ;
 			my @cols2 = split /,/, $cols[$i] ;
 			my $seqId = $cols2[7] ;
-			my $fullLength = "F" ;
-			$fullLength = "T" if ($cols2[9] == 1) ;
-			@{$seqCDR3s{$seqId}} = ($cols2[4], int($cols2[6]), $fullLength) ;
+			if ( !($seqId =~ /^impute/) )
+			{
+				my $fullLength = "F" ;
+				$fullLength = "T" if ($cols2[9] == 1) ;
+				@{$seqCDR3s{$seqId}} = ($cols2[4], int($cols2[6]), $fullLength) ;
+			}
+			else
+			{
+				#"impute_from_" has 12 characters
+				push @{$seqImputeBarcodeList{substr($seqId, 12)}}, $cols[0] ;
+			}
 		}
 	}
 }
@@ -441,6 +449,18 @@ while (<FP>)
 			$vcall, $dcall, $jcall, $ccall, $outputSequenceAlignment, $outputGermlineAlignment, 
 			$cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
 		  $vcigar, $dcigar, $jcigar, $ccigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
+
+		if ($format eq "barcoderep" && defined $seqImputeBarcodeList{$seqId})
+		{
+			foreach $cellId (@{$seqImputeBarcodeList{$seqId}})
+			{
+				$outputSeqId = "${cellId}_impute_from_${seqId}" ;
+				print join("\t", ($outputSeqId, $outputSeq, "F", $productive, $locus,
+						$vcall, $dcall, $jcall, $ccall, $outputSequenceAlignment, $outputGermlineAlignment, 
+						$cdr1, $cdr2, $cdr3s[$i], $cdr3aa, 
+						$vcigar, $dcigar, $jcigar, $ccigar, $videntity, $jidentity, $cellId, $cdr3s[$i + 2], $cdr3s[$i + 1]) ). "\n" ;
+			}
+		}
 	}
 }
 close FP ;
