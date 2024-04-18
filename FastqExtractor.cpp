@@ -135,7 +135,7 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, ReadFormatter
 {
 	if ( qual != NULL )
 		fprintf( fp, "@%s\n%s\n+\n%s\n", name, readFormatter.Extract(seq, readCategory, true, true, 0),
-				readFormatter.Extract(qual, readCategory, false, 1)) ;
+				readFormatter.Extract(qual, readCategory, false, true, 1)) ;
 	else
 		fprintf( fp, ">%s\n%s\n", name, readFormatter.Extract(seq, readCategory, true, true, 0) ) ;
 }
