@@ -8,8 +8,6 @@
 
 #include "KmerCode.hpp"
 
-#define KCOUNT_HASH_MAX 1000003
-
 class KmerCount
 {
 private:
@@ -17,21 +15,33 @@ private:
 	int kmerLength ;
 	KmerCode kmerCode ;
 	int maxReadLen ;
+  int khashMax ;
 
 	int *c ;
 
 	int GetHash( uint64_t k )
 	{
-		return k % KCOUNT_HASH_MAX ;
+		return k % khashMax ;
 	}
 public:
-	KmerCount( int k ): kmerCode( k ) 
+	KmerCount( int k, int hmax = 1000003 ): kmerCode( k )
 	{ 
-		kmerLength = k ; 
+		kmerLength = k ;
+    khashMax = hmax ;
 		maxReadLen = -1 ;
 		c = NULL ;
-		count = new std::map<uint64_t, int>[KCOUNT_HASH_MAX] ;
+		count = new std::map<uint64_t, int>[khashMax] ;
 	}
+
+  KmerCount(const KmerCount &b): kmerCode(b.kmerLength)
+  {
+    kmerLength = b.kmerLength ;
+    khashMax = b.khashMax ;
+    maxReadLen = -1 ;
+    c = NULL ;
+		count = new std::map<uint64_t, int>[khashMax] ;
+  }
+
 	~KmerCount() 
 	{
 		if ( c != NULL )
@@ -97,7 +107,7 @@ public:
 		int i, j ;
 		FILE *fp = fopen( file, "r" ) ;
 		char *buffer = new char[kmerLength + 1] ;
-		for ( i = 0 ; i < KCOUNT_HASH_MAX ; ++i )	
+		for ( i = 0 ; i < khashMax ; ++i )	
 		{
 			for ( std::map<uint64_t, int>::iterator it = count[i].begin() ; it != count[i].end() ; ++it )
 			{
@@ -121,6 +131,12 @@ public:
 		if ( c == NULL )
 			 c = new int[ sz ] ;
 	}
+
+  void SetBuffer()
+  {
+    if (c == NULL && maxReadLen > 0)
+      c = new int[maxReadLen] ;
+  }
 	
 	int GetCount( char *kmer )
 	{

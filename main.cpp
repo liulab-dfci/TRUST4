@@ -108,6 +108,17 @@ struct _quickAnnotateReadsThreadArg
 	int readCnt ;
 } ;
 
+struct _barcodeKmerCountThreadArg
+{
+  int tid ;
+  int threadCnt ;
+  std::vector<struct _sortRead> *pReads ;
+  int readCnt ;
+  std::vector<KmerCount> *pBarcodeKmerCount ;
+
+  int task ; // 0: get kmer count. 1: put kmer count to each read
+} ;
+
 struct _assignReadsThreadArg
 {
 	int tid ;
@@ -180,6 +191,38 @@ void *QuickAnnotateReads_Thread( void *pArg )
 			sortedReads[i].geneOverlap[j] = geneOverlap[j] ;
 	}
 	pthread_exit( NULL ) ;
+}
+
+void *BarcodeKmerCount_Thread(void *pArg)
+{
+  int i ;
+  struct _barcodeKmerCountThreadArg &arg = *((struct _barcodeKmerCountThreadArg*)pArg) ;
+	std::vector< struct _sortRead> &reads = *arg.pReads ;
+  
+  if (arg.task == 0)
+  {
+    for (i = 0 ; i < arg.readCnt ; ++i)
+    {
+      if (reads[i].barcode % arg.threadCnt == arg.tid)
+        (arg.pBarcodeKmerCount->at(reads[i].barcode)).AddCount(reads[i].read) ;
+    }
+  }
+  else if (arg.task == 1)
+  {
+    for (i = 0 ; i < arg.readCnt ; ++i)
+    {
+      // Has to be in this fashion, otherwise reads from the same barcode may compete
+      // for the internal kmer count buffer.
+      if (reads[i].barcode % arg.threadCnt == arg.tid) 
+      {
+        int tmp = reads[i].minCnt ;
+        (arg.pBarcodeKmerCount->at(reads[i].barcode)).GetCountStatsAndTrim(reads[i].read, NULL, 
+            reads[i].minCnt, reads[i].medianCnt, reads[i].avgCnt ) ;
+        reads[i].medianCnt = tmp ;
+      }
+    }
+  }
+  pthread_exit(NULL) ;
 }
 
 void *AssignReads_Thread( void *pArg )
@@ -709,6 +752,74 @@ int main( int argc, char *argv[] )
 #endif
 	
 	kmerCount.Release() ;
+
+  if (hasBarcode && !keepMissingBarcode) // use within barcode count 
+  {
+    PrintLog("Get barcode-wise kmer count.") ;
+    int barcodeCnt = barcodeIntToStr.size() ;
+    std::vector<KmerCount> barcodeKmerCount ;
+    
+    barcodeKmerCount.reserve(barcodeCnt) ;
+    for (i = 0 ; i < barcodeCnt ; ++i)
+    {
+      barcodeKmerCount.push_back(KmerCount(21, 23)) ;
+    }
+    
+    if (threadCnt == 1)
+    {
+      for (i = 0 ; i < readCnt ; ++i)
+      {
+        int bc = sortedReads[i].barcode ;
+        barcodeKmerCount[bc].AddCount(sortedReads[i].read) ;
+      }
+
+      for (i = 0 ; i < readCnt ; ++i)
+      {
+        int bc = sortedReads[i].barcode ;
+        int tmp = sortedReads[i].minCnt ; // the count from the gloal count
+        barcodeKmerCount[bc].GetCountStatsAndTrim( sortedReads[i].read, NULL, 
+            sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+        sortedReads[i].medianCnt = tmp ; // replace the medicanCnt by the global kmer count
+      }
+    }    
+    else
+    {
+      pthread_t *threads = new pthread_t[ threadCnt ] ;
+      struct _barcodeKmerCountThreadArg *args = new struct _barcodeKmerCountThreadArg[threadCnt] ;
+      pthread_attr_t attr ;
+
+      pthread_attr_init( &attr ) ;
+      pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+      for ( i = 0 ; i < threadCnt ; ++i )
+      {
+        args[i].tid = i ;
+        args[i].threadCnt = threadCnt ;
+        args[i].pReads = &sortedReads ;
+        args[i].readCnt = readCnt ;
+        args[i].pBarcodeKmerCount = &barcodeKmerCount ;
+        args[i].task = 0 ;
+        pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
+      }
+
+      for ( i = 0 ; i < threadCnt ; ++i )
+        pthread_join( threads[i], NULL ) ;
+     
+      for ( i = 0 ; i < threadCnt ; ++i )
+      {
+        args[i].task = 1 ;
+        pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
+      }
+      
+      for ( i = 0 ; i < threadCnt ; ++i )
+        pthread_join( threads[i], NULL ) ;
+
+      delete[] threads ;
+      delete[] args ;
+    }
+    PrintLog("Finish barcode-wise kmer count.") ;
+  }
+
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		sortedReads[i].info = i ;
