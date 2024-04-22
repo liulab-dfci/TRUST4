@@ -3580,54 +3580,61 @@ public:
 							seq.posWeight[i + shift] = seq.posWeight[i] ;
 						
 						// Lower the weight at the end for original sequence.
-						for ( i = 0 ; i < 2 ; ++i )
+						if (barcode == -1 || minKmerCount > 1)
 						{
-							if ( i + shift >= len || r[i + shift] == 'N' )
-								continue ;
-							// If the current weight is 1, change the consensus to the newly input nucleotide
-							if (r[i + shift] != newConsensus[i + shift]
-									&& newConsensus[i + shift] != 'N' // The equal to N case will be handled later 
-									&& seq.posWeight[i + shift].count[ nucToNum[newConsensus[i + shift] - 'A']] == 1)
+							for ( i = 0 ; i < 2 ; ++i )
 							{
-								struct _pair np ;
-								np.a = i + shift ;
-								np.b = (int)(r[i + shift]) ;
-								consensusReplacement.PushBack(np) ;	
-							}
+								if ( i + shift >= len || r[i + shift] == 'N' )
+									continue ;
+								// If the current weight is 1, change the consensus to the newly input nucleotide
+								if (r[i + shift] != newConsensus[i + shift]
+										&& newConsensus[i + shift] != 'N' // The equal to N case will be handled later 
+										&& seq.posWeight[i + shift].count[ nucToNum[newConsensus[i + shift] - 'A']] == 1)
+								{
+									struct _pair np ;
+									np.a = i + shift ;
+									np.b = (int)(r[i + shift]) ;
+									consensusReplacement.PushBack(np) ;	
+								}
 
-							for ( j = 0 ; j < 4 ; ++j )
-								if ( r[i + shift] != numToNuc[j] && seq.posWeight[i + shift].count[j] > 1 )
-									--seq.posWeight[i + shift].count[j] ;
+								for ( j = 0 ; j < 4 ; ++j )
+									if ( r[i + shift] != numToNuc[j] && seq.posWeight[i + shift].count[j] > 1 )
+										--seq.posWeight[i + shift].count[j] ;
+							}
 						}
 						seq.posWeight.SetZero( 0, shift ) ;
 					}
+
 					if ( extendedOverlaps[0].readEnd < len - 1 )
 					{
 						int start = extendedOverlaps[0].readStart + seq.consensusLen ;
 						seq.posWeight.SetZero( start, len - extendedOverlaps[0].readEnd - 1 ) ;
 						
 						// Lower the weight at the end for original sequence.
-						for ( i = seq.consensusLen - 2 ; i < seq.consensusLen ; ++i )
+						if (barcode == -1 || minKmerCount > 1)
 						{
-							int pos = i - extendedOverlaps[0].seqStart ;
-							int seqPos = i + shift ;
-							if ( pos < 0 || r[pos] == 'N' )
-								continue ;
-							
-							// If the current weight is 1, change the consensus to the newly input nucleotide
-							if (r[pos] != newConsensus[seqPos]
-									&& newConsensus[seqPos] != 'N' 
-									&& seq.posWeight[seqPos].count[ nucToNum[newConsensus[seqPos] - 'A']] == 1)
+							for ( i = seq.consensusLen - 2 ; i < seq.consensusLen ; ++i )
 							{
-								struct _pair np ;
-								np.a = seqPos ;
-								np.b = (int)r[pos] ;
-								consensusReplacement.PushBack(np) ;
-							}
+								int pos = i - extendedOverlaps[0].seqStart ;
+								int seqPos = i + shift ;
+								if ( pos < 0 || r[pos] == 'N' )
+									continue ;
 
-							for ( j = 0 ; j < 4 ; ++j )
-								if ( r[pos] != numToNuc[j] && seq.posWeight[seqPos].count[j] > 1 )
-									--seq.posWeight[seqPos].count[j] ;
+								// If the current weight is 1, change the consensus to the newly input nucleotide
+								if (r[pos] != newConsensus[seqPos]
+										&& newConsensus[seqPos] != 'N' 
+										&& seq.posWeight[seqPos].count[ nucToNum[newConsensus[seqPos] - 'A']] == 1)
+								{
+									struct _pair np ;
+									np.a = seqPos ;
+									np.b = (int)r[pos] ;
+									consensusReplacement.PushBack(np) ;
+								}
+
+								for ( j = 0 ; j < 4 ; ++j )
+									if ( r[pos] != numToNuc[j] && seq.posWeight[seqPos].count[j] > 1 )
+										--seq.posWeight[seqPos].count[j] ;
+							}
 						}
 					}
 					

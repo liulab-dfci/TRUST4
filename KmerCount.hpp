@@ -15,7 +15,7 @@ private:
 	int kmerLength ;
 	KmerCode kmerCode ;
 	int maxReadLen ;
-  int khashMax ;
+	int khashMax ;
 
 	int *c ;
 
@@ -27,20 +27,20 @@ public:
 	KmerCount( int k, int hmax = 1000003 ): kmerCode( k )
 	{ 
 		kmerLength = k ;
-    khashMax = hmax ;
+		khashMax = hmax ;
 		maxReadLen = -1 ;
 		c = NULL ;
 		count = new std::map<uint64_t, int>[khashMax] ;
 	}
 
-  KmerCount(const KmerCount &b): kmerCode(b.kmerLength)
-  {
-    kmerLength = b.kmerLength ;
-    khashMax = b.khashMax ;
-    maxReadLen = -1 ;
-    c = NULL ;
+	KmerCount(const KmerCount &b): kmerCode(b.kmerLength)
+	{
+		kmerLength = b.kmerLength ;
+		khashMax = b.khashMax ;
+		maxReadLen = -1 ;
+		c = NULL ;
 		count = new std::map<uint64_t, int>[khashMax] ;
-  }
+	}
 
 	~KmerCount() 
 	{
@@ -132,11 +132,11 @@ public:
 			 c = new int[ sz ] ;
 	}
 
-  void SetBuffer()
-  {
-    if (c == NULL && maxReadLen > 0)
-      c = new int[maxReadLen] ;
-  }
+	void SetBuffer()
+	{
+		if (c == NULL && maxReadLen > 0)
+			c = new int[maxReadLen] ;
+	}
 	
 	int GetCount( char *kmer )
 	{
@@ -158,7 +158,7 @@ public:
 	}
 
 
-	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, double &avgCount )
+	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, float &avgCount )
 	{
 		int i, k ;
 		int sum ;
