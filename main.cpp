@@ -60,9 +60,20 @@ struct _sortRead
 	char *id ;
 	char *read ;
 	char *qual ;
+
+	// global k-mer count
 	int minCnt ;
 	int medianCnt ;
-	double avgCnt ;
+	float avgCnt ;
+
+	// barcode-wise k-mer count
+	int barcodeMinCnt ;
+	int barcodeMedianCnt ;
+	float barcodeAvgCnt ;
+
+	//double avgQual ;
+	//int germlineMatchCnt ; 
+
 	int len ;
 
 	int strand ;
@@ -75,9 +86,25 @@ struct _sortRead
 
 	struct _overlap geneOverlap[4] ; // Rough annotation of the read
 
+	_sortRead()
+	{
+		id = read = qual = NULL ;
+		minCnt = medianCnt = barcodeMinCnt = barcodeMedianCnt = 0 ;
+		avgCnt = barcodeAvgCnt = 0 ;
+		len = strand = 0 ;
+		mateIdx = info = -1 ;
+		barcode = umi = 1 ;
+	}
+
 	bool operator<( const struct _sortRead &b ) const 
 	{
-		if ( minCnt != b.minCnt )
+		if ( barcode != -1 && b.barcode != -1 && barcodeMinCnt != b.barcodeMinCnt )
+			return barcodeMinCnt > b.barcodeMinCnt ;
+			/*else if ( medianCnt != b.medianCnt )
+				return medianCnt > b.medianCnt ;
+			else if ( avgCnt != b.avgCnt )
+				return avgCnt > b.avgCnt ;*/
+		else if ( minCnt != b.minCnt )
 			return minCnt > b.minCnt ;
 		else if ( medianCnt != b.medianCnt )
 			return medianCnt > b.medianCnt ;
@@ -85,6 +112,10 @@ struct _sortRead
 			return avgCnt > b.avgCnt ;
 		else if ( len != b.len )
 			return len > b.len ;
+		//else if (avgQual != b.avgQual)
+		//	return avgQual > b.avgQual ;
+		//else if (germlineMatchCnt != b.germlineMatchCnt)
+		//	return germlineMatchCnt > b.germlineMatchCnt ;
 		else if (barcode != b.barcode)
 			return barcode < b.barcode ;
 		else
@@ -106,6 +137,17 @@ struct _quickAnnotateReadsThreadArg
 	SeqSet *refSet ;
 	std::vector<struct _sortRead> *pSortedReads ;
 	int readCnt ;
+} ;
+
+struct _barcodeKmerCountThreadArg
+{
+	int tid ;
+	int threadCnt ;
+	std::vector<struct _sortRead> *pReads ;
+	int readCnt ;
+	std::vector<KmerCount> *pBarcodeKmerCount ;
+
+	int task ; // 0: get kmer count. 1: put kmer count to each read
 } ;
 
 struct _assignReadsThreadArg
@@ -180,6 +222,36 @@ void *QuickAnnotateReads_Thread( void *pArg )
 			sortedReads[i].geneOverlap[j] = geneOverlap[j] ;
 	}
 	pthread_exit( NULL ) ;
+}
+
+void *BarcodeKmerCount_Thread(void *pArg)
+{
+	int i ;
+	struct _barcodeKmerCountThreadArg &arg = *((struct _barcodeKmerCountThreadArg*)pArg) ;
+	std::vector< struct _sortRead> &reads = *arg.pReads ;
+
+	if (arg.task == 0)
+	{
+		for (i = 0 ; i < arg.readCnt ; ++i)
+		{
+			if (reads[i].barcode % arg.threadCnt == arg.tid)
+				(arg.pBarcodeKmerCount->at(reads[i].barcode)).AddCount(reads[i].read) ;
+		}
+	}
+	else if (arg.task == 1)
+	{
+		for (i = 0 ; i < arg.readCnt ; ++i)
+		{
+			// Has to be in this fashion, otherwise reads from the same barcode may compete
+			// for the internal kmer count buffer.
+			if (reads[i].barcode % arg.threadCnt == arg.tid) 
+			{
+				(arg.pBarcodeKmerCount->at(reads[i].barcode)).GetCountStatsAndTrim(reads[i].read, NULL, 
+						reads[i].barcodeMinCnt, reads[i].barcodeMedianCnt, reads[i].barcodeAvgCnt ) ;
+			}
+		}
+	}
+	pthread_exit(NULL) ;
 }
 
 void *AssignReads_Thread( void *pArg )
@@ -425,9 +497,9 @@ int main( int argc, char *argv[] )
 			mateR.barcode = barcode ;
 			mateR.umi = umi ;
 			if ( mateReads.qual != NULL )
-      {
+			{
 				mateR.qual = strdup( mateReads.qual ) ;
-      }
+			}
 			else
 				mateR.qual = NULL ;
 			
@@ -442,16 +514,16 @@ int main( int argc, char *argv[] )
 			int flen = strlen( mateReads.seq ) ;
 			int slen = strlen( nr.read ) ;
 			seqSet.ReverseComplement( mateR.read, mateReads.seq, flen ) ;
-      if (mateR.qual != NULL)
-      {
-        // Reverse the mateR's quality score
-        for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
-        {
-          char tmp = mateR.qual[j] ;
-          mateR.qual[j] = mateR.qual[k] ;
-          mateR.qual[k] = tmp ;
-        }
-      }
+			if (mateR.qual != NULL)
+			{
+				// Reverse the mateR's quality score
+				for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
+				{
+					char tmp = mateR.qual[j] ;
+					mateR.qual[j] = mateR.qual[k] ;
+					mateR.qual[k] = tmp ;
+				}
+			}
 			int minOverlap = ( flen + slen ) / 10 ;
 			int minOverlap2 = ( flen + slen ) / 20 ;
 			if ( minOverlap > 31 )
@@ -680,9 +752,19 @@ int main( int argc, char *argv[] )
 
 		if ( sortedReads[i].qual != NULL )
 		{
+			/*char *qual = sortedReads[i].qual ;
+			double avgQual = 0 ;
+			for (j = 0 ; qual[j] ; ++j)
+				avgQual += qual[j] ;
+			sortedReads[i].avgQual = avgQual / j ;*/
+
 			free( sortedReads[i].qual ) ;
 			sortedReads[i].qual = NULL ;
 		}
+		//else
+		//	sortedReads[i].avgQual = 0 ;
+
+
 		if ( sortedReads[i].read[0] == '\0' )
 		{
 			free( sortedReads[i].read ) ;
@@ -709,6 +791,74 @@ int main( int argc, char *argv[] )
 #endif
 	
 	kmerCount.Release() ;
+
+	if (hasBarcode && !keepMissingBarcode) // use within barcode count 
+	{
+		PrintLog("Get barcode-wise kmer count.") ;
+		int barcodeCnt = barcodeIntToStr.size() ;
+		std::vector<KmerCount> barcodeKmerCount ;
+
+		barcodeKmerCount.reserve(barcodeCnt) ;
+		for (i = 0 ; i < barcodeCnt ; ++i)
+		{
+			barcodeKmerCount.push_back(KmerCount(21, 23)) ;
+		}
+
+		if (threadCnt == 1)
+		{
+			for (i = 0 ; i < readCnt ; ++i)
+			{
+				int bc = sortedReads[i].barcode ;
+				barcodeKmerCount[bc].AddCount(sortedReads[i].read) ;
+			}
+
+			for (i = 0 ; i < readCnt ; ++i)
+			{
+				int bc = sortedReads[i].barcode ;
+				barcodeKmerCount[bc].GetCountStatsAndTrim( sortedReads[i].read, NULL, 
+						sortedReads[i].barcodeMinCnt, sortedReads[i].barcodeMedianCnt, 
+						sortedReads[i].barcodeAvgCnt ) ;
+			}
+		}    
+		else
+		{
+			pthread_t *threads = new pthread_t[ threadCnt ] ;
+			struct _barcodeKmerCountThreadArg *args = new struct _barcodeKmerCountThreadArg[threadCnt] ;
+			pthread_attr_t attr ;
+
+			pthread_attr_init( &attr ) ;
+			pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+			{
+				args[i].tid = i ;
+				args[i].threadCnt = threadCnt ;
+				args[i].pReads = &sortedReads ;
+				args[i].readCnt = readCnt ;
+				args[i].pBarcodeKmerCount = &barcodeKmerCount ;
+				args[i].task = 0 ;
+				pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
+			}
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+				pthread_join( threads[i], NULL ) ;
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+			{
+				args[i].task = 1 ;
+				pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
+			}
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+				pthread_join( threads[i], NULL ) ;
+
+			delete[] threads ;
+			delete[] args ;
+		}
+		PrintLog("Finish barcode-wise kmer count.") ;
+	}
+
+	// Remaining intializations
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		sortedReads[i].info = i ;
@@ -723,24 +873,9 @@ int main( int argc, char *argv[] )
 			++i ;	
 		}
 	}
+	
 	std::sort( sortedReads.begin(), sortedReads.end() ) ;
-	
-
-	SimpleVector<int> originToSortedIdx ;
-	SimpleVector<bool> goodCandidate ; // Use mate pair alignment information to infer 
-					   // whether this read could be a good candidate
-	originToSortedIdx.ExpandTo( readCnt ) ;
-	goodCandidate.ExpandTo( readCnt ) ;
-	for ( i = 0 ; i < readCnt ; ++i )
-		originToSortedIdx[ sortedReads[i].info ] = i ;
-	for ( i = 0 ; i < readCnt ; ++i )
-	{
-		if ( sortedReads[i].mateIdx != -1 )
-			sortedReads[i].mateIdx = originToSortedIdx[ sortedReads[i].mateIdx ] ;
-		goodCandidate[i] = false ;
-	}
 	PrintLog( "Finish sorting the reads." ) ;
-	
 
 	// Quickly annoate the reads.
 	if ( trimLevel > 1 )
@@ -783,6 +918,35 @@ int main( int argc, char *argv[] )
 		delete[] args ;
 	}
 	PrintLog( "Finish rough annotations." ) ;
+
+	/*for (i = 0 ; i < readCnt ; ++i)
+	{
+		int germlineMatchCnt = 0 ;
+		struct _overlap *overlaps = sortedReads[i].geneOverlap ;
+		for (j = 0 ; j < 4 ; ++j)
+			if (overlaps[j].seqIdx != -1)
+				germlineMatchCnt += overlaps[j].matchCnt ;
+		sortedReads[i].germlineMatchCnt = germlineMatchCnt ;
+	}
+	TODO: maybe just sort the elements with k-mer supports = 1.
+	std::sort( sortedReads.begin(), sortedReads.end() ) ;
+	PrintLog( "Finish re-sorting the reads.") ;*/
+
+	// Connect mate pair information
+	SimpleVector<int> originToSortedIdx ;
+	SimpleVector<bool> goodCandidate ; // Use mate pair alignment information to infer 
+					   // whether this read could be a good candidate
+	originToSortedIdx.ExpandTo( readCnt ) ;
+	goodCandidate.ExpandTo( readCnt ) ;
+	for ( i = 0 ; i < readCnt ; ++i )
+		originToSortedIdx[ sortedReads[i].info ] = i ;
+	for ( i = 0 ; i < readCnt ; ++i )
+	{
+		if ( sortedReads[i].mateIdx != -1 )
+			sortedReads[i].mateIdx = originToSortedIdx[ sortedReads[i].mateIdx ] ;
+		goodCandidate[i] = false ;
+	}
+
 
 	if ( trimLevel > 1 && !hasBarcode )
 	{
@@ -1247,7 +1411,7 @@ int main( int argc, char *argv[] )
 				//	similarityThreshold = 1.0 ;
 
 				addRet = seqSet.AddRead( sortedReads[i].read, name, strand, sortedReads[i].barcode, 
-						sortedReads[i].minCnt, trimLevel > 1, similarityThreshold ) ;
+						hasBarcode ? (sortedReads[i].minCnt + sortedReads[i].barcodeMinCnt + 1) / 2 : sortedReads[i].minCnt, trimLevel > 1, similarityThreshold ) ;
 				
 				if ( addRet < 0 )
 				{
@@ -1734,9 +1898,9 @@ int main( int argc, char *argv[] )
 		// At least one of the mate should have at least 2 kmer count.
 		int a = lowFreqReadsIdx[i] ;
 		int minCntA, tmp ;
-		double tmpd ;
+		float tmpf ;
 		lowFreqKmerCount.GetCountStatsAndTrim( assembledReads[a].read, NULL, 
-			minCntA, tmp, tmpd ) ;
+			minCntA, tmp, tmpf ) ;
 
 		// Then these two pairs must overlap with each other.
 		struct _sortRead nr ;
@@ -1745,7 +1909,7 @@ int main( int argc, char *argv[] )
 		nr.qual = NULL ;
 		nr.minCnt = minCntA ; 
 		nr.medianCnt = tmp ;
-		nr.avgCnt = tmpd ;
+		nr.avgCnt = tmpf ;
 		nr.strand = assembledReads[a].overlap.strand ;
 		lowFreqReads.push_back( nr ) ;
 	}
