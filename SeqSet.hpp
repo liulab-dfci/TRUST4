@@ -2448,6 +2448,7 @@ public:
 					++k ;
 				}
 			sw.consensus[k] = '\0' ;
+			sw.consensusLen = k ;
 
 			// Use IMGT documented coordinate to infer CDR1,2,3 coordinate.
 			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
@@ -2486,19 +2487,37 @@ public:
 				else
 					sw.info[2].a = sw.info[2].b = -1 ;
 
-        // Check whether CDR3 start site is the motif
-        if (sw.info[2].a != -1 
-            && DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
-              sw.consensus[sw.info[2].a + 2]) != 'C'
-             && DnaToAa(sw.consensus[sw.info[2].a - 6], sw.consensus[sw.info[2].a - 5], 
-              sw.consensus[sw.info[2].a - 4]) != 'Y' 
-             && DnaToAa(sw.consensus[sw.info[2].a - 3], sw.consensus[sw.info[2].a - 2], 
-              sw.consensus[sw.info[2].a - 1]) != 'Y')
-        {
-          PrintLog("WARNING: Cannot identify CDR3 motif based on %s's gapped alignment provided by IMGT, will use its motif information for CDR3 inference.", fa.id) ; 
-          for (i = 0 ; i < 3 ; ++i)  
-            sw.info[i].a = sw.info[i].b = -1 ;
-        }
+				// Check whether CDR3 start site is the motif
+				if (sw.info[2].a != -1 
+						&& DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
+							sw.consensus[sw.info[2].a + 2]) != 'C'
+						&& DnaToAa(sw.consensus[sw.info[2].a - 6], sw.consensus[sw.info[2].a - 5], 
+							sw.consensus[sw.info[2].a - 4]) != 'Y' 
+						&& DnaToAa(sw.consensus[sw.info[2].a - 3], sw.consensus[sw.info[2].a - 2], 
+							sw.consensus[sw.info[2].a - 1]) != 'Y')
+				{
+					// Check whether shifting a bit would work due to extra gaps
+					bool warning = false ;
+					for (i = 1 ; i <= 2 ; ++i)
+					{
+						if (sw.info[2].a + 3 * i + 2 < sw.consensusLen)
+						{
+							if (DnaToAa(sw.consensus[sw.info[2].a + 3 * i], sw.consensus[sw.info[2].a + 3 * i + 1], 
+										sw.consensus[sw.info[2].a + 3 * i + 2]) == 'C')
+							{
+								warning = true ;
+								break ;
+							}
+						}
+					}
+
+					if (warning)
+					{
+						PrintLog("WARNING: Cannot identify CDR3 motif based on %s's gapped alignment provided by IMGT, will use its motif information for CDR3 inference.", fa.id) ; 
+						for (i = 0 ; i < 3 ; ++i)  
+							sw.info[i].a = sw.info[i].b = -1 ;
+					}
+				}
 			}
 			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
 			{
@@ -2528,7 +2547,6 @@ public:
 			}
 
 
-			sw.consensusLen = strlen( sw.consensus );
 			sw.barcode = -1 ;
 			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id, -1 ) ;
 		}
