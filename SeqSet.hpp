@@ -242,6 +242,20 @@ private:
 		else
 			return a.a < b.a ;
 	}
+  
+  void PrintLog( const char *fmt, ... )
+  {
+    va_list args ;
+    char buffer[500] ;
+    va_start( args, fmt ) ;
+    vsprintf( buffer, fmt, args ) ;
+
+    time_t mytime = time(NULL) ;
+    struct tm *localT = localtime( &mytime ) ;
+    char stime[500] ;
+    strftime( stime, sizeof( stime ), "%c", localT ) ;
+    fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+  }
 
 	bool IsReverseComplement( char *a, char *b )
 	{
@@ -2471,6 +2485,20 @@ public:
 				}
 				else
 					sw.info[2].a = sw.info[2].b = -1 ;
+
+        // Check whether CDR3 start site is the motif
+        if (sw.info[2].a != -1 
+            && DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
+              sw.consensus[sw.info[2].a + 2]) != 'C'
+             && DnaToAa(sw.consensus[sw.info[2].a - 6], sw.consensus[sw.info[2].a - 5], 
+              sw.consensus[sw.info[2].a - 4]) != 'Y' 
+             && DnaToAa(sw.consensus[sw.info[2].a - 3], sw.consensus[sw.info[2].a - 2], 
+              sw.consensus[sw.info[2].a - 1]) != 'Y')
+        {
+          PrintLog("WARNING: Cannot identify CDR3 motif based on %s's gapped alignment provided by IMGT, will use its motif information for CDR3 inference.", fa.id) ; 
+          for (i = 0 ; i < 3 ; ++i)  
+            sw.info[i].a = sw.info[i].b = -1 ;
+        }
 			}
 			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
 			{

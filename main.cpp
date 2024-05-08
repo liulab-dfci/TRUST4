@@ -1738,7 +1738,7 @@ int main( int argc, char *argv[] )
 	SeqSet extendedSeq( indexKmerLength > 17 ? indexKmerLength : 17 ) ;
 	extendedSeq.InputSeqSet( seqSet, false ) ;
 	struct _overlap assign ;
-	memset( &assign, -1, sizeof( assign ) ) ;
+	//memset( &assign, -1, sizeof( assign ) ) ;
 
 	/*fp = fopen( "assign_results.out", "r" ) ;
 	for ( i = 0 ; i < assembledReadCnt ; ++i )
