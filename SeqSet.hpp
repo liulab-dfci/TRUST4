@@ -2408,11 +2408,18 @@ public:
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename, bool isIMGT = false ) 
 	{
-		int i, k ;
+		int i, j, k ;
 		ReadFiles fa ;
 		fa.AddReadFile( filename, false ) ;
 		
 		KmerCode kmerCode( kmerLength ) ;
+
+		// Variable to determine whether there is special gap
+		int chainVMotifShiftCount[7][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
+		for (i = 0 ; i < 7 ; ++i)
+			for (j = 0 ; j < 6 ; ++j)
+				chainVMotifShiftCount[i][j] = 0 ;
+
 		while ( fa.Next() )
 		{
 			// Insert the kmers 
@@ -2497,27 +2504,21 @@ public:
 							sw.consensus[sw.info[2].a - 1]) != 'Y')
 				{
 					// Check whether shifting a bit would work due to extra gaps
-					bool warning = false ;
-					for (i = 1 ; i <= 2 ; ++i)
+					for (i = 1 ; i <= 4 ; ++i)
 					{
 						if (sw.info[2].a + 3 * i + 2 < sw.consensusLen)
 						{
 							if (DnaToAa(sw.consensus[sw.info[2].a + 3 * i], sw.consensus[sw.info[2].a + 3 * i + 1], 
 										sw.consensus[sw.info[2].a + 3 * i + 2]) == 'C')
-							{
-								warning = true ;
 								break ;
-							}
 						}
+						else
+							i = 4 ;
 					}
-
-					if (warning)
-					{
-						PrintLog("WARNING: Cannot identify CDR3 motif based on %s's gapped alignment provided by IMGT, will use its motif information for CDR3 inference.", fa.id) ; 
-						for (i = 0 ; i < 3 ; ++i)  
-							sw.info[i].a = sw.info[i].b = -1 ;
-					}
+					++chainVMotifShiftCount[GetChainType(fa.id)][i] ;
 				}
+				else
+					++chainVMotifShiftCount[GetChainType(fa.id)][0] ;
 			}
 			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
 			{
@@ -2548,6 +2549,53 @@ public:
 
 			sw.barcode = -1 ;
 			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id, -1 ) ;
+		}
+		
+		if (isIMGT) // Go through the sequences again to determine special gaps
+		{
+			const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV"} ;
+			for (i = 0 ; i < 7 ; ++i)
+			{
+				int sum = 0 ;
+				for (j = 0 ; j < 6 ; ++j)
+					sum += chainVMotifShiftCount[i][j] ;
+
+				if (chainVMotifShiftCount[i][0] > sum / 2)
+					continue ;
+
+				int shift = 0 ;
+				for (j = 1 ; j < 5 ; ++j)
+					if (chainVMotifShiftCount[i][j] > sum / 2)
+						break ;
+				shift = j ;
+				if (shift < 5)
+				{
+					PrintLog("WARNING: IMGT may introduce %d bp speical gaps in %s. Will not annotate the CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
+				}
+				else 
+				{
+					PrintLog("WARNING: IMGT may introduce speical gaps in %s and the gaps' total length cannot be determined. Will use the motif information for CDR3 inference and will not annotate the CDR1 and CDR2 information for this chain.", chainName[i]) ; 
+				}
+					
+				int seqCnt = seqs.size() ;
+				for (j = 0 ; j < seqCnt ; ++j)
+				{
+					struct _seqWrapper &sw = seqs[j] ;
+					if (GetChainType(sw.name) != i)
+						continue ;
+					//fprintf(stderr, "adjust %s\n", sw.name) ;
+						
+					sw.info[0].a = sw.info[0].b = -1 ;
+					sw.info[1].a = sw.info[1].b = -1 ;
+					if (shift < 5)
+					{
+						sw.info[2].a += 3 * shift ;
+						sw.info[2].b += 3 * shift ;
+					}
+					else
+						sw.info[2].a = sw.info[i].b = -1 ;
+				}
+			}
 		}
 	}
 	
@@ -4546,6 +4594,31 @@ public:
 			return false ;
 	}
 	
+	int GetChainType(char *name)
+	{
+		if (name[0] == 'I')
+		{
+			if (name[2] == 'H')
+				return 0 ;
+			else if (name[2] == 'K')
+				return 1 ;
+			else if (name[2] == 'L')
+				return 2 ;
+		}
+		else if (name[0] == 'T')
+		{
+			if (name[2] == 'A')
+				return 3 ;
+			else if (name[2] == 'B')
+				return 4 ;
+			else if (name[2] == 'G')
+				return 5 ;
+			else if (name[2] == 'D')
+				return 6 ;
+		}
+		return 8 ;
+	}
+
 	// The reference gene may have different length, which makes matchCnt criterion biased
 	//   to longer gene, so we want to remove such effect
 	// Return: is overlap a is better than b*threshold
