@@ -243,6 +243,20 @@ private:
 			return a.a < b.a ;
 	}
 
+	void PrintLog( const char *fmt, ... )
+	{
+		va_list args ;
+		char buffer[500] ;
+		va_start( args, fmt ) ;
+		vsprintf( buffer, fmt, args ) ;
+
+		time_t mytime = time(NULL) ;
+		struct tm *localT = localtime( &mytime ) ;
+		char stime[500] ;
+		strftime( stime, sizeof( stime ), "%c", localT ) ;
+		fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+	}
+
 	bool IsReverseComplement( char *a, char *b )
 	{
 		int i, j ;
@@ -2394,11 +2408,18 @@ public:
 	// Input some baseline sequence to match against.
 	void InputRefFa( char *filename, bool isIMGT = false ) 
 	{
-		int i, k ;
+		int i, j, k ;
 		ReadFiles fa ;
 		fa.AddReadFile( filename, false ) ;
 		
 		KmerCode kmerCode( kmerLength ) ;
+
+		// Variable to determine whether there is special gap
+		int chainVMotifShiftCount[7][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
+		for (i = 0 ; i < 7 ; ++i)
+			for (j = 0 ; j < 6 ; ++j)
+				chainVMotifShiftCount[i][j] = 0 ;
+
 		while ( fa.Next() )
 		{
 			// Insert the kmers 
@@ -2434,6 +2455,7 @@ public:
 					++k ;
 				}
 			sw.consensus[k] = '\0' ;
+			sw.consensusLen = k ;
 
 			// Use IMGT documented coordinate to infer CDR1,2,3 coordinate.
 			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
@@ -2471,6 +2493,32 @@ public:
 				}
 				else
 					sw.info[2].a = sw.info[2].b = -1 ;
+
+				// Check whether CDR3 start site is the motif
+				if (sw.info[2].a != -1 
+						&& DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
+							sw.consensus[sw.info[2].a + 2]) != 'C'
+						&& DnaToAa(sw.consensus[sw.info[2].a - 6], sw.consensus[sw.info[2].a - 5], 
+							sw.consensus[sw.info[2].a - 4]) != 'Y' 
+						&& DnaToAa(sw.consensus[sw.info[2].a - 3], sw.consensus[sw.info[2].a - 2], 
+							sw.consensus[sw.info[2].a - 1]) != 'Y')
+				{
+					// Check whether shifting a bit would work due to extra gaps
+					for (i = 1 ; i <= 4 ; ++i)
+					{
+						if (sw.info[2].a + 3 * i + 2 < sw.consensusLen)
+						{
+							if (DnaToAa(sw.consensus[sw.info[2].a + 3 * i], sw.consensus[sw.info[2].a + 3 * i + 1], 
+										sw.consensus[sw.info[2].a + 3 * i + 2]) == 'C')
+								break ;
+						}
+						else
+							i = 4 ;
+					}
+					++chainVMotifShiftCount[GetChainType(fa.id)][i] ;
+				}
+				else
+					++chainVMotifShiftCount[GetChainType(fa.id)][0] ;
 			}
 			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
 			{
@@ -2499,10 +2547,55 @@ public:
 				sw.info[2].a = sw.info[2].b = -1 ;
 			}
 
-
-			sw.consensusLen = strlen( sw.consensus );
 			sw.barcode = -1 ;
 			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id, -1 ) ;
+		}
+		
+		if (isIMGT) // Go through the sequences again to determine special gaps
+		{
+			const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV"} ;
+			for (i = 0 ; i < 7 ; ++i)
+			{
+				int sum = 0 ;
+				for (j = 0 ; j < 6 ; ++j)
+					sum += chainVMotifShiftCount[i][j] ;
+
+				if (chainVMotifShiftCount[i][0] > sum / 2)
+					continue ;
+
+				int shift = 0 ;
+				for (j = 1 ; j < 5 ; ++j)
+					if (chainVMotifShiftCount[i][j] > sum / 2)
+						break ;
+				shift = j ;
+				if (shift < 5)
+				{
+					PrintLog("WARNING: IMGT may introduce %d bp speical gaps in %s. Will not annotate the CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
+				}
+				else 
+				{
+					PrintLog("WARNING: IMGT may introduce speical gaps in %s and the gaps' total length cannot be determined. Will use the motif information for CDR3 inference and will not annotate the CDR1 and CDR2 information for this chain.", chainName[i]) ; 
+				}
+					
+				int seqCnt = seqs.size() ;
+				for (j = 0 ; j < seqCnt ; ++j)
+				{
+					struct _seqWrapper &sw = seqs[j] ;
+					if (GetChainType(sw.name) != i)
+						continue ;
+					//fprintf(stderr, "adjust %s\n", sw.name) ;
+						
+					sw.info[0].a = sw.info[0].b = -1 ;
+					sw.info[1].a = sw.info[1].b = -1 ;
+					if (shift < 5)
+					{
+						sw.info[2].a += 3 * shift ;
+						sw.info[2].b += 3 * shift ;
+					}
+					else
+						sw.info[2].a = sw.info[i].b = -1 ;
+				}
+			}
 		}
 	}
 	
@@ -3462,7 +3555,7 @@ public:
 			  
 				int nameIdx = 0 ;
 				for ( nameIdx = 0 ; nameIdx < eOverlapCnt ; ++nameIdx ) 
-          if ( strcmp( seqs[ extendedOverlaps[nameIdx].seqIdx ].name, "Novel" ) )
+					if ( strcmp( seqs[ extendedOverlaps[nameIdx].seqIdx ].name, "Novel" ) )
 						break ;
 			  if ( nameIdx >= eOverlapCnt )
 					nameIdx = 0 ;
@@ -4454,8 +4547,8 @@ public:
 	int GetGeneType( char *name )
 	{
 		int geneType = -1 ;
-    if ( name[0] == 'N' && name[1] == 'o' ) // Name is "Novel"
-      return -1 ;
+		if ( name[0] == 'N' && name[1] == 'o' ) // Name is "Novel"
+			return -1 ;
 		switch ( name[3] )
 		{
 			case 'V': geneType = 0 ; break ;
@@ -4501,6 +4594,31 @@ public:
 			return false ;
 	}
 	
+	int GetChainType(char *name)
+	{
+		if (name[0] == 'I')
+		{
+			if (name[2] == 'H')
+				return 0 ;
+			else if (name[2] == 'K')
+				return 1 ;
+			else if (name[2] == 'L')
+				return 2 ;
+		}
+		else if (name[0] == 'T')
+		{
+			if (name[2] == 'A')
+				return 3 ;
+			else if (name[2] == 'B')
+				return 4 ;
+			else if (name[2] == 'G')
+				return 5 ;
+			else if (name[2] == 'D')
+				return 6 ;
+		}
+		return 8 ;
+	}
+
 	// The reference gene may have different length, which makes matchCnt criterion biased
 	//   to longer gene, so we want to remove such effect
 	// Return: is overlap a is better than b*threshold
@@ -5497,12 +5615,12 @@ public:
 		{
 			// Remove the hits on the D gene
 			int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
-      if ( geneType == 1 )
+			if ( geneType == 1 )
 				continue ;
 
 			// Remove those overlaps that was secondary as well.
 			if ( seqUsed[ overlaps[i].seqIdx ] == -1 
-          && overlaps[i].similarity >= geneSimilarity[geneType] )
+					&& overlaps[i].similarity >= geneSimilarity[geneType] )
 			{
 				seqUsed[ overlaps[i].seqIdx ] = k ; // Store the index where this is copied to
 				overlaps[k] = overlaps[i] ;
@@ -8087,118 +8205,116 @@ public:
   // this is only the information generated internally by seqset
   void GetPartAirrHeader(char *buffer)
   {
-    // 18 columns
-    strcpy(buffer, "sequence\trev_comp\tv_call\td_call\tj_call\tc_call\tv_cigar\td_cigar\tj_cigar\tc_cigar\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tproductive\tv_identity\tj_identity") ;
+		// 19 columns
+		strcpy(buffer, "sequence\trev_comp\tv_call\td_call\tj_call\tc_call\tv_cigar\td_cigar\tj_cigar\tc_cigar\tsequence_alignment\tgermline_alignment\tcdr1\tcdr2\tjunction\tjunction_aa\tproductive\tv_identity\tj_identity") ;
   }
 
   // Notice the difference to AirrAlign, which is part of the airr fields focusing on the alignment information. AirrAlign don't output the sequence itself, saving disk space
   // sequence_id will be printed externally
 	char *AnnotationToAirrString(char *read, struct _overlap geneOverlap[4], struct _overlap cdr[3])
-  {
-    int i ;
-    int len = strlen(read) ;
-    char *buffer = (char *)malloc(sizeof(char) * 20 * len) ;
-    
-    sprintf(buffer, "%s", read) ;
+	{
+		int i ;
+		int len = strlen(read) ;
+		char *buffer = (char *)malloc(sizeof(char) * 20 * len) ;
 
-    int gidx = 0 ;
-    for (gidx = 0 ; gidx < 4 ; ++gidx)
-      if (geneOverlap[gidx].seqIdx != -1)
-        break ;
-    
-    if (gidx >= 4 && cdr[2].seqIdx == -1)
-    {
-      // sequence is already written
-      for (i = 1 ; i < 18 ; ++i)
-      {
-        if (i != 15)
-          sprintf(buffer + strlen(buffer), "\t") ;
-        else
-          sprintf(buffer + strlen(buffer), "\tF") ;
-      }
-    }
+		sprintf(buffer, "%s", read) ;
 
-    char revComp = 'F' ;
-    if (geneOverlap[gidx].strand == -1)
-      revComp = 'T' ;
-    sprintf(buffer + strlen(buffer), "\t%c", revComp) ;
-    
-    //v,d,j,c calls
-    for (i = 0 ; i < 4 ; ++i)
-    {
-      if (geneOverlap[i].seqIdx == -1)
-        sprintf(buffer + strlen(buffer), "\t") ;
-      else
-        sprintf(buffer + strlen(buffer), "\t%s", GetSeqName(geneOverlap[i].seqIdx)) ;
-    }
-    
-    //v,d,j,c cigar, sequen align, germline align
-    char *alignStr = AnnotationToAirrAlign(read, geneOverlap, cdr, false) ;
-    sprintf(buffer + strlen(buffer), "\t%s", alignStr) ;
-    free(alignStr) ;
-    
-    //cdr1, 2
-    char cdrBuffer[1024] ;
-    for (i = 0 ; i <= 1 ; ++i)
-    {
-      if (cdr[i].seqIdx == -1)
-      {
-        sprintf(buffer + strlen(buffer), "\t") ;
-        continue ;
-      }
-      else
-      {
-        memcpy(cdrBuffer, read + cdr[i].readStart, cdr[i].readEnd - cdr[i].readStart + 1) ;
-        cdrBuffer[cdr[i].readEnd - cdr[i].readStart + 1] = '\0' ;
-        sprintf(buffer + strlen(buffer), "\t%s", cdrBuffer) ;
-      }
-    }
+		int gidx = 0 ;
+		for (gidx = 0 ; gidx < 4 ; ++gidx)
+			if (geneOverlap[gidx].seqIdx != -1)
+				break ;
 
-    // cdr3 (junction) nt, aa, productive
-    if (cdr[2].seqIdx == -1)
-    {
-      sprintf(buffer + strlen(buffer), "\t\t\tF") ;
-    }
-    else
-    {
-      int cdrLen = cdr[2].readEnd - cdr[2].readStart + 1 ;
-      memcpy(cdrBuffer, read + cdr[2].readStart, cdrLen) ;
-      cdrBuffer[cdrLen] = '\0' ;
-      sprintf(buffer + strlen(buffer), "\t%s", cdrBuffer) ;
+		if (gidx >= 4 && cdr[2].seqIdx == -1)
+		{
+			// sequence is already written
+			for (i = 1 ; i < 19 ; ++i)
+			{
+				sprintf(buffer + strlen(buffer), "\t") ;
+			}
+			return buffer ;
+		}
 
-      if (cdrLen % 3 != 0)
-      {
-        sprintf(buffer + strlen(buffer), "\tout_of_frame\tF") ;
-      }
-      else
-      {
-        int k = 0 ;
-        char productive = 'T' ;
-        for (i = cdr[2].readStart ; i <= cdr[2].readEnd ; i += 3)
-        {
-          char aa = DnaToAa(read[i], read[i + 1], read[i + 2]) ;
-          if (aa < 'A' || aa > 'Z')
-            productive = 'F' ;
+		char revComp = 'F' ;
+		if (geneOverlap[gidx].strand == -1)
+			revComp = 'T' ;
+		sprintf(buffer + strlen(buffer), "\t%c", revComp) ;
 
-          cdrBuffer[k] = aa ;
-          ++k ;
-        }
-        cdrBuffer[k] = '\0' ;
-        sprintf(buffer + strlen(buffer), "\t%s\t%c", cdrBuffer, productive) ;
-      }
-    }
+		//v,d,j,c calls
+		for (i = 0 ; i < 4 ; ++i)
+		{
+			if (geneOverlap[i].seqIdx == -1)
+				sprintf(buffer + strlen(buffer), "\t") ;
+			else
+				sprintf(buffer + strlen(buffer), "\t%s", GetSeqName(geneOverlap[i].seqIdx)) ;
+		}
 
-    //v,j identitiy
-    for (i = 0 ; i <= 2 ; i += 2)
-    {
-      if (geneOverlap[i].seqIdx != -1)
-        sprintf(buffer + strlen(buffer), "\t%.2lf", geneOverlap[i].similarity * 100) ;
-      else
-        sprintf(buffer + strlen(buffer), "\t") ;
-    }
+		//v,d,j,c cigar, sequen align, germline align
+		char *alignStr = AnnotationToAirrAlign(read, geneOverlap, cdr, false) ;
+		sprintf(buffer + strlen(buffer), "\t%s", alignStr) ;
+		free(alignStr) ;
 
-    return buffer ;
-  }
+		//cdr1, 2
+		char cdrBuffer[1024] ;
+		for (i = 0 ; i <= 1 ; ++i)
+		{
+			if (cdr[i].seqIdx == -1)
+			{
+				sprintf(buffer + strlen(buffer), "\t") ;
+				continue ;
+			}
+			else
+			{
+				memcpy(cdrBuffer, read + cdr[i].readStart, cdr[i].readEnd - cdr[i].readStart + 1) ;
+				cdrBuffer[cdr[i].readEnd - cdr[i].readStart + 1] = '\0' ;
+				sprintf(buffer + strlen(buffer), "\t%s", cdrBuffer) ;
+			}
+		}
+
+		// cdr3 (junction) nt, aa, productive
+		if (cdr[2].seqIdx == -1)
+		{
+			sprintf(buffer + strlen(buffer), "\t\t\t") ;
+		}
+		else
+		{
+			int cdrLen = cdr[2].readEnd - cdr[2].readStart + 1 ;
+			memcpy(cdrBuffer, read + cdr[2].readStart, cdrLen) ;
+			cdrBuffer[cdrLen] = '\0' ;
+			sprintf(buffer + strlen(buffer), "\t%s", cdrBuffer) ;
+
+			if (cdrLen % 3 != 0)
+			{
+				sprintf(buffer + strlen(buffer), "\tout_of_frame\tF") ;
+			}
+			else
+			{
+				int k = 0 ;
+				char productive = 'T' ;
+				for (i = cdr[2].readStart ; i <= cdr[2].readEnd ; i += 3)
+				{
+					char aa = DnaToAa(read[i], read[i + 1], read[i + 2]) ;
+					if (aa < 'A' || aa > 'Z')
+						productive = 'F' ;
+
+					cdrBuffer[k] = aa ;
+					++k ;
+				}
+				cdrBuffer[k] = '\0' ;
+				sprintf(buffer + strlen(buffer), "\t%s\t%c", cdrBuffer, productive) ;
+			}
+		}
+
+		//v,j identitiy
+		for (i = 0 ; i <= 2 ; i += 2)
+		{
+			if (geneOverlap[i].seqIdx != -1)
+				sprintf(buffer + strlen(buffer), "\t%.2lf", geneOverlap[i].similarity * 100) ;
+			else
+				sprintf(buffer + strlen(buffer), "\t") ;
+		}
+
+		return buffer ;
+	}
 
 	char *GetGeneOverlapAlignment(char *read, const struct _overlap gene )
 	{
