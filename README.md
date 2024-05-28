@@ -86,13 +86,13 @@ For CDR1,2, score is similarity. for CDR3, score 0.00 means partial CDR3, score 
 
 The output trust_cdr3.out is a tsv file. The fields are:
 
-	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count CDR3_germline_similarity full_length_assembly
+	consensus_id	index_within_consensus	V_gene	D_gene	J_gene	C_gene	CDR1	CDR2	CDR3	CDR3_score	read_fragment_count CDR3_germline_similarity complete_vdj_assembly
 	
 Please note that CDR3_score in trust_cdr3.out has been divided by 100, so 1.00 is the maximum score and 0.01 means imputed CDR3.
 
 The output trust_report.tsv is a tsv file. The fileds are:
 	
-	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C	consensus_id consensus_id_full_length
+	read_count	frequency(proportion of read_count)	CDR3_dna	CDR3_amino_acids	V	D	J	C	consensus_id consensus_id_complete_vdj
 
 For frequency, the BCR(IG) and TCR(TR) chains are normalized respectively. In the amino acid sequence, "_" represents stop codon, and "?" represents ambiguous nucleotide "N" in codon.
 
@@ -142,7 +142,7 @@ In the output, the abundance in the report will use the number of barcodes for t
 
 For the chain information it is in CSV format:
 	
-	V_gene,D_gene,J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity,consensus_full_length
+	V_gene,D_gene,J_gene,C_gene,cdr3_nt,cdr3_aa,read_cnt,consensus_id,CDR3_germline_similarity,consensus_complete_vdj
 
 TRUST4 also converts the barcode report file to the trust_barcode_airr.tsv file to follow the AIRR format.
 
