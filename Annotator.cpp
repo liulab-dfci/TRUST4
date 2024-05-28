@@ -70,7 +70,7 @@ struct _annotate
 	struct _overlap cdr[3] ;
 	std::vector<struct _overlap> secondaryGeneOverlaps ;
 	
-	int isFullLength ;
+	int isFullLength ; // Is VDJ full length
 
 	_annotate()
 	{
@@ -319,8 +319,8 @@ int IsFullLengthAssembly(char *seq, struct _annotate &annotation, SeqSet &refSet
 
   if (cdr[2].seqIdx == -1)
       return 0 ;
-
-	if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3 
+	
+  if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3 
 		|| geneOverlap[2].readEnd > geneOverlap[3].readStart + 6 )
 		return 0 ;
 	if (geneOverlap[0].seqStart > 0 || geneOverlap[0].readEnd < cdr[2].readStart)
@@ -335,6 +335,32 @@ int IsFullLengthAssembly(char *seq, struct _annotate &annotation, SeqSet &refSet
 			return 0 ;
 	}
 	return 1 ;
+}
+
+int IsCompleteVDJ(char *seq, struct _annotate &annotation, SeqSet &refSet)
+{
+  int i ;
+  struct _overlap *geneOverlap = annotation.geneOverlap ;
+  struct _overlap *cdr = annotation.cdr ;
+  if (geneOverlap[0].seqIdx == -1 || geneOverlap[2].seqIdx == -1)
+      return 0 ;
+
+  if (cdr[2].seqIdx == -1)
+    return 0 ;
+
+  if (geneOverlap[0].readEnd > geneOverlap[2].readStart + 3) 
+    return 0 ;
+  if (geneOverlap[0].seqStart > 0 || geneOverlap[0].readEnd < cdr[2].readStart)
+    return 0 ;
+  if (geneOverlap[2].readStart > cdr[2].readEnd || geneOverlap[2].seqEnd < refSet.GetSeqConsensusLen(geneOverlap[2].seqIdx) - 1)
+    return 0 ;
+  
+  for ( i = geneOverlap[0].readStart ; i <= geneOverlap[2].readEnd ; ++i )
+  {
+    if (seq[i] == 'N')
+      return 0 ;
+  }
+  return 1 ;
 }
 
 
@@ -658,7 +684,7 @@ int main( int argc, char *argv[] )
   // Add other informations for annotation.
 	for ( i = 0 ;i < seqCnt ; ++i )
 	{
-		annotations[i].isFullLength = IsFullLengthAssembly( seqSet.GetSeqConsensus(i), annotations[i], refSet ) ;
+		annotations[i].isFullLength = IsCompleteVDJ( seqSet.GetSeqConsensus(i), annotations[i], refSet ) ;
 	}
 
 	// Output the annotation of consensus assemblies
