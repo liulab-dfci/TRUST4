@@ -4829,14 +4829,27 @@ public:
 		UpdateConsensus( seqIdx, updateIndex ) ;
 	}
 	
-	void ShiftAnnotations( int at, int shift, int baseChange, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
-	                        std::vector<struct _overlap> *secondaryGeneOverlaps )
+	// Shift the annotation supposing there is an insertion on read[at] 
+	//   that also extend the sequence annotation for seqIdx.
+	void ShiftAnnotations( int at, int shift, int readLen,
+			int seqIdx, int seqStart, int seqInsertLen, 
+			int baseChange, struct _overlap geneOverlap[4], //struct _overlap cdr[3],
+	    std::vector<struct _overlap> *secondaryGeneOverlaps )
 	{
 		int i ;
+		struct _overlap anchorOverlap ;
 		for ( i = 0 ; i < 4 ; ++i )	
 		{
 			if ( geneOverlap[i].seqIdx == -1 )
 				continue ;
+			if ( geneOverlap[i].seqIdx == seqIdx)
+			{
+				anchorOverlap = geneOverlap[i] ;
+				if (seqStart < geneOverlap[i].seqStart)
+					geneOverlap[i].seqStart = seqStart ;
+				if (geneOverlap[i].seqEnd < seqStart + seqInsertLen - 1)
+					geneOverlap[i].seqEnd = seqStart + seqInsertLen - 1 ;
+			}
 
 			if ( geneOverlap[i].readStart <= at && at <= geneOverlap[i].readEnd )
 			{
@@ -4845,13 +4858,10 @@ public:
 					/ ( geneOverlap[i].readEnd - geneOverlap[i].readStart + 1 + shift
 						+ geneOverlap[i].seqEnd - geneOverlap[i].seqStart + 1 ) ;
 			}
-
-			if ( geneOverlap[i].readStart >= at )
+			if ( geneOverlap[i].readStart > at )
 				geneOverlap[i].readStart += shift ;
-			if ( geneOverlap[i].readEnd >= at )
+			if ( geneOverlap[i].readEnd >= at - 1) // at-1 is the directly extension of this gene
 				geneOverlap[i].readEnd += shift ;
-			
-
 		}
 
 		/*for ( i = 0 ; i < 3 ; ++i )
@@ -4871,6 +4881,18 @@ public:
 			int size = overlaps.size() ;
 			for ( i = 0 ; i < size ; ++i )
 			{
+				if (seqIdx != -1 && anchorOverlap.seqIdx != -1
+						&& IsSameChainType(seqs[seqIdx].name, 
+									seqs[ overlaps[i].seqIdx ].name)
+            && GetGeneType(seqs[seqIdx].name) == GetGeneType( seqs[overlaps[i].seqIdx].name)
+						&& anchorOverlap.seqStart == overlaps[i].seqStart
+						&& anchorOverlap.seqEnd == overlaps[i].seqEnd)
+				{
+					if (seqStart < overlaps[i].seqStart)
+						overlaps[i].seqStart = seqStart ;
+					if (overlaps[i].seqEnd < seqStart + seqInsertLen - 1)
+						overlaps[i].seqEnd = seqStart + seqInsertLen - 1 ;
+				}
 				if ( overlaps[i].readStart <= at && at <= overlaps[i].readEnd )
 				{
 					overlaps[i].matchCnt += 2 * baseChange ;
@@ -4879,9 +4901,9 @@ public:
 								+ overlaps[i].seqEnd - overlaps[i].seqStart + 1 ) ;
 				}
 
-				if ( overlaps[i].readStart >= at )
+				if ( overlaps[i].readStart > at )
 					overlaps[i].readStart += shift ;
-				if ( overlaps[i].readEnd >= at )
+				if ( overlaps[i].readEnd >= at - 1 )
 					overlaps[i].readEnd += shift ;
 			}
 		}
@@ -5132,7 +5154,7 @@ public:
 			cdr[2].readEnd = newEnd ;
 			cdr[2].similarity = 0.01 ;
 			// Shift what we found.
-			ShiftAnnotations( insertAt, insertLen, 0, geneOverlap, secondaryGeneOverlaps ) ;
+			ShiftAnnotations( insertAt, insertLen, len, seqIdx, seqStart, insertLen, 0, geneOverlap, secondaryGeneOverlaps ) ;
 		}
 		else if ( insertLen == 0 )
 		{
@@ -5228,6 +5250,7 @@ public:
 		int shiftAt ;
 		int shift ;
 		int baseChange = 0 ; // The change t
+    int seqStart = -1 ;
 		for ( j = 0 ; j <= anchor[0].b ; ++j )
 			nr[j] = read[j] ;
 		if ( anchor[1].a > anchor[0].a ) 
@@ -5240,6 +5263,7 @@ public:
 			for ( j = anchor[1].b ; read[j] ; ++j )
 				nr[j + shift] = read[j] ;
 			baseChange = anchor[1].a - anchor[0].a - 1 ;
+      seqStart = anchor[0].a + 1 ;
 		}
 		else
 		{
@@ -5250,11 +5274,12 @@ public:
 			for ( j = anchor[1].b + overlap ; read[j] ; ++j ) // anchor[1].b+overlap should not excess the read len.
 				nr[j + shift] = read[j] ;
 			baseChange = -overlap ;
-		}
+		  seqIdx = -1 ;
+    }
 		nr[j + shift] = '\0' ; 
 		cdr[2].readEnd += shift ;
 		cdr[2].similarity = 0.01 ;
-		ShiftAnnotations( shiftAt, shift, baseChange, geneOverlap, secondaryGeneOverlaps ) ;
+		ShiftAnnotations( shiftAt, shift, strlen(read), seqIdx, seqStart, baseChange, baseChange, geneOverlap, secondaryGeneOverlaps ) ;
 
 		return shiftAt ;
 	}
@@ -6999,6 +7024,20 @@ public:
 			bool forcePartial = false ; // Let the CDR3 be partial.
 			if ( locateS != -1 && locateS <= 18 && geneOverlap[0].seqIdx == -1 )
 			{
+				// J and C gene annotation, for some filters
+				int anchorSeqIdx = -1 ;
+				int anchorType = -1 ;
+				if ( geneOverlap[2].seqIdx != -1 )
+				{
+					anchorSeqIdx = geneOverlap[2].seqIdx ;
+					anchorType = 2 ;
+				}
+				else if ( geneOverlap[3].seqIdx != -1 )
+				{
+					anchorSeqIdx = geneOverlap[3].seqIdx ;	
+					anchorType = 3 ;
+				}
+
 				// So far, just ignore indel.
 				int bestMatchCnt = 0 ;
 				int bestHitLen = 0 ;
@@ -7047,7 +7086,8 @@ public:
 						++hitLen ;
 					}
 					
-					if ( matchCnt > bestMatchCnt )
+					if ( matchCnt > bestMatchCnt 
+							|| (matchCnt == bestMatchCnt && hitLen < bestHitLen) ) 
 					{
 						bestMatchCnt = matchCnt ;
 						bestHitLen = hitLen ; 
@@ -7058,7 +7098,7 @@ public:
 						readStart = tmp ;
 						bestTags.PushBack( np ) ;
 					}
-					else if ( matchCnt == bestMatchCnt )
+					else if ( matchCnt == bestMatchCnt && hitLen == bestHitLen)
 					{
 						struct _pair np ;
 						np.a = i ;
@@ -7067,21 +7107,9 @@ public:
 					}
 				}
 				
-				int anchorSeqIdx = -1 ;
-				int anchorType = -1 ;
-				if ( geneOverlap[2].seqIdx != -1 )
-				{
-					anchorSeqIdx = geneOverlap[2].seqIdx ;
-					anchorType = 2 ;
-				}
-				else if ( geneOverlap[3].seqIdx != -1 )
-				{
-					anchorSeqIdx = geneOverlap[3].seqIdx ;	
-					anchorType = 3 ;
-				}
-				//printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
+        //printf( "%d %d %d\n", bestMatchCnt, bestHitLen, bestTags.Size() ) ;
 				int originalLocateS = locateS ;
-				if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.9 )
+				if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.91)
 				{
 					int size = bestTags.Size() ;
 					bool start = false ;
@@ -7097,8 +7125,8 @@ public:
 						no.similarity = bestMatchCnt / (double)bestHitLen ;
 						if ( anchorSeqIdx != -1 )
 						{
-							if ( no.readEnd > geneOverlap[ anchorType ].readStart 
-								|| !IsSameChainType( seqs[ no.seqIdx ].name, seqs[ anchorSeqIdx ].name ) )
+							if ( no.readEnd > geneOverlap[ anchorType ].readStart ||
+								!IsSameChainType( seqs[i].name, seqs[ anchorSeqIdx ].name))
 								continue ;
 						}
 
@@ -7132,6 +7160,19 @@ public:
 				int distToEnd = contigs[ eContigIdx ].b - locateE ;
 				if ( distToEnd <= 18 && geneOverlap[2].seqIdx == -1 )
 				{
+					int anchorSeqIdx = -1 ;
+					int anchorType = -1 ;
+					if ( geneOverlap[0].seqIdx != -1 )
+					{
+						anchorSeqIdx = geneOverlap[0].seqIdx ;
+						anchorType = 0 ;
+					}
+					else if ( geneOverlap[3].seqIdx != -1 )
+					{
+						anchorSeqIdx = geneOverlap[3].seqIdx ;	
+						anchorType = 3 ;
+					}
+
 					// So far, just ignore indel.
 					int bestMatchCnt = 0 ;
 					SimpleVector<struct _pair> bestTags ;
@@ -7142,6 +7183,7 @@ public:
 					{
 						if ( GetGeneType( seqs[i].name ) != 2 || seqs[i].info[2].a == -1 )
 							continue ;
+						
 						struct _seqWrapper &seq = seqs[i] ;
 
 						int geneOffset = seq.info[2].a ; // The coordinate of the gene match with locateE 
@@ -7196,7 +7238,8 @@ public:
 						}
 						
 						struct _pair np ;
-						if ( matchCnt > bestMatchCnt )
+						if ( matchCnt > bestMatchCnt
+								|| (matchCnt == bestMatchCnt && hitLen < bestHitLen)) 
 						{
 							bestMatchCnt = matchCnt ;
 							bestHitLen = hitLen ;
@@ -7206,7 +7249,7 @@ public:
 							np.b = geneOffset ;
 							bestTags.PushBack( np ) ;
 						}
-						else if ( matchCnt == bestMatchCnt )
+						else if ( matchCnt == bestMatchCnt && hitLen == bestHitLen)
 						{
 							np.a = i ;
 							np.b = geneOffset ;
@@ -7214,19 +7257,7 @@ public:
 						}
 					}
 
-					int anchorSeqIdx = -1 ;
-					int anchorType = -1 ;
-					if ( geneOverlap[0].seqIdx != -1 )
-					{
-						anchorSeqIdx = geneOverlap[0].seqIdx ;
-						anchorType = 0 ;
-					}
-					else if ( geneOverlap[3].seqIdx != -1 )
-					{
-						anchorSeqIdx = geneOverlap[3].seqIdx ;	
-						anchorType = 3 ;
-					}
-					if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.9 )
+					if ( bestHitLen > 9 && bestMatchCnt / (double)bestHitLen >= 0.9)
 					{
 						int size = bestTags.Size() ;
 						bool start = false ;
@@ -7248,10 +7279,10 @@ public:
 												seqs[ anchorSeqIdx ].name ) )
 									continue ;
 							}
+
 							if ( !start )
 							{
 								geneOverlap[2] = no ;
-
 								if ( seqs[ bestTags[i].a ].info[2].a != bestTags[i].b ) 
 								{
 									// adjust locateS, if we can match the point
