@@ -2560,7 +2560,7 @@ public:
 				for (j = 0 ; j < 6 ; ++j)
 					sum += chainVMotifShiftCount[i][j] ;
 
-				if (chainVMotifShiftCount[i][0] > sum / 2)
+				if (sum == 0 || chainVMotifShiftCount[i][0] > sum / 2)
 					continue ;
 
 				int shift = 0 ;

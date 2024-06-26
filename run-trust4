@@ -7,7 +7,9 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-die "TRUST4 v1.1.2-r516 usage: ./run-trust4 [OPTIONS]:\n".
+my $version = "v1.1.2-r517" ;
+
+die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
     #"\t[Input]:\n".
     "\t-b STRING: path to bam file\n".
@@ -96,7 +98,7 @@ my $chainsInBarcode = 2 ;
 my $assembleWithRef = 0 ;
 my $cleanup = 0 ;
 
-print STDERR "[".localtime()."] TRUST4 begins.\n" ;
+print STDERR "[".localtime()."] TRUST4 $version begins.\n" ;
 for ( $i = 0 ; $i < @ARGV ; ++$i )
 {
 	if ( $ARGV[$i] eq "-1" )
