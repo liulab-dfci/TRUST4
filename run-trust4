@@ -7,7 +7,7 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-my $version = "v1.1.2-r517" ;
+my $version = "v1.1.2-r519" ;
 
 die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
@@ -487,8 +487,9 @@ if ( $stage <= 1 )
 # Annotation 
 if ( $stage <= 2 )
 {
-	if ( $hasBarcode == 0 || $hasUmi == 1 )
+	if (1) #$hasBarcode == 0 || $hasUmi == 1)
 	{
+    # Always use the read now. For consistent and reproducible abundance estimation if user want to examine read assignment.
 		$annotatorArgs .= " -r ${prefix}_assembled_reads.fa" ;
 	}
 	else
