@@ -5154,7 +5154,7 @@ public:
 			cdr[2].readEnd = newEnd ;
 			cdr[2].similarity = 0.01 ;
 			// Shift what we found.
-			ShiftAnnotations( insertAt, insertLen, len, seqIdx, seqStart, insertLen, 0, geneOverlap, secondaryGeneOverlaps ) ;
+			ShiftAnnotations( insertAt, insertLen, len, seqIdx, seqStart, insertLen, insertLen, geneOverlap, secondaryGeneOverlaps ) ;
 		}
 		else if ( insertLen == 0 )
 		{
@@ -5221,7 +5221,7 @@ public:
 			for ( i = seq.info[2].a, j = cdr[2].readStart ; i < seq.consensusLen && j < gapStart ; ++i, ++j )
 				if ( seq.consensus[i] != read[j] )
 					valid = false ;
-			if ( valid == false )
+			if ( valid == false || i >= seq.consensusLen) // mismatch or the gap is after v gene end
 				return -1 ;
 			anchor[0].a = i - 1 ;
 			anchor[0].b = j - 1 ;
@@ -5236,7 +5236,7 @@ public:
 			for ( i = seq.info[2].a + 2, j = cdr[2].readEnd ; i >= 0 && j > gapEnd ; --i, --j )
 				if ( seq.consensus[i] != read[j] )
 					valid = false ;
-			if ( valid == false )
+			if ( valid == false || i < 0) // mismatch or the gap is before j gene start
 				return -1 ;
 			anchor[0].a = jOffset + jMatchLen - 1 ;
 			anchor[0].b = gapStart - 1 ;
@@ -7126,7 +7126,7 @@ public:
 						if ( anchorSeqIdx != -1 )
 						{
 							if ( no.readEnd > geneOverlap[ anchorType ].readStart ||
-								!IsSameChainType( seqs[i].name, seqs[ anchorSeqIdx ].name))
+								!IsSameChainType( seqs[no.seqIdx].name, seqs[ anchorSeqIdx ].name))
 								continue ;
 						}
 
