@@ -2442,7 +2442,6 @@ public:
 			struct _seqWrapper &sw = seqs[id] ;
 			int seqLen = strlen( fa.seq ) ;
 			sw.consensus = strdup( fa.seq ) ;	
-					
 			
 			// Remove "." from IMGT annotation.
 			k = 0 ;
@@ -2581,7 +2580,7 @@ public:
 				for (j = 0 ; j < seqCnt ; ++j)
 				{
 					struct _seqWrapper &sw = seqs[j] ;
-					if (GetChainType(sw.name) != i)
+					if (GetChainType(sw.name) != i || GetGeneType(sw.name) != 0)
 						continue ;
 					//fprintf(stderr, "adjust %s\n", sw.name) ;
 						
