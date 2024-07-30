@@ -2406,7 +2406,7 @@ public:
 	}
 	
 	// Input some baseline sequence to match against.
-	void InputRefFa( char *filename, bool isIMGT = false ) 
+	void InputRefFa( char *filename, bool isIMGT = false, const char *imgtAdditionalGap = NULL) 
 	{
 		int i, j, k ;
 		ReadFiles fa ;
@@ -2562,18 +2562,65 @@ public:
 				if (sum == 0 || chainVMotifShiftCount[i][0] > sum / 2)
 					continue ;
 
+        SimpleVector<int> additionalGaps ;
+        if (imgtAdditionalGap != NULL)
+        {
+          int l ;
+          for (j = 0 ; imgtAdditionalGap[j] ;)
+          {
+            for (l = 0 ; l < 4 && imgtAdditionalGap[j + l] ; ++l)  
+              if (imgtAdditionalGap[j + l] != chainName[i][l])
+                break ;
+            if (l >= 4)
+              break ;
+            
+            for (; imgtAdditionalGap[j] && imgtAdditionalGap[j] != ';'; ++j)
+              break ;
+
+            if (imgtAdditionalGap[j]) // point to ';'
+              ++j ;
+          }
+
+          // e.g. TRAV:7,83
+          j += 5 ;
+          int n = 0 ;
+          for (; imgtAdditionalGap[j] ; ++j)
+          {
+            if (imgtAdditionalGap[j] >= '0' && imgtAdditionalGap[j] <= '9')
+              n = n * 10 + imgtAdditionalGap[j] - '0' ;
+            else
+            {
+              additionalGaps.PushBack(n) ;
+              n = 0 ;
+              if (imgtAdditionalGap[j] == ';')
+                break ;
+            }
+          }
+          if (n != 0)
+            additionalGaps.PushBack(n) ;
+        }
+
 				int shift = 0 ;
 				for (j = 1 ; j < 5 ; ++j)
 					if (chainVMotifShiftCount[i][j] > sum / 2)
 						break ;
 				shift = j ;
+        bool additionalGapValid = false ;
 				if (shift < 5)
 				{
-					PrintLog("WARNING: IMGT may introduce %d bp speical gaps in %s. Will not annotate the CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
+          if (additionalGaps.Size() == shift)
+          {
+            additionalGapValid = true ;
+					  PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s. Will use --imgtAdditiona adjustment to get CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
+          }
+          else
+          {
+					  PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s, and the size does not match --imgtAdditionalGap (if provided). Will not annotate the CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
+          }
 				}
 				else 
 				{
-					PrintLog("WARNING: IMGT may introduce speical gaps in %s and the gaps' total length cannot be determined. Will use the motif information for CDR3 inference and will not annotate the CDR1 and CDR2 information for this chain.", chainName[i]) ; 
+					PrintLog("WARNING: IMGT may introduce additional gaps in %s and the gaps' total length cannot be determined. Will use the motif information for CDR3 inference and will not annotate the CDR1 and CDR2 information for this chain.", chainName[i]) ; 
 				}
 					
 				int seqCnt = seqs.size() ;
@@ -2583,9 +2630,33 @@ public:
 					if (GetChainType(sw.name) != i || GetGeneType(sw.name) != 0)
 						continue ;
 					//fprintf(stderr, "adjust %s\n", sw.name) ;
-						
-					sw.info[0].a = sw.info[0].b = -1 ;
-					sw.info[1].a = sw.info[1].b = -1 ;
+					
+          if (additionalGapValid)
+          {
+            int k, l ;
+            int size = additionalGaps.Size() ;
+            for (k = 0 ; k <= 1 ; ++k)
+            {
+              int aAdjust = 0 ;
+              int bAdjust = 0 ;
+              for (l = 0 ; l < size ; ++l)
+              {
+                if (sw.info[0].a > additionalGaps[l] * 3)
+                  aAdjust += 3 ;
+                if (sw.info[0].b > additionalGaps[l] * 3)
+                  bAdjust += 3 ;
+              }
+
+              sw.info[k].a += aAdjust ;
+              sw.info[k].b += bAdjust ;
+            }
+          }
+          else
+          {
+					  sw.info[0].a = sw.info[0].b = -1 ;
+					  sw.info[1].a = sw.info[1].b = -1 ;
+          }
+
 					if (shift < 5)
 					{
 						sw.info[2].a += 3 * shift ;

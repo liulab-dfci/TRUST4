@@ -30,6 +30,7 @@ char usage[] = "./annotator [OPTIONS]:\n"
     "\t--airrAlignment: output the aligned sequences to prefix_airr_align.tsv (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n"
+    "\t--imgtAddtionalGap STRING: description for additional gap codon position in IMGT (0-based), e.g. \"TRAV:7,83\" for mouse (default: no)\n"
 		"\t--outputCDR3File: output CDR3 file when not using -r option (default: no output)\n"
 		"\t--needReverseComplement: reverse complement sequences on another strand (default: no)\n"
     "\t--outputFormat INT: 0-fasta, 1-AIRR. (default: 0 (fasta))\n" 
@@ -61,6 +62,7 @@ static struct option long_options[] = {
 			{ "fastq", no_argument, 0, 10011 },
 			{ "airrAlignment", no_argument, 0, 10012 }, 
 			{ "outputFormat", required_argument, 0, 10013 }, 
+      { "imgtAdditionalGap", required_argument, 0, 10014},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -448,6 +450,7 @@ int main( int argc, char *argv[] )
 	bool needRC = false ; // need reverse complment
 	int format = 0 ; // 0-trust4 format. 1-fasta, 2-fastq
 	int outputFormat = 0 ; //0-fasta, 1-airr
+  std::string imgtAdditionalGap ;
   std::map<std::string, int> barcodeStrToInt ;
 	std::string assemblyFileName ;
 
@@ -536,6 +539,11 @@ int main( int argc, char *argv[] )
     {
       outputFormat = atoi(optarg) ;
     }
+    else if (c == 10014) // --imgtAdditionalGap
+    {
+			std::string s(optarg) ;
+			imgtAdditionalGap = s ;
+    }
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -543,7 +551,7 @@ int main( int argc, char *argv[] )
 		}
 	}
 
-	refSet.InputRefFa( buffer, isIMGT ) ;
+	refSet.InputRefFa( buffer, isIMGT, imgtAdditionalGap.length() > 0 ? imgtAdditionalGap.c_str() : NULL  ) ;
 	//refSet.OutputRef( stdout ) ;
 	//return 0 ;
 

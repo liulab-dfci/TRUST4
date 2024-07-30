@@ -7,7 +7,7 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-my $version = "v1.1.3-r523" ;
+my $version = "v1.1.3-r524" ;
 
 die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
@@ -39,6 +39,7 @@ die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
+    "\t--imgtAdditionalGap STRING: description for additional gap codon position in IMGT (0-based), e.g. \"TRAV:7,83\" for mouse (default: no)\n".
     "\t--assembleWithRef: conduct the assembly with --ref file (default: use -f file)\n".
 		"\t--outputReadAssignment: output read assignment results to the prefix_assign.out file (default: no output)\n".
     "\t--stage INT: start TRUST4 on specified stage (default: 0):\n".
@@ -288,6 +289,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	{
 		$assembleWithRef = 1 ;
 	}
+  elsif ($ARGV[$i] eq "--imgtAdditionalGap")
+  {
+    $annotatorArgs .= " --imgtAdditionalGap ".$ARGV[$i + 1] ;
+    ++$i ;
+  }
 	else
 	{
 		die "Unknown parameter ".$ARGV[$i]."\n" ;
