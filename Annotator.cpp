@@ -27,13 +27,13 @@ char usage[] = "./annotator [OPTIONS]:\n"
 		"\t--barcode: there is barcode information in -a and -r files (default: not set)\n"
 		"\t--UMI: there is UMI information in -r file (default: not set)\n"
 		"\t--geneAlignment: output the gene alignment (default: not set)\n"
-    "\t--airrAlignment: output the aligned sequences to prefix_airr_align.tsv (default: not set)\n"
+		"\t--airrAlignment: output the aligned sequences to prefix_airr_align.tsv (default: not set)\n"
 		"\t--noImpute: do not impute CDR3 sequence for TCR (default: not set (impute))\n"
 		"\t--notIMGT: the receptor genome sequence is not in IMGT format (default: not set(in IMGT format))\n"
-    "\t--imgtAddtionalGap STRING: description for additional gap codon position in IMGT (0-based), e.g. \"TRAV:7,83\" for mouse (default: no)\n"
+		"\t--imgtAddtionalGap STRING: description for additional gap codon position in IMGT (0-based), e.g. \"TRAV:7,83\" for mouse (default: no)\n"
 		"\t--outputCDR3File: output CDR3 file when not using -r option (default: no output)\n"
 		"\t--needReverseComplement: reverse complement sequences on another strand (default: no)\n"
-    "\t--outputFormat INT: 0-fasta, 1-AIRR. (default: 0 (fasta))\n" 
+		"\t--outputFormat INT: 0-fasta, 1-AIRR. (default: 0 (fasta))\n" 
 		"\t--readAssignment STRING: output the read assignment to the file (default: no output)\n";
 
 int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
@@ -62,7 +62,7 @@ static struct option long_options[] = {
 			{ "fastq", no_argument, 0, 10011 },
 			{ "airrAlignment", no_argument, 0, 10012 }, 
 			{ "outputFormat", required_argument, 0, 10013 }, 
-      { "imgtAdditionalGap", required_argument, 0, 10014},
+			{ "imgtAdditionalGap", required_argument, 0, 10014},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -535,15 +535,15 @@ int main( int argc, char *argv[] )
 		{
 			outputAirrAlignment = true ;
 		}
-    else if (c == 10013) // outputFormat
-    {
-      outputFormat = atoi(optarg) ;
-    }
-    else if (c == 10014) // --imgtAdditionalGap
-    {
+		else if (c == 10013) // outputFormat
+		{
+			outputFormat = atoi(optarg) ;
+		}
+		else if (c == 10014) // --imgtAdditionalGap
+		{
 			std::string s(optarg) ;
 			imgtAdditionalGap = s ;
-    }
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -576,10 +576,10 @@ int main( int argc, char *argv[] )
 		flrAssembly.Open(assemblyFileName.c_str()) ;
 		while ( flrAssembly.ReadLine() != NULL )
 		{
-      const char *lineBuffer = flrAssembly.GetLinePtr() ;
-      for (i = 0 ; lineBuffer[i] && lineBuffer[i] != '\n' && lineBuffer[i] != ' ' ; ++i)
-        buffer[i] = lineBuffer[i] ;
-      buffer[i] = '\0' ;
+			const char *lineBuffer = flrAssembly.GetLinePtr() ;
+			for (i = 0 ; lineBuffer[i] && lineBuffer[i] != '\n' && lineBuffer[i] != ' ' ; ++i)
+				buffer[i] = lineBuffer[i] ;
+			buffer[i] = '\0' ;
 
 			flrAssembly.ReadLine() ;
 			char *seq = strdup( flrAssembly.GetLinePtr() ) ;
