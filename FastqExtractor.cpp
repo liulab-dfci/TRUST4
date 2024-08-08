@@ -35,6 +35,7 @@ char usage[] = "./fastq-extractor [OPTIONS]:\n"
 		//"\t--umiEnd INT: the end position of barcode in the barcode sequence (default: length-1)\n"
 		//"\t--umiRevComp: whether the barcode need to be reverse complemented (default: not used)\n"
 		"\t--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)\n"
+    "\t--skipBarcodeErrorRead: do not output reads that failed barcode correction or barcode translation. (default: not set)\n"
 		;
 
 static const char *short_options = "f:u:1:2:o:t:" ;
@@ -54,6 +55,7 @@ static struct option long_options[] = {
 			{ "umiRevComp", no_argument, 0, 10012},
 			{ "readFormat", required_argument, 0, 10013},
 			{ "barcodeTranslate", required_argument, 0, 10014},
+      { "skipBarcodeErrorRead", no_argument, 0, 10015},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -141,9 +143,10 @@ void OutputSeq( FILE *fp, const char *name, char *seq, char *qual, ReadFormatter
 }
 
 // Maybe barcode read quality could be useful in future.
-void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual, 
+// return: 1. output. 0: should skip
+int OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual, 
 	ReadFormatter &readFormatter, int readCategory, BarcodeCorrector *barcodeCorrector,
-	BarcodeTranslator *barcodeTranslator)
+	BarcodeTranslator *barcodeTranslator, bool skipError)
 {
 	if (barcode && barcode[0] != '\0')
 	{
@@ -156,17 +159,37 @@ void OutputBarcode( FILE *fp, const char *name, char *barcode, char *qual,
 			if (barcodeTranslator)
 			{
 				std::string newbc = barcodeTranslator->Translate(bcBuffer, strlen(bcBuffer)) ;
+        if (newbc.empty())
+				{
+					if (skipError)
+						return 0 ;
+					else
+					{
+						fprintf(stderr, "Barcode %s does not exist in the translation table.\n", bcBuffer) ;
+						exit(-1) ;
+					}
+				}
 				fprintf( fp, ">%s\n%s\n", name, newbc.c_str()) ;
-
 			}
 			else
 				fprintf( fp, ">%s\n%s\n", name, bcBuffer ) ;
 		}
 		else
-			fprintf(fp, ">%s\nmissing_barcode\n", name) ;
+		{
+			if (skipError)
+				return 0 ;
+			else
+				fprintf(fp, ">%s\nmissing_barcode\n", name) ;
+		}
 	}
 	else
-		fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
+	{
+		if (skipError)
+			return 0 ;
+		else
+			fprintf( fp, ">%s\nmissing_barcode\n", name ) ;
+	}
+  return 1 ;
 }
 
 void *ProcessReads_Thread( void *pArg )
@@ -266,8 +289,9 @@ int main( int argc, char *argv[] )
 	int umiStart = 0 ;
 	int umiEnd = -1 ;
 	bool umiRevComp = false ;
+	bool skipBarcodeErrorRead = false ;
 	ReadFormatter readFormatter ;
-
+	
 	while ( 1 )
 	{
 		c = getopt_long( argc, argv, short_options, long_options, &option_index ) ;
@@ -364,6 +388,10 @@ int main( int argc, char *argv[] )
 		else if (c == 10014) // barcodeTranslate
 		{
 			barcodeTranslator.SetTranslateTable(optarg) ;
+		}
+		else if (c == 10015) //skipBarcodeErrorRead
+		{
+			skipBarcodeErrorRead = true ;
 		}
 		else
 		{
@@ -473,17 +501,21 @@ int main( int argc, char *argv[] )
 				++goodCandidate ;
 			if ( goodCandidate )
 			{
+				int barcodeNoError = 1 ;
+				if ( hasBarcode )
+					barcodeNoError = OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
+						readFormatter, FORMAT_BARCODE, 
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
+						barcodeTranslator.isSet() ? &barcodeTranslator : NULL, skipBarcodeErrorRead) ;
+				if (barcodeNoError == 0)
+					continue ;
+
 				OutputSeq( fp1, reads.id, reads.seq, reads.qual, readFormatter, FORMAT_READ1 ) ;
 				if ( hasMate )
 					OutputSeq( fp2, reads.id, mateReads.seq, mateReads.qual, readFormatter, FORMAT_READ2 ) ;
-				if ( hasBarcode )
-					OutputBarcode( fpBc, reads.id, barcodeFile.seq, barcodeFile.qual, 
-						readFormatter, FORMAT_BARCODE, 
-						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
-						barcodeTranslator.isSet() ? &barcodeTranslator : NULL) ;
 				if ( hasUmi )
 					OutputBarcode( fpUmi, reads.id, umiFile.seq, umiFile.qual,
-							readFormatter, FORMAT_UMI, NULL, NULL) ;
+							readFormatter, FORMAT_UMI, NULL, NULL, false) ;
 			}
 		}
 	}
@@ -578,18 +610,24 @@ int main( int argc, char *argv[] )
 			{
 				if ( readBatch[i].id[0] == '\0' )
 					continue ;
+
+				int barcodeNoError = 1 ;
+				if ( hasBarcode )
+					barcodeNoError = OutputBarcode( 
+						fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
+						readFormatter, FORMAT_BARCODE,
+						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
+						barcodeTranslator.isSet() ? &barcodeTranslator : NULL,
+						skipBarcodeErrorRead) ;
+				if (barcodeNoError == 0)
+					continue ;
+
 				OutputSeq( fp1, readBatch[i].id, readBatch[i].seq, readBatch[i].qual, readFormatter, FORMAT_READ1 ) ;
 				if ( readBatch2 != NULL )
 					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual, readFormatter, FORMAT_READ2) ;
-				if ( hasBarcode )
-					OutputBarcode( fpBc, readBatch[i].id, barcodeBatch[i].seq, barcodeBatch[i].qual, 
-						readFormatter, FORMAT_BARCODE,
-						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
-						barcodeTranslator.isSet() ? &barcodeTranslator : NULL) ;
-				
 				if ( hasUmi )
 					OutputBarcode( fpUmi, readBatch[i].id, umiBatch[i].seq, umiBatch[i].qual, 
-						readFormatter, FORMAT_UMI, NULL, NULL) ; 
+						readFormatter, FORMAT_UMI, NULL, NULL, false) ; 
 			}
 		}
 		
