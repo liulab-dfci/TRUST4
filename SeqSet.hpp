@@ -4622,13 +4622,19 @@ public:
 		switch ( name[3] )
 		{
 			case 'V': geneType = 0 ; break ;
-			case 'D': 
+			case 'D':
 				  if ( name[4] >= '0' && name[4] <= '9' )
 					  geneType = 1 ; 
 				  else
 					  geneType = 3 ;
 				  break ;
 			case 'J': geneType = 2 ; break ;
+			case 'L': 
+					if (GetChainType(name) == 2)
+					{
+						geneType = -1 ; // IGLL genes
+						break ;
+					}
 			default: geneType = 3 ; break ;
 		}
 		return geneType ;
@@ -5687,7 +5693,7 @@ public:
 			for (i = 0 ; i < overlapCnt ; ++i)
 			{
 				int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
-				if (geneCompared[geneType] == 1)
+				if (geneType < 0 || geneCompared[geneType] == 1)
 					continue ;
 
 				if (geneUsed[geneType] == -1)
@@ -5708,9 +5714,9 @@ public:
 
 		for ( i = 0 ; i < overlapCnt ; ++i )
 		{
-			// Remove the hits on the D gene
+			// Remove the hits on the D gene or other random genes (genetype==-1)
 			int geneType = GetGeneType( seqs[ overlaps[i].seqIdx ].name ) ;
-			if ( geneType == 1 )
+			if ( geneType < 0 || geneType == 1 )
 				continue ;
 
 			// Remove those overlaps that was secondary as well.
