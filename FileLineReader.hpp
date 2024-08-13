@@ -62,7 +62,7 @@ public:
 			return NULL ;
 
 		int len = 0 ;	
-		while ((c = fgetc(fp)) != EOF)
+		while ((c = fgetc(fp)) != (char)EOF)
 		{
 			buffer[len] = c ;
 			++len ;
