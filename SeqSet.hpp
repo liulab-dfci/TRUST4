@@ -419,7 +419,7 @@ private:
 		return ret ;
 	}
 
-	void GetAlignStats( char *align, bool update, int &matchCnt, int &mismatchCnt, int &indelCnt)
+	void GetAlignStats( signed char *align, bool update, int &matchCnt, int &mismatchCnt, int &indelCnt)
 	{
 		int k ;
 		if ( !update )
@@ -1010,7 +1010,7 @@ private:
 	// Extend the overlap to include the overhang parts and filter the overlaps if the overhang does not match well.
 	// return: whether this is a valid extension or not
 	int ExtendOverlap( char *r, int len, struct _seqWrapper &seq, double mismatchThresholdFactor, 
-		char *align, struct _overlap &overlap, struct _overlap &extendedOverlap )
+		signed char *align, struct _overlap &overlap, struct _overlap &extendedOverlap )
 	{
 		// Check whether the overhang part is compatible with each other or not.
 		// Extension to 5'-end ( left end )
@@ -1672,7 +1672,7 @@ private:
 			}*/
 
 			matchCnt += 2 * kmerLength ;
-			char *align = new char[ overlaps[i].readEnd - overlaps[i].readStart + 1 + 
+			signed char *align = new signed char[ overlaps[i].readEnd - overlaps[i].readStart + 1 + 
 				overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 1] ;
 			for ( j = 1 ; j < hitCnt ; ++j )
 			{
@@ -2093,11 +2093,11 @@ private:
 		int i, j ;
 		int seqCnt = seqs.size() ;
 		int maxLen = 0 ;
-		char *align ;
+		signed char *align ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 			if ( seqs[i].consensusLen > maxLen )
 				maxLen = seqs[i].consensusLen ;
-		align = new char[2 * maxLen + 2] ;
+		align = new signed char[2 * maxLen + 2] ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			if ( seqs[i].consensus == NULL ) 
@@ -2152,11 +2152,11 @@ private:
 		int i, j, k ;
 		int seqCnt = seqs.size() ;
 		int maxLen = 0 ;
-		char *align ;
+		signed char *align ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 			if ( seqs[i].consensusLen > maxLen )
 				maxLen = seqs[i].consensusLen ;
-		align = new char[2 * maxLen + 2] ;
+		align = new signed char[2 * maxLen + 2] ;
 		SimpleVector<bool> use ; // Buffer to represent whether to use the seq when computing overlaps
 		use.ExpandTo( seqCnt ) ;
 		for ( i = 0 ; i < seqCnt ; ++i )
@@ -3070,7 +3070,7 @@ public:
 		if ( i < overlapCnt )
 		{
 			// Incorporate to existing sequence.
-			char *align = new char[3 * len] ;
+			signed char *align = new signed char[3 * len] ;
 			char *rcRead = strdup( read ) ;
 			ReverseComplement( rcRead, read, len ) ;
 			
@@ -4205,7 +4205,7 @@ public:
 			r = rc ;
 
 		struct _overlap extendedOverlap ;
-		char *align = new char[ 2 * len + 2 ] ;
+		signed char *align = new signed char[ 2 * len + 2 ] ;
 		/*for ( j = 0 ; j < overlapCnt ; ++j )
 		  {
 		  printf( "+ %d %d: %d %d %d %lf\n", i, j, overlaps[j].seqIdx, overlaps[j].seqStart, overlaps[j].seqEnd, overlaps[j].similarity) ;
@@ -5457,7 +5457,7 @@ public:
 		seqCnt = dGeneSeqIdx.Size() ;
 		std::vector<struct _overlap> dOverlaps ;
 		int cdr3Len = cdr[2].readEnd - cdr[2].readStart + 1 ;
-		char *align = new char[ cdr3Len ] ;
+		signed char *align = new signed char[ cdr3Len ] ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int seqStart ;
@@ -5906,7 +5906,7 @@ public:
 
 		if ( detailLevel >= 1 )
 		{
-			char *align = new char[ 2 * len + 2 ] ;
+			signed char *align = new signed char[ 2 * len + 2 ] ;
 			char *rvr = new char[len + 1] ;
 			int size = allOverlaps.size() ;
 			for ( i = 0 ; i < size ; ++i )
@@ -6196,7 +6196,7 @@ public:
 		// Infer CDR1,2,3.
 		char *cdr1 = NULL ;
 		char *cdr2 = NULL ;
-		char *vAlign = NULL ;
+		signed char *vAlign = NULL ;
 		
 
 		if ( detailLevel >= 2 && geneOverlap[0].seqIdx != -1 
@@ -6204,7 +6204,7 @@ public:
 		{
 			// Infer CDR1, 2
 			struct _overlap vgene = geneOverlap[0] ; // Overlap with v-gene
-			vAlign = new char[ len + seqs[ vgene.seqIdx ].consensusLen + 2 ] ;
+			vAlign = new signed char[ len + seqs[ vgene.seqIdx ].consensusLen + 2 ] ;
 			AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
 				read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
 			//AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
@@ -6477,7 +6477,7 @@ public:
 					if ( vAlign == NULL )
 					{
 						struct _overlap vgene = geneOverlap[0] ; // Overlap with v-gene
-						vAlign = new char[ len + seqs[vgene.seqIdx].consensusLen + 2 ] ;
+						vAlign = new signed char[ len + seqs[vgene.seqIdx].consensusLen + 2 ] ;
 						AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, 
 								vgene.seqEnd - vgene.seqStart + 1,
 								read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
@@ -6720,14 +6720,14 @@ public:
 				// Use sequence to infer locateE ;
 				if ( geneOverlap[2].seqIdx != -1 ) 
 				{
-					char *align ;
+					signed char *align ;
 
 					int dest = seqs[ geneOverlap[2].seqIdx ].info[2].a  ;
 					if ( dest != -1 /*&& dest >= geneOverlap[2].seqStart*/)
 					{
 						// Right to left scan should be more stable.
 						struct _overlap jgene = geneOverlap[2] ; // Overlap with j-gene
-						align = new char[ len + seqs[ jgene.seqIdx ].consensusLen + 2 ] ;
+						align = new signed char[ len + seqs[ jgene.seqIdx ].consensusLen + 2 ] ;
 						AlignAlgo::GlobalAlignment( seqs[ jgene.seqIdx ].consensus + jgene.seqStart, 
 								jgene.seqEnd - jgene.seqStart + 1,
 								read + jgene.readStart, jgene.readEnd - jgene.readStart + 1, align ) ;
@@ -7972,8 +7972,8 @@ public:
 		
 		int matchCnt = 0, mismatchCnt = 0, indelCnt = 0 ;
 		int len = strlen( seq ) ;
-		char *align ;
-		align = new char[ 3 * len + 102] ;
+		signed char *align ;
+		align = new signed char[ 3 * len + 102] ;
 		len = 0 ;
 		int seqStart, seqEnd, readStart, readEnd ;
 		for ( i = 0 ; i < 3 ; ++i )
@@ -8134,7 +8134,7 @@ public:
 				//if ( i == 1 )
 				//	continue ;
 
-				char *align = GetGeneOverlapAlignment( read, geneOverlap[i] ) ;
+				signed char *align = GetGeneOverlapAlignment( read, geneOverlap[i] ) ;
 				if ( align != NULL )
 				{
 					int k, l ;
@@ -8192,7 +8192,7 @@ public:
 			if (geneOverlap[i].seqIdx != -1)
 				bufferSize += geneOverlap[i].seqEnd - geneOverlap[i].seqStart + 1 ;
 
-		char *align[4] ; // align part for v, d, j, c genes.
+		signed char *align[4] ; // align part for v, d, j, c genes.
 		char *buffer = (char *)malloc(sizeof(char) * 6 * bufferSize) ;
 		char *buffer2 = new char[2 * bufferSize] ; // sequence_align
 		char *buffer3 = new char[2 * bufferSize] ; // germline_align
@@ -8423,21 +8423,20 @@ public:
 		return buffer ;
 	}
 
-	char *GetGeneOverlapAlignment(char *read, const struct _overlap gene )
+	signed char *GetGeneOverlapAlignment(char *read, const struct _overlap gene )
 	{
 		if ( gene.seqIdx == -1 )
 			return NULL ;
 
 		int len = strlen( read ) ;
-		char *align ;
-		align = new char[ len + seqs[gene.seqIdx].consensusLen + 2 ] ;
+		signed char *align = new signed char[ len + seqs[gene.seqIdx].consensusLen + 2 ] ;
 		AlignAlgo::GlobalAlignment( seqs[ gene.seqIdx ].consensus + gene.seqStart,
 				gene.seqEnd - gene.seqStart + 1,
 				read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
 		return align ;
 	}
 
-	void GetGeneAlignmentAirrCigar(const char *read, const struct _overlap &gene, const char *align, char *cigar)
+	void GetGeneAlignmentAirrCigar(const char *read, const struct _overlap &gene, const signed char *align, char *cigar)
 	{
 		int i, j ;
 		cigar[0] = '\0' ;
@@ -8521,7 +8520,7 @@ public:
 			char *r = reads[i].seq ;
 			if ( overlaps[0].strand == -1 )
 				r = rc ;
-			char *align = new char[ 2 * len + 2 ] ;	
+			signed char *align = new signed char[ 2 * len + 2 ] ;	
 			for ( j = 0 ; j < overlapCnt ; ++j )
 			{
 				if ( ExtendOverlap( r, len, seqs[ overlaps[j].seqIdx ], 1.0, align, 
