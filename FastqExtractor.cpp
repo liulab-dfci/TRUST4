@@ -207,6 +207,14 @@ void *ProcessReads_Thread( void *pArg )
 		if ( !goodCandidate && arg.readBatch2 && IsGoodCandidate( arg.readBatch2[i].seq, arg.buffer, arg.refSet ) )
 			++goodCandidate ;
 
+		if (goodCandidate && arg.barcodeBatch)
+		{
+			if ((!strcmp(arg.barcodeBatch[i].seq, arg.readBatch[i].seq)
+						|| (arg.readBatch2 && !strcmp(arg.barcodeBatch[i].seq, arg.readBatch2[i].seq))) 
+					&& IsLowComplexity(arg.barcodeBatch[i].seq))
+				goodCandidate = 0 ;
+		}
+
 		if ( !goodCandidate ) 
 			arg.readBatch[i].id[0] = '\0' ;
 		/*else if (arg.barcodeBatch != NULL)
@@ -499,6 +507,15 @@ int main( int argc, char *argv[] )
 				++goodCandidate ;
 			if ( !goodCandidate && hasMate && IsGoodCandidate( mateReads.seq, seqBuffer, &refSet ) )
 				++goodCandidate ;
+			
+			if (goodCandidate && hasBarcode)
+			{
+				if ((!strcmp(barcodeFile.seq, reads.seq)
+						|| (hasMate && !strcmp(barcodeFile.seq, mateReads.seq)) ) 
+						&& IsLowComplexity(barcodeFile.seq) )
+					goodCandidate = 0 ;
+			}
+
 			if ( goodCandidate )
 			{
 				int barcodeNoError = 1 ;

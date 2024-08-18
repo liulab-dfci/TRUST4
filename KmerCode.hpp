@@ -17,17 +17,21 @@ class KmerCode
 		}
 		KmerCode( int kl ) 
 		{
-			int i ;
 			kmerLength = kl ;
 			code = 0 ;
 			invalidPos = -1 ;
 
-			mask = 0 ;
+			/*mask = 0 ;
+			int i ;
 			for ( i = 0 ; i < kmerLength ; ++i )
 			{
 				mask = mask << 2 ;
 				mask = mask | 3 ;
-			}
+			}*/
+			if (kmerLength < 32)
+				mask = (1ull << (uint64_t)(2*kmerLength)) - 1ull ;
+			else
+				mask = (uint64_t)(-1) ;
 		}
 
 		KmerCode( const KmerCode& in )
