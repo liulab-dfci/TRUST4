@@ -1254,6 +1254,10 @@ int main( int argc, char *argv[] )
 
 	std::vector<int> rescueReadIdx ;
 	std::vector<int> assembledReadIdx ;
+	SimpleVector<int> barcodeTotalReadCount ; // Number of reads for this barcode
+	SimpleVector<int> barcodeReadCount ;
+	std::map<int, int> finishedBarcodes ; 
+
 	int assembledReadCnt = 0 ;
 	int prevAddRet = -1 ;
 	
@@ -1292,6 +1296,18 @@ int main( int argc, char *argv[] )
 
 	if ( firstReadLen > 200 || trimLevel > 1 )
 		changeKmerLengthThreshold /= 2 ;
+
+	if (hasBarcode)
+	{
+		barcodeTotalReadCount.Reserve(barcodeIntToStr.size()) ;
+		barcodeReadCount.Reserve(barcodeIntToStr.size()) ;
+		barcodeReadCount.SetZero(0, barcodeIntToStr.size()) ;
+		for (i = 0 ; i < readCnt ; ++i)
+		{
+			if (sortedReads[i].barcode != -1)
+				++barcodeTotalReadCount[ sortedReads[i].barcode ] ;
+		}
+	}
 
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
@@ -1552,6 +1568,22 @@ int main( int argc, char *argv[] )
 				{
 					goodCandidate[ sortedReads[i].mateIdx ] = good ;
 					sortedReads[ sortedReads[i].mateIdx ].info = i;
+				}
+
+				// Check whether the many barcode is already finished, so we can purge them from the index and posWeight array
+				if (hasBarcode && sortedReads[i].barcode != -1)
+				{
+					int barcode = sortedReads[i].barcode ;
+					++barcodeReadCount[barcode] ;
+					if (barcodeReadCount[barcode] >= barcodeTotalReadCount[barcode])
+					{
+						finishedBarcodes[barcode] = barcodeTotalReadCount[barcode] ;
+						if (finishedBarcodes.size() >= 1000000)
+						{
+							seqSet.ReleaseEvenCoverageBarcodeSeqPosWeight(finishedBarcodes, true) ;
+							finishedBarcodes.clear() ;
+						}
+					}
 				}
 			}
 		}
