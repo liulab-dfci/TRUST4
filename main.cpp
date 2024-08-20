@@ -1301,6 +1301,7 @@ int main( int argc, char *argv[] )
 	{
 		barcodeTotalReadCount.Reserve(barcodeIntToStr.size()) ;
 		barcodeReadCount.Reserve(barcodeIntToStr.size()) ;
+		barcodeTotalReadCount.SetZero(0, barcodeIntToStr.size()) ;
 		barcodeReadCount.SetZero(0, barcodeIntToStr.size()) ;
 		for (i = 0 ; i < readCnt ; ++i)
 		{
@@ -1569,20 +1570,20 @@ int main( int argc, char *argv[] )
 					goodCandidate[ sortedReads[i].mateIdx ] = good ;
 					sortedReads[ sortedReads[i].mateIdx ].info = i;
 				}
-
-				// Check whether the many barcode is already finished, so we can purge them from the index and posWeight array
-				if (hasBarcode && sortedReads[i].barcode != -1)
+			} // end if for setting good candidate
+			
+			// Check whether the many barcode is already finished, so we can purge them from the index and posWeight array
+			if (hasBarcode && !keepMissingBarcode && sortedReads[i].barcode != -1)
+			{
+				int barcode = sortedReads[i].barcode ;
+				++barcodeReadCount[barcode] ;
+				if (barcodeReadCount[barcode] >= barcodeTotalReadCount[barcode])
 				{
-					int barcode = sortedReads[i].barcode ;
-					++barcodeReadCount[barcode] ;
-					if (barcodeReadCount[barcode] >= barcodeTotalReadCount[barcode])
+					finishedBarcodes[barcode] = barcodeTotalReadCount[barcode] ;
+					if (finishedBarcodes.size() >= 500000) // clean up the memory once every 500K barcode finishes
 					{
-						finishedBarcodes[barcode] = barcodeTotalReadCount[barcode] ;
-						if (finishedBarcodes.size() >= 1000000)
-						{
-							seqSet.ReleaseEvenCoverageBarcodeSeqPosWeight(finishedBarcodes, true) ;
-							finishedBarcodes.clear() ;
-						}
+						seqSet.ReleaseEvenCoverageBarcodeSeqPosWeight(finishedBarcodes, true) ;
+						finishedBarcodes.clear() ;
 					}
 				}
 			}
