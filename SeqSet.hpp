@@ -10258,22 +10258,37 @@ public:
 		std::sort( seqs.begin(), seqs.end() ) ; 
 	}
 
+	// The sequences with those barcode will not be updated and used
 	// Release the position weight array for the sequences from the specified barcodes
 	//   if their coverage is even
-	void ReleaseEvenCoverageBarcodeSeqPosWeight(std::map<int, int> barcodes, bool removeFromIndex)
+	// Also release other part of like the index
+	// early stop, finish on the first sequence that is released
+	void ReleaseFinishedBarcodeSeq(std::map<int, int> barcodes, bool removeFromIndex, bool earlyStop)
 	{
 		int size = seqs.size() ;
 		int len ;
 		int i, j, k;
 		KmerCode kmerCode( kmerLength ) ;
 
-		for (i = 0 ; i < size ; ++i)
+		for (i = size - 1 ; i >= 0 ; --i)
 		{
+			if (seqs[i].consensus == NULL)
+				continue ;
+			if (earlyStop && (seqs[i].index == false || seqs[i].posWeight.Size() == 0))
+				break ;
+
 			if (barcodes.find(seqs[i].barcode) == barcodes.end())
 				continue ;
 			
 			UpdateConsensus(i, false) ;
 			struct _seqWrapper &seq = seqs[i] ;
+
+			if (removeFromIndex)
+			{
+				seq.index = false ;
+				seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, i, seq.barcode, 0 ) ;
+			}
+			
 			len = seq.consensusLen ;
 			int cov = 0 ;
 			for (j = 0 ; j < len ; ++j)	
@@ -10304,12 +10319,6 @@ public:
 			// This sequence has even coverage
 			seq.numRead = cov ;
 			seq.posWeight.Release() ;
-			
-			if (removeFromIndex)
-			{
-				seq.index = false ;
-				seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, i, seq.barcode, 0 ) ;
-			}
 		}
 	}
 

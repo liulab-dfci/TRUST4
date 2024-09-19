@@ -31,6 +31,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		///"\t--noV: do not assemble the full length V gene (default: not used)\n"
 		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
+		"\t--barcodeMinRead INT: ignore barcodes with less than INT reads (default: 0)\n"
 		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
 		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" ;
 
@@ -52,6 +53,7 @@ static struct option long_options[] = {
 			{ "UMI", required_argument, 0, 10004},
 			{ "skipMateExtension", no_argument, 0, 10005},
 			{ "minHitLen", required_argument, 0, 10006},
+			{ "barcodeMinRead", required_argument, 0, 10007},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -98,7 +100,9 @@ struct _sortRead
 
 	bool operator<( const struct _sortRead &b ) const 
 	{
-		if ( barcode != -1 && b.barcode != -1 && barcodeMinCnt != b.barcodeMinCnt )
+		if (barcode != -1 && barcode != b.barcode)
+			return barcode < b.barcode ;
+		else if ( barcode != -1 && b.barcode != -1 && barcodeMinCnt != b.barcodeMinCnt )
 			return barcodeMinCnt > b.barcodeMinCnt ;
 			/*else if ( medianCnt != b.medianCnt )
 				return medianCnt > b.medianCnt ;
@@ -116,8 +120,6 @@ struct _sortRead
 		//	return avgQual > b.avgQual ;
 		//else if (germlineMatchCnt != b.germlineMatchCnt)
 		//	return germlineMatchCnt > b.germlineMatchCnt ;
-		else if (barcode != b.barcode)
-			return barcode < b.barcode ;
 		else
 		{
 			int tmp = strcmp( read, b.read ) ;
@@ -128,6 +130,17 @@ struct _sortRead
 		}
 	}
 } ;
+
+bool CompReadByBarcode(const struct _sortRead &a, const struct _sortRead &b)
+{
+	if (a.barcode != -1 && b.barcode != -1)
+		return a.barcode < b.barcode ;
+	if (a.barcode == -1 && b.barcode != -1)
+		return false ;
+	else if (a.barcode != -1 && b.barcode == -1)
+		return true ;
+	return false ;
+}
 
 struct _quickAnnotateReadsThreadArg
 {
@@ -309,6 +322,7 @@ int main( int argc, char *argv[] )
 	bool keepMissingBarcode = false ;
 	int threadCnt = 1 ;
 	bool skipMateExtension = false ;
+	int barcodeMinRead = 0 ;
 
 	while ( 1 )
 	{
@@ -385,6 +399,10 @@ int main( int argc, char *argv[] )
 		{
 			minHitLen = atoi( optarg ) ;
 		}
+		else if ( c == 10007 )
+		{
+			barcodeMinRead = atoi( optarg ) ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -414,6 +432,11 @@ int main( int argc, char *argv[] )
 	std::map<std::string, int> barcodeStrToInt ;
 	std::map<std::string, int> umiStrToInt ;
 	std::vector<std::string> barcodeIntToStr ;
+	
+	// Relate to barcode release
+	SimpleVector<int> barcodeTotalReadCount ; // Number of reads for this barcode
+	SimpleVector<int> barcodeReadCount ;
+	std::map<int, int> finishedBarcodes ; 
 
 	i = 0 ;
 	while ( reads.Next() )
@@ -449,6 +472,14 @@ int main( int argc, char *argv[] )
 				barcode = barcodeIntToStr.size() ;
 				barcodeStrToInt[s] = barcode ;
 				barcodeIntToStr.push_back( s ) ;
+			}
+
+			if (barcodeMinRead > 0)
+			{
+				if (barcode >= barcodeTotalReadCount.Size())
+					barcodeTotalReadCount.PushBack(1) ;
+				else
+					++barcodeTotalReadCount[barcode] ;
 			}
 		}
 
@@ -740,6 +771,38 @@ int main( int argc, char *argv[] )
 	printf( "Finish read in the reads and kmer count.\n") ;
 #endif
 	int readCnt = sortedReads.size() ;
+
+	// Remove the reads from the barcode with too few reads
+	if (barcodeMinRead > 0)
+	{
+		for (i = 0 ; i < readCnt ; ++i)
+		{
+			if (sortedReads[i].barcode != -1 && barcodeTotalReadCount[sortedReads[i].barcode] < barcodeMinRead)
+			{
+				free( sortedReads[i].read ) ;
+				free( sortedReads[i].id ) ;
+				if (sortedReads[i].qual != NULL)
+				{
+					free(sortedReads[i].qual) ;
+					sortedReads[i].qual = NULL ;
+				}
+				sortedReads[i].read = NULL ;
+			}
+		}
+
+		k = 0 ;
+		for ( i = 0 ; i < readCnt ; ++i )
+		{
+			if ( sortedReads[i].read == NULL )
+				continue ;
+			sortedReads[k] = sortedReads[i] ;
+			sortedReads[k].len = strlen( sortedReads[i].read ) ;
+			++k ;
+		}
+		readCnt = k ;
+		sortedReads.resize( k ) ;
+	}
+
 	kmerCount.SetBuffer( maxReadLen ) ;
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
@@ -1254,9 +1317,6 @@ int main( int argc, char *argv[] )
 
 	std::vector<int> rescueReadIdx ;
 	std::vector<int> assembledReadIdx ;
-	SimpleVector<int> barcodeTotalReadCount ; // Number of reads for this barcode
-	SimpleVector<int> barcodeReadCount ;
-	std::map<int, int> finishedBarcodes ; 
 
 	int assembledReadCnt = 0 ;
 	int prevAddRet = -1 ;
@@ -1299,8 +1359,8 @@ int main( int argc, char *argv[] )
 
 	if (hasBarcode)
 	{
-		barcodeTotalReadCount.Reserve(barcodeIntToStr.size()) ;
-		barcodeReadCount.Reserve(barcodeIntToStr.size()) ;
+		barcodeTotalReadCount.ExpandTo(barcodeIntToStr.size()) ;
+		barcodeReadCount.ExpandTo(barcodeIntToStr.size()) ;
 		barcodeTotalReadCount.SetZero(0, barcodeIntToStr.size()) ;
 		barcodeReadCount.SetZero(0, barcodeIntToStr.size()) ;
 		for (i = 0 ; i < readCnt ; ++i)
@@ -1309,7 +1369,7 @@ int main( int argc, char *argv[] )
 				++barcodeTotalReadCount[ sortedReads[i].barcode ] ;
 		}
 	}
-
+	
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
 		/*++assembledReadCnt ;
@@ -1573,16 +1633,16 @@ int main( int argc, char *argv[] )
 			} // end if for setting good candidate
 			
 			// Check whether the many barcode is already finished, so we can purge them from the index and posWeight array
-			if (hasBarcode && !keepMissingBarcode && sortedReads[i].barcode != -1)
+			if (0 && hasBarcode && !keepMissingBarcode && sortedReads[i].barcode != -1)
 			{
 				int barcode = sortedReads[i].barcode ;
 				++barcodeReadCount[barcode] ;
 				if (barcodeReadCount[barcode] >= barcodeTotalReadCount[barcode])
 				{
 					finishedBarcodes[barcode] = barcodeTotalReadCount[barcode] ;
-					if (finishedBarcodes.size() >= 500000) // clean up the memory once every 500K barcode finishes
+					if (finishedBarcodes.size() >= 10000) // clean up the memory once every 10000 barcode finishes. The sort makes sure the barocde is processed one by one, so it can be efficiently removed.
 					{
-						seqSet.ReleaseEvenCoverageBarcodeSeqPosWeight(finishedBarcodes, true) ;
+						seqSet.ReleaseFinishedBarcodeSeq(finishedBarcodes, /*release_index*/true, /*early_stop*/true) ;
 						finishedBarcodes.clear() ;
 					}
 				}
@@ -1889,9 +1949,6 @@ int main( int argc, char *argv[] )
 	
 	if ( outputPrefix[0] != '-' )
 		fclose( fp ) ;*/
-	
-		
-	
 	
 	// Now the assembled reads should be sorted by their read id.
 	//PrintLog( "Rescue low frequency reads." ) ;
