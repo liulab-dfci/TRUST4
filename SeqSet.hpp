@@ -10322,6 +10322,29 @@ public:
 		}
 	}
 
+	// Release contigs with bases with too few read coverage
+	void ReleaseShallowContigs(int minCov)
+	{
+		int i, j ;
+		int size = seqs.size() ;
+		for (i = 0 ; i < size ; ++i)
+		{
+			struct _seqWrapper &seq = seqs[i] ;
+			int len = seq.consensusLen ;
+			if (seq.isRef || seq.consensus == NULL)
+				continue ;
+
+			for (j = 0 ; j < len ; ++j)
+			{
+				if (seq.posWeight[j].Sum() < minCov)
+					break ;
+			}
+
+			if (j < len)
+				ReleaseSeq(i) ;
+		}
+	}
+
 	void Output( FILE *fp, std::vector<std::string> *barcodeIntToStr = NULL )
 	{
 		int i, j, k ;

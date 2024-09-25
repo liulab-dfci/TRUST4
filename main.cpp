@@ -31,7 +31,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		///"\t--noV: do not assemble the full length V gene (default: not used)\n"
 		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
-		"\t--barcodeMinRead INT: ignore barcodes with less than INT reads (default: 0)\n"
+		"\t--contigMinCov INT: ignore contigs that have bases covered by fewer than INT reads (default: 0)\n"
 		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
 		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" ;
 
@@ -53,7 +53,7 @@ static struct option long_options[] = {
 			{ "UMI", required_argument, 0, 10004},
 			{ "skipMateExtension", no_argument, 0, 10005},
 			{ "minHitLen", required_argument, 0, 10006},
-			{ "barcodeMinRead", required_argument, 0, 10007},
+			{ "contigMinCov", required_argument, 0, 10007},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -322,7 +322,7 @@ int main( int argc, char *argv[] )
 	bool keepMissingBarcode = false ;
 	int threadCnt = 1 ;
 	bool skipMateExtension = false ;
-	int barcodeMinRead = 0 ;
+	int contigMinCov = 0 ;
 
 	while ( 1 )
 	{
@@ -401,7 +401,7 @@ int main( int argc, char *argv[] )
 		}
 		else if ( c == 10007 )
 		{
-			barcodeMinRead = atoi( optarg ) ;
+			contigMinCov = atoi( optarg ) ;
 		}
 		else
 		{
@@ -474,7 +474,7 @@ int main( int argc, char *argv[] )
 				barcodeIntToStr.push_back( s ) ;
 			}
 
-			if (barcodeMinRead > 0)
+			if (contigMinCov > 0)
 			{
 				if (barcode >= barcodeTotalReadCount.Size())
 					barcodeTotalReadCount.PushBack(1) ;
@@ -773,11 +773,11 @@ int main( int argc, char *argv[] )
 	int readCnt = sortedReads.size() ;
 
 	// Remove the reads from the barcode with too few reads
-	if (barcodeMinRead > 0)
+	if (contigMinCov > 0)
 	{
 		for (i = 0 ; i < readCnt ; ++i)
 		{
-			if (sortedReads[i].barcode != -1 && barcodeTotalReadCount[sortedReads[i].barcode] < barcodeMinRead)
+			if (sortedReads[i].barcode != -1 && barcodeTotalReadCount[sortedReads[i].barcode] < contigMinCov)
 			{
 				free( sortedReads[i].read ) ;
 				free( sortedReads[i].id ) ;
@@ -1737,6 +1737,11 @@ int main( int argc, char *argv[] )
 	fprintf( stderr, "Annotate the contigs.\n" ) ;
 	seqSet.Annotate( refSet ) ;*/
 
+	if (contigMinCov > 0)
+	{
+		seqSet.ReleaseShallowContigs(contigMinCov) ;
+	}
+	
 	// Output the preliminary assembly.
 	//seqSet.Clean( true ) ;
 	FILE *fp ;
