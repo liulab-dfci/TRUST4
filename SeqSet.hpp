@@ -2867,7 +2867,6 @@ public:
 				for (j = 1 ; j < size ; ++j)
 					if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
 						++readHitCount ;
-
 				if ( size > 0 && readHitCount > max )
 				{
 					maxTag = k ;
@@ -2889,8 +2888,8 @@ public:
 		}
 		if ( overlaps.size() == 0 )
 			return 0 ;
-		/*printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
-		for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
+		//printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
+		/*for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
 			printf( "%d %d\n", overlaps[0].hitCoords->Get(i).a, overlaps[0].hitCoords->Get(i).b ) ;*/
 		return maxTag == 0 ? -1 : 1 ;
 	}
@@ -10278,8 +10277,11 @@ public:
 				break ;
 
 			if (barcodes.find(seqs[i].barcode) == barcodes.end())
+			{
+				if (earlyStop)
+					break ;
 				continue ;
-			
+			}
 			UpdateConsensus(i, false) ;
 			struct _seqWrapper &seq = seqs[i] ;
 
@@ -10333,14 +10335,33 @@ public:
 			int len = seq.consensusLen ;
 			if (seq.isRef || seq.consensus == NULL)
 				continue ;
-
+		
+			if (seq.posWeight.Size() == 0)
+			{
+				if (seq.numRead < minCov)
+					ReleaseSeq(i) ;
+				continue ;
+			}
+			
+			// The end of the contig coverage is not considered.
+			int start, end ;
 			for (j = 0 ; j < len ; ++j)
+				if (seq.posWeight[j].Sum() >= minCov)
+					break ;
+			start = j;
+
+			for (j = len - 1 ; j >= start ; --j)
+				if (seq.posWeight[j].Sum() >= minCov)
+					break ;
+			end = j ;
+
+			for (j = start ; j <= end ; ++j) // This also handles the case when start>=len
 			{
 				if (seq.posWeight[j].Sum() < minCov)
 					break ;
 			}
 
-			if (j < len)
+			if (j <= end || end < start)
 				ReleaseSeq(i) ;
 		}
 	}

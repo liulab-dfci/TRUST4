@@ -1633,14 +1633,14 @@ int main( int argc, char *argv[] )
 			} // end if for setting good candidate
 			
 			// Check whether the many barcode is already finished, so we can purge them from the index and posWeight array
-			if (0 && hasBarcode && !keepMissingBarcode && sortedReads[i].barcode != -1)
+			if (hasBarcode && !keepMissingBarcode && sortedReads[i].barcode != -1)
 			{
 				int barcode = sortedReads[i].barcode ;
 				++barcodeReadCount[barcode] ;
 				if (barcodeReadCount[barcode] >= barcodeTotalReadCount[barcode])
 				{
 					finishedBarcodes[barcode] = barcodeTotalReadCount[barcode] ;
-					if (finishedBarcodes.size() >= 10000) // clean up the memory once every 10000 barcode finishes. The sort makes sure the barocde is processed one by one, so it can be efficiently removed.
+					if (finishedBarcodes.size() >= 1) // clean up the memory once every barcode finishes. The sort makes sure the barocde is processed one by one, so it can be efficiently removed.
 					{
 						seqSet.ReleaseFinishedBarcodeSeq(finishedBarcodes, /*release_index*/true, /*early_stop*/true) ;
 						finishedBarcodes.clear() ;
