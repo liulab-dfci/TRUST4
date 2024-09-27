@@ -4474,6 +4474,8 @@ public:
 				
 				// Update posweight
 				ns.posWeight.SetZero( 0, newConsensusLen ) ;
+				ns.numRead = 0 ;
+				ns.index = true ;
 				for ( j = 0 ; j < k ; ++j )
 				{
 					int l ;
@@ -8514,7 +8516,7 @@ public:
 		delete[] buffer ;
 	}
 	
-	
+	// Not used now.
 	void BreakFalseAssembly( std::vector<struct _Read> reads )
 	{
 		int i, j, k ;
@@ -8641,12 +8643,16 @@ public:
 				ns.consensusLen = end - start + 1 ;
 				ns.name = strdup( seqs[i].name ) ;
 				ns.isRef = false ;
+				ns.numRead = 0 ;
+				ns.index = true ;
 				
 				ns.posWeight.Reserve( end - start + 1 ) ;
 				int l ;
 				for ( l = start ; l <= end ; ++l )
+				{
 					ns.posWeight.PushBack( seqs[i].posWeight[l] ) ;	
-
+					ns.numRead += seqs[i].numRead ;
+				}
 				seqs.push_back( ns ) ;
 				//printf( "Break %d to %d.\n", i, seqs.size() - 1 ) ;
 			}
@@ -10003,12 +10009,15 @@ public:
 			ns.name = strdup( seqs[i].name ) ;
 			ns.posWeight.ExpandTo( newConsensusLen ) ;
 			ns.posWeight.SetZero( 0, newConsensusLen ) ;
+			ns.numRead = 0 ;
+			ns.index = true ;
 
 			// Assign the posWeight of the core part.	
 			int newSeqIdx = seqs.size() ;
 			for ( j = 0 ; j < chainSize ; ++j )
 			{
 				int l ;
+				ns.numRead += seqs[chain[j]].numRead ;
 				for ( l = range[j].a ; l <= origRangeB[j] && offset[j] + l - range[j].a < newConsensusLen ; ++l )
 				{
 					ns.posWeight[ offset[j] + l - range[j].a ] += seqs[ chain[j] ].posWeight[l] ;
@@ -10257,6 +10266,8 @@ public:
 		std::sort( seqs.begin(), seqs.end() ) ; 
 	}
 
+	// USE THIS FUNCTION WITH CAUTION. 
+	// After calling this function, the scaffolding function will break.
 	// The sequences with those barcode will not be updated and used
 	// Release the position weight array for the sequences from the specified barcodes
 	//   if their coverage is even
@@ -10284,7 +10295,7 @@ public:
 			}
 			UpdateConsensus(i, false) ;
 			struct _seqWrapper &seq = seqs[i] ;
-
+			
 			if (removeFromIndex)
 			{
 				seq.index = false ;
