@@ -31,9 +31,9 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		///"\t--noV: do not assemble the full length V gene (default: not used)\n"
 		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
-		"\t--contigMinCov INT: ignore contigs that have bases covered by fewer than INT reads (default: 0)\n"
 		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
-		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" ;
+		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" 
+		"\t--contigMinCov INT: ignore contigs that have bases covered by fewer than INT reads (default: 0)\n" ;
 
 int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
