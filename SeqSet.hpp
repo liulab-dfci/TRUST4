@@ -29,6 +29,8 @@ struct _seqWrapper
 	struct _triple info[3] ; // For storing extra information. for ref, info[0,1] contains the coordinate for CDR1,2 and info[2].a for CDR3
 					// In extending seqs with mate pair information, these are used to store rough V, J, C read coordinate.	
 	int barcode ; // transformed barcode. -1: no barcode
+	int numRead ; // number of read assigned to the seq. TODO: need to check whether this is accuracy
+	bool index ; // whether this sequence will be added to the index.
 
 	bool operator<( const struct _seqWrapper &b )	const
 	{
@@ -2435,6 +2437,8 @@ public:
 			}
 			ns.name = strdup( fa.id ) ;
 			ns.isRef = true ;
+			ns.numRead = 0 ;
+			ns.index = true ;
 
 			int id = seqs.size() ;
 			seqs.push_back( ns ) ;
@@ -2704,6 +2708,8 @@ public:
 		
 		sw.barcode = -1 ;
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
+		sw.numRead = 0 ;
+		sw.index = true ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 		return seqIdx ;
 	}	
@@ -2724,6 +2730,8 @@ public:
 		ns.consensusLen = seqLen ;	
 		ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
 		ns.barcode = barcode ;
+		ns.numRead = 1 ;
+		ns.index = true ;
 		for (i = 0 ; i < 3 ; ++i)
 		{
 			struct _triple nt ;
@@ -2764,6 +2772,8 @@ public:
 		ns.consensusLen = seqLen ;	
 		ns.barcode = -1 ;	
 		ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
+		ns.numRead = 0 ;
+		ns.index = true ; 
 		for (int i = 0 ; i < 3 ; ++i)
 		{
 			struct _triple nt ;
@@ -2806,7 +2816,10 @@ public:
 			ns.posWeight = in.seqs[i].posWeight ;
 			ns.minLeftExtAnchor = in.seqs[i].minLeftExtAnchor ;
 			ns.minRightExtAnchor = in.seqs[i].minRightExtAnchor ;
-			seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, id, ns.barcode) ;
+			ns.numRead = in.seqs[i].numRead ;
+			ns.index = in.seqs[i].index ;
+			if (ns.index)
+				seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, id, ns.barcode) ;
 			seqs.push_back( ns ) ;
 		}
 	}
@@ -2854,7 +2867,6 @@ public:
 				for (j = 1 ; j < size ; ++j)
 					if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
 						++readHitCount ;
-
 				if ( size > 0 && readHitCount > max )
 				{
 					maxTag = k ;
@@ -2876,8 +2888,8 @@ public:
 		}
 		if ( overlaps.size() == 0 )
 			return 0 ;
-		/*printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
-		for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
+		//printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
+		/*for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
 			printf( "%d %d\n", overlaps[0].hitCoords->Get(i).a, overlaps[0].hitCoords->Get(i).b ) ;*/
 		return maxTag == 0 ? -1 : 1 ;
 	}
@@ -3995,6 +4007,8 @@ public:
 			}
 			//printf( "%d %s %lld\n", ns.posWeight.Size(), ns.consensus, ns.posWeight.BeginAddress() ) ;
 			ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
+			ns.numRead = 1 ;
+			ns.index = true ;
 			seqs.push_back( ns ) ;
 
 			// Don't forget to update index.
@@ -4049,6 +4063,7 @@ public:
 				continue ;
 			++seq.posWeight[i + prevAddInfo.seqStart].count[ nucToNum[ r[i] - 'A' ] ] ;
 		}
+		++seq.numRead ;
 
 		if ( prevAddInfo.strand == -1 )
 			free( r ) ;
@@ -4067,6 +4082,7 @@ public:
 			ReverseComplement( r, read, len ) ;
 		
 		UpdatePosWeightFromRead( seqs[ assign.seqIdx ].posWeight, assign.seqStart, r ) ;
+		++seqs[assign.seqIdx].numRead ;
 		free( r ) ;
 	}
 	
@@ -4088,6 +4104,9 @@ public:
 		int i, j ;
 		struct _seqWrapper &seq = seqs[ seqIdx ] ;
 		SimpleVector<struct _pair> changes ;
+		if (seq.posWeight.Size() == 0)
+			return ;
+
 		for ( i = 0 ; i < seq.consensusLen ; ++i )
 		{
 			int max = 0 ;
@@ -4112,7 +4131,7 @@ public:
 			}
 		}
 
-		if ( changes.Size() == 0 )
+		if ( changes.Size() == 0 || seqs[seqIdx].index == false)
 			return ;
 		
 		if ( updateIndex )
@@ -4159,7 +4178,8 @@ public:
 			seqs[k] = seqs[i] ;
 			//if ( i != k )
 			//	seqIndex.UpdateIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, 0, i, k ) ;
-			seqIndex.BuildIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, k, seqs[k].barcode, 0 ) ;
+			if (seqs[k].index)
+				seqIndex.BuildIndexFromRead( kmerCode, seqs[k].consensus, seqs[k].consensusLen, k, seqs[k].barcode, 0 ) ;
 			++k ;
 		}
 		SetPrevAddInfo( -1, -1, -1, -1, -1, 0 ) ; 
@@ -4454,14 +4474,17 @@ public:
 				
 				// Update posweight
 				ns.posWeight.SetZero( 0, newConsensusLen ) ;
+				ns.numRead = 0 ;
+				ns.index = true ;
 				for ( j = 0 ; j < k ; ++j )
 				{
 					int l ;
 					int seqIdx = path[j] ;
 					for ( l = 0 ; l < seqs[ seqIdx ].consensusLen ; ++l )
 						ns.posWeight[l + seqOffset[j] ] += seqs[ seqIdx ].posWeight[l] ; 
+					ns.numRead += seqs[seqIdx].numRead ;
 				} 
-				// Update name
+				// Update name 
 				int sum = 0 ;
 				for ( j = 0 ; j < k ; ++j )
 					sum += strlen( seqs[ path[j] ].name ) ;
@@ -8493,7 +8516,7 @@ public:
 		delete[] buffer ;
 	}
 	
-	
+	// Not used now.
 	void BreakFalseAssembly( std::vector<struct _Read> reads )
 	{
 		int i, j, k ;
@@ -8620,12 +8643,16 @@ public:
 				ns.consensusLen = end - start + 1 ;
 				ns.name = strdup( seqs[i].name ) ;
 				ns.isRef = false ;
+				ns.numRead = 0 ;
+				ns.index = true ;
 				
 				ns.posWeight.Reserve( end - start + 1 ) ;
 				int l ;
 				for ( l = start ; l <= end ; ++l )
+				{
 					ns.posWeight.PushBack( seqs[i].posWeight[l] ) ;	
-
+					ns.numRead += seqs[i].numRead ;
+				}
 				seqs.push_back( ns ) ;
 				//printf( "Break %d to %d.\n", i, seqs.size() - 1 ) ;
 			}
@@ -9982,12 +10009,15 @@ public:
 			ns.name = strdup( seqs[i].name ) ;
 			ns.posWeight.ExpandTo( newConsensusLen ) ;
 			ns.posWeight.SetZero( 0, newConsensusLen ) ;
+			ns.numRead = 0 ;
+			ns.index = true ;
 
 			// Assign the posWeight of the core part.	
 			int newSeqIdx = seqs.size() ;
 			for ( j = 0 ; j < chainSize ; ++j )
 			{
 				int l ;
+				ns.numRead += seqs[chain[j]].numRead ;
 				for ( l = range[j].a ; l <= origRangeB[j] && offset[j] + l - range[j].a < newConsensusLen ; ++l )
 				{
 					ns.posWeight[ offset[j] + l - range[j].a ] += seqs[ chain[j] ].posWeight[l] ;
@@ -10236,6 +10266,117 @@ public:
 		std::sort( seqs.begin(), seqs.end() ) ; 
 	}
 
+	// USE THIS FUNCTION WITH CAUTION. 
+	// After calling this function, the scaffolding function will break.
+	// The sequences with those barcode will not be updated and used
+	// Release the position weight array for the sequences from the specified barcodes
+	//   if their coverage is even
+	// Also release other part of like the index
+	// early stop, finish on the first sequence that is released
+	void ReleaseFinishedBarcodeSeq(std::map<int, int> barcodes, bool removeFromIndex, bool earlyStop)
+	{
+		int size = seqs.size() ;
+		int len ;
+		int i, j, k;
+		KmerCode kmerCode( kmerLength ) ;
+
+		for (i = size - 1 ; i >= 0 ; --i)
+		{
+			if (seqs[i].consensus == NULL)
+				continue ;
+			if (earlyStop && (seqs[i].index == false || seqs[i].posWeight.Size() == 0))
+				break ;
+
+			if (barcodes.find(seqs[i].barcode) == barcodes.end())
+			{
+				if (earlyStop)
+					break ;
+				continue ;
+			}
+			UpdateConsensus(i, false) ;
+			struct _seqWrapper &seq = seqs[i] ;
+			
+			if (removeFromIndex)
+			{
+				seq.index = false ;
+				seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, i, seq.barcode, 0 ) ;
+			}
+			
+			len = seq.consensusLen ;
+			int cov = 0 ;
+			for (j = 0 ; j < len ; ++j)	
+			{
+				for (k = 0 ; k < 4 ; ++k)
+				{
+					if (k == nucToNum[seq.consensus[j] - 'A'])
+					{
+						if (seq.posWeight[j].count[k] == 0) // unfixable 'N', because we update the consensus before
+							break ;
+
+						if (j == 0)
+							cov = seq.posWeight[j].count[k] ;
+						else if (seq.posWeight[j].count[k] != cov)
+							break ;
+					}
+					else if (seq.posWeight[j].count[k] != 0)
+						break ;
+				}
+
+				if (k < 4)
+					break ;
+			}
+
+			if (j < len) // Coverage is not even
+				continue ;
+
+			// This sequence has even coverage
+			seq.numRead = cov ;
+			seq.posWeight.Release() ;
+		}
+	}
+
+	// Release contigs with bases with too few read coverage
+	void ReleaseShallowContigs(int minCov)
+	{
+		int i, j ;
+		int size = seqs.size() ;
+		for (i = 0 ; i < size ; ++i)
+		{
+			struct _seqWrapper &seq = seqs[i] ;
+			int len = seq.consensusLen ;
+			if (seq.isRef || seq.consensus == NULL)
+				continue ;
+		
+			if (seq.posWeight.Size() == 0)
+			{
+				if (seq.numRead < minCov)
+					ReleaseSeq(i) ;
+				continue ;
+			}
+			
+			// The end of the contig coverage is not considered.
+			int start, end ;
+			for (j = 0 ; j < len ; ++j)
+				if (seq.posWeight[j].Sum() >= minCov)
+					break ;
+			start = j;
+
+			for (j = len - 1 ; j >= start ; --j)
+				if (seq.posWeight[j].Sum() >= minCov)
+					break ;
+			end = j ;
+
+			for (j = start ; j <= end ; ++j) // This also handles the case when start>=len
+			{
+				if (seq.posWeight[j].Sum() < minCov)
+					break ;
+			}
+
+			if (j <= end || end < start)
+				ReleaseSeq(i) ;
+		}
+	}
+
 	void Output( FILE *fp, std::vector<std::string> *barcodeIntToStr = NULL )
 	{
 		int i, j, k ;
@@ -10251,11 +10392,28 @@ public:
 				fprintf( fp, ">%s_%d %s\n%s\n", barcodeIntToStr->at( seqs[i].barcode ).c_str(), i, seqs[i].name, 
 							seqs[i].consensus ) ;
 			
-			for ( k = 0 ; k < 4 ; ++k )
+			if (seqs[i].posWeight.Size() > 0)
 			{
-				for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
-					fprintf( fp, "%d ", seqs[i].posWeight[j].count[k] ) ;
-				fprintf( fp, "\n" ) ;
+				for ( k = 0 ; k < 4 ; ++k )
+				{
+					for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
+						fprintf( fp, "%d ", seqs[i].posWeight[j].count[k] ) ;
+					fprintf( fp, "\n" ) ;
+				}
+			}
+			else
+			{
+				for (k = 0 ; k < 4 ; ++k)
+				{
+					for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
+					{
+						if (nucToNum[seqs[i].consensus[j] - 'A'] == k)
+							fprintf( fp, "%d ", seqs[i].numRead ) ;
+						else
+							fprintf( fp, "0 ") ;
+					}
+					fprintf( fp, "\n" ) ;
+				}
 			}
 		}
 	}
@@ -10342,7 +10500,7 @@ public:
 
 		seq.consensus[pos] = c ;
 
-		if (updateIndex)
+		if (updateIndex && seq.index)
 			seqIndex.BuildIndexFromRead(kmerCode, seq.consensus + start, end - start + 1, seqIdx, seq.barcode, start) ;
 	}
 	

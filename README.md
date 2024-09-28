@@ -48,6 +48,7 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			--UMI STRING: if -b, bam field for 10x Genomics-like UMI; if -1 -2/-u, file containing 10x Genomics-like UMIs (default: not used)
 			--readFormat STRING: format for read, barcode and UMI files (example: r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI)
 			--repseq: the data is from bulk,non-UMI-based TCR-seq or BCR-seq (default: not set)
+			--contigMinCov INT: ignore contigs that have bases covered by fewer than INT reads (default: 0)
 			--minHitLen INT: the minimal hit length for a valid overlap (default: auto)
 			--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)
 			--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)
