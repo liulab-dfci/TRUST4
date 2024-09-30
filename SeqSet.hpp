@@ -2876,10 +2876,11 @@ public:
 		}
 
 		std::vector<struct _overlap> overlaps ;
-		// Too short k-mer length may cause wrong strandness
-		if (max[0] + kmerLength - 1 >= 2 * hitLenRequired
+		// There might be cases we miss the right strand
+		if ((max[0] + kmerLength - 1 >= 2 * hitLenRequired
 				&& max[1] + kmerLength - 1 >= 2 * hitLenRequired
 				&& max[0] > 0.9 * max[1] && max[1] > 0.9 * max[0])
+				|| (max[0] == max[1] && max[0] * kmerLength >= hitLenRequired))
 		{
 			// Potential ambugious strand where both hits seem to be quite good
 			std::vector<struct _overlap> tmpOverlaps[2] ;
@@ -2919,7 +2920,6 @@ public:
 		else
 		{
 			maxTag = (max[1] >= max[0] ? 1 : 0);
-			//printf("%d %d %d\n", max[0], max[1], maxSeqIdx[maxTag]) ;
 			GetOverlapsFromHits( buckets[maxTag][maxSeqIdx[maxTag]], hitLenRequired, 1, overlaps ) ;
 		}
 
