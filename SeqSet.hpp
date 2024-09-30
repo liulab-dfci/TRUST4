@@ -2854,9 +2854,9 @@ public:
 		}
 		
 		// Find the best bucket.
-		int max = -1 ;
+		int max[2] = {-1, -1} ;
+		int maxSeqIdx[2] = {-1, -1} ;
 		int maxTag = -1 ;
-		int maxSeqIdx = -1 ;
 		for ( k = 0 ; k <= 1 ; ++k )
 		{
 			for ( i = 0 ; i < seqCnt ; ++i )
@@ -2867,17 +2867,62 @@ public:
 				for (j = 1 ; j < size ; ++j)
 					if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
 						++readHitCount ;
-				if ( size > 0 && readHitCount > max )
+				if ( size > 0 && readHitCount > max[k] )
 				{
-					maxTag = k ;
-					maxSeqIdx = i ;
-					max = readHitCount ;
+					maxSeqIdx[k] = i ;
+					max[k] = readHitCount ;
 				}
 			}
 		}
-		
+
 		std::vector<struct _overlap> overlaps ;
-		GetOverlapsFromHits( buckets[maxTag][maxSeqIdx], hitLenRequired, 1, overlaps ) ;
+		// There might be cases we miss the right strand
+		if ((max[0] + kmerLength - 1 >= 2 * hitLenRequired
+				&& max[1] + kmerLength - 1 >= 2 * hitLenRequired
+				&& max[0] > 0.9 * max[1] && max[1] > 0.9 * max[0])
+				|| (max[0] == max[1] && max[0] * kmerLength >= hitLenRequired))
+		{
+			// Potential ambugious strand where both hits seem to be quite good
+			std::vector<struct _overlap> tmpOverlaps[2] ;
+			GetOverlapsFromHits( buckets[0][maxSeqIdx[0]], hitLenRequired, 1, tmpOverlaps[0] ) ;
+			GetOverlapsFromHits( buckets[1][maxSeqIdx[1]], hitLenRequired, 1, tmpOverlaps[1] ) ;
+
+			if (tmpOverlaps[0].size() > 0 && tmpOverlaps[1].size() > 0)
+			{
+				//printf("%d %d\n", overlaps0[0].matchCnt, overlaps1[0].matchCnt); 
+				if (tmpOverlaps[0][0].matchCnt >= tmpOverlaps[1][0].matchCnt)
+				{
+					maxTag = 0 ;
+					overlaps = tmpOverlaps[0] ;
+				}
+				else
+				{
+					maxTag = 1 ;
+					overlaps = tmpOverlaps[1] ;
+				}
+			}
+			else if (tmpOverlaps[0].size() > 0)
+			{
+				maxTag = 0 ;
+				overlaps = tmpOverlaps[0] ;
+			}
+			else // overlaps1.size() > 0 or both ==0
+			{
+				maxTag = 1 ;
+				overlaps = tmpOverlaps[1] ;
+			}
+
+			int otherTag = 1 - maxTag ;
+			int size = tmpOverlaps[otherTag].size() ;
+			for (i = 0 ; i < size ; ++i)
+				delete tmpOverlaps[otherTag][i].hitCoords ;
+		}
+		else
+		{
+			maxTag = (max[1] >= max[0] ? 1 : 0);
+			GetOverlapsFromHits( buckets[maxTag][maxSeqIdx[maxTag]], hitLenRequired, 1, overlaps ) ;
+		}
+
 		delete[] buckets[0] ;
 		delete[] buckets[1] ;
 		int size = overlaps.size() ;
@@ -2888,7 +2933,7 @@ public:
 		}
 		if ( overlaps.size() == 0 )
 			return 0 ;
-		//printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, overlaps[0].similarity ) ;
+		//printf( "%s %d %d %lf\n", seqs[ overlaps[0].seqIdx ].name, overlaps[0].readStart, overlaps[0].readEnd, (double)overlaps[0].matchCnt) ;
 		/*for ( i = 0 ; i < overlaps[0].hitCoords->Size() ; ++i )
 			printf( "%d %d\n", overlaps[0].hitCoords->Get(i).a, overlaps[0].hitCoords->Get(i).b ) ;*/
 		return maxTag == 0 ? -1 : 1 ;
