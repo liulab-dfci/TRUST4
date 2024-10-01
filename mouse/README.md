@@ -1,1 +1,1 @@
-IMGT has additional gaps on the TRAV genes so the conventional coordinate system does not apply. If you need the CDR1 and CDR2 information on the TRAV genes, please add the option "--imgtAddtionalGap TRAV:7,83".
+IMGT has additional gaps on the TRAV genes so the conventional coordinate system does not apply. If you need the CDR1 and CDR2 information on the TRAV genes, please add the option "--imgtAdditionalGap TRAV:7,83".
