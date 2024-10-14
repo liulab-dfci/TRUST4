@@ -10603,6 +10603,21 @@ public:
 		}
 		delete[] buffer ;
 	}
+
+	size_t GetSpace()
+	{
+		int i ;
+		size_t ret = seqIndex.GetSpace() ;
+		int seqCnt = seqs.size() ;
+		for (i = 0 ; i < seqCnt ; ++i)
+		{
+			ret += sizeof(seqs[i]) ;
+			ret += sizeof(char) * strlen(seqs[i].name) ;
+			ret += sizeof(char) * seqs[i].consensusLen ;
+			ret += seqs[i].posWeight.GetSpace() ;
+		}
+		return ret ;
+	}
 } ;
 
 

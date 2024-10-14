@@ -985,7 +985,6 @@ int main( int argc, char *argv[] )
 		}
 		PrintLog( "Finish re-sorting the reads based on barcode." ) ;
 	}
-
 	/*for (i = 0 ; i < readCnt ; ++i)
 	{
 		int germlineMatchCnt = 0 ;
@@ -1672,6 +1671,7 @@ int main( int argc, char *argv[] )
 		}
 	}
 	seqSet.UpdateAllConsensus() ;
+	//printf("index=%lu reads=%lu\n", seqSet.GetSpace(), sortedReads.size() * sizeof(sortedReads[0])) ;
 	PrintLog(  "Assembled %d reads.", assembledReadCnt ) ;
 
 	// Go through the second round.
@@ -1745,7 +1745,7 @@ int main( int argc, char *argv[] )
 	{
 		seqSet.ReleaseShallowContigs(contigMinCov) ;
 	}
-	
+
 	// Output the preliminary assembly.
 	//seqSet.Clean( true ) ;
 	FILE *fp ;

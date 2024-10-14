@@ -105,7 +105,11 @@ public:
 		if ( maxInc > 0 && inc > maxInc )
 			inc = maxInc ;
 	}
-
+  
+	size_t GetSpace()
+	{
+		return sizeof(T) * capacity ;
+	}
 
 	int PushBack( const T &in )	
 	{
