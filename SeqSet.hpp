@@ -4217,10 +4217,10 @@ public:
 			}
 		}
 
-		if ( changes.Size() == 0 || seqs[seqIdx].index == false)
+		if ( changes.Size() == 0 ) //|| seqs[seqIdx].index == false)
 			return ;
 		
-		if ( updateIndex )
+		if ( updateIndex && seqs[seqIdx].index)
 		{
 			// Inefficient implementation, improve in future.
 			KmerCode kmerCode( kmerLength ) ;
@@ -4231,7 +4231,7 @@ public:
 		for ( i = 0 ; i < size ; ++i )
 			seq.consensus[ changes[i].a ] = numToNuc[ changes[i].b ] ;
 
-		if ( updateIndex )
+		if ( updateIndex && seqs[seqIdx].index)
 		{
 			KmerCode kmerCode( kmerLength ) ;
 			seqIndex.BuildIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, seqIdx, seq.barcode, 0 ) ;

@@ -108,10 +108,6 @@ struct _sortRead
 			return avgCnt > b.avgCnt ;
 		else if ( len != b.len )
 			return len > b.len ;
-    if (barcode != -1 && barcode != b.barcode)
-			return barcode < b.barcode ;
-		else if ( barcode != -1 && b.barcode != -1 && barcodeMinCnt != b.barcodeMinCnt )
-			return barcodeMinCnt > b.barcodeMinCnt ;
 		//else if (avgQual != b.avgQual)
 		//	return avgQual > b.avgQual ;
 		//else if (germlineMatchCnt != b.germlineMatchCnt)
@@ -131,8 +127,8 @@ bool CompReadWithBarcode(const struct _sortRead &a, const struct _sortRead &b)
 {
 	if (a.barcode != -1 && a.barcode != b.barcode)
 		return a.barcode < b.barcode ;
-  else if (a.barcode == -1 && b.barcode != -1)
-		return false ;
+	else if ( a.barcode != -1 && b.barcode != -1 && a.barcodeMinCnt != b.barcodeMinCnt )
+		return a.barcodeMinCnt > b.barcodeMinCnt ;
   else
     return a < b ;
 }
@@ -939,9 +935,11 @@ int main( int argc, char *argv[] )
 					barcodeKmerCount.AddCount(sortedReads[k].read) ;
 
 				for (k = i ; k < j ; ++k)
+				{
 					barcodeKmerCount.GetCountStatsAndTrim(sortedReads[k].read, NULL,
 							sortedReads[k].barcodeMinCnt, sortedReads[k].barcodeMedianCnt,
 							sortedReads[k].barcodeAvgCnt ) ;  
+				}
 
 				barcodeKmerCount.Clear() ;
 				i = j ;
