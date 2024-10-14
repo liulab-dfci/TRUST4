@@ -157,7 +157,6 @@ public:
 			return 0 ;
 	}
 
-
 	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, float &avgCount )
 	{
 		int i, k ;
@@ -259,6 +258,13 @@ public:
 
 		return 1 ;
 	}
+
+  void Clear()
+  {
+    int i ;
+    for (i = 0 ; i < khashMax ; ++i)
+      count[i].clear() ;
+  }
 
 	void Release()
 	{

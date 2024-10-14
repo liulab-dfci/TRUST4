@@ -100,15 +100,7 @@ struct _sortRead
 
 	bool operator<( const struct _sortRead &b ) const 
 	{
-		if (barcode != -1 && barcode != b.barcode)
-			return barcode < b.barcode ;
-		else if ( barcode != -1 && b.barcode != -1 && barcodeMinCnt != b.barcodeMinCnt )
-			return barcodeMinCnt > b.barcodeMinCnt ;
-			/*else if ( medianCnt != b.medianCnt )
-				return medianCnt > b.medianCnt ;
-			else if ( avgCnt != b.avgCnt )
-				return avgCnt > b.avgCnt ;*/
-		else if ( minCnt != b.minCnt )
+		if ( minCnt != b.minCnt )
 			return minCnt > b.minCnt ;
 		else if ( medianCnt != b.medianCnt )
 			return medianCnt > b.medianCnt ;
@@ -116,6 +108,10 @@ struct _sortRead
 			return avgCnt > b.avgCnt ;
 		else if ( len != b.len )
 			return len > b.len ;
+    if (barcode != -1 && barcode != b.barcode)
+			return barcode < b.barcode ;
+		else if ( barcode != -1 && b.barcode != -1 && barcodeMinCnt != b.barcodeMinCnt )
+			return barcodeMinCnt > b.barcodeMinCnt ;
 		//else if (avgQual != b.avgQual)
 		//	return avgQual > b.avgQual ;
 		//else if (germlineMatchCnt != b.germlineMatchCnt)
@@ -131,15 +127,14 @@ struct _sortRead
 	}
 } ;
 
-bool CompReadByBarcode(const struct _sortRead &a, const struct _sortRead &b)
+bool CompReadWithBarcode(const struct _sortRead &a, const struct _sortRead &b)
 {
-	if (a.barcode != -1 && b.barcode != -1)
+	if (a.barcode != -1 && a.barcode != b.barcode)
 		return a.barcode < b.barcode ;
-	if (a.barcode == -1 && b.barcode != -1)
+  else if (a.barcode == -1 && b.barcode != -1)
 		return false ;
-	else if (a.barcode != -1 && b.barcode == -1)
-		return true ;
-	return false ;
+  else
+    return a < b ;
 }
 
 struct _quickAnnotateReadsThreadArg
@@ -158,9 +153,7 @@ struct _barcodeKmerCountThreadArg
 	int threadCnt ;
 	std::vector<struct _sortRead> *pReads ;
 	int readCnt ;
-	std::vector<KmerCount> *pBarcodeKmerCount ;
-
-	int task ; // 0: get kmer count. 1: put kmer count to each read
+	int maxReadLen ;
 } ;
 
 struct _assignReadsThreadArg
@@ -239,31 +232,39 @@ void *QuickAnnotateReads_Thread( void *pArg )
 
 void *BarcodeKmerCount_Thread(void *pArg)
 {
-	int i ;
+	int i, j, k ;
 	struct _barcodeKmerCountThreadArg &arg = *((struct _barcodeKmerCountThreadArg*)pArg) ;
 	std::vector< struct _sortRead> &reads = *arg.pReads ;
+	int readCnt = arg.readCnt ;
 
-	if (arg.task == 0)
+	KmerCount barcodeKmerCount(21, 23) ;
+	barcodeKmerCount.SetBuffer( arg.maxReadLen ) ;
+	for (i = 0 ; i < readCnt ; )
 	{
-		for (i = 0 ; i < arg.readCnt ; ++i)
+		for (j = i + 1 ; j < readCnt ; ++j)
 		{
-			if (reads[i].barcode % arg.threadCnt == arg.tid)
-				(arg.pBarcodeKmerCount->at(reads[i].barcode)).AddCount(reads[i].read) ;
+			if (reads[i].barcode != reads[j].barcode)
+				break ;
 		}
-	}
-	else if (arg.task == 1)
-	{
-		for (i = 0 ; i < arg.readCnt ; ++i)
+		
+		if (reads[i].barcode % arg.threadCnt != arg.tid)
 		{
-			// Has to be in this fashion, otherwise reads from the same barcode may compete
-			// for the internal kmer count buffer.
-			if (reads[i].barcode % arg.threadCnt == arg.tid) 
-			{
-				(arg.pBarcodeKmerCount->at(reads[i].barcode)).GetCountStatsAndTrim(reads[i].read, NULL, 
-						reads[i].barcodeMinCnt, reads[i].barcodeMedianCnt, reads[i].barcodeAvgCnt ) ;
-			}
+			i = j ;
+			continue ;
 		}
+
+		for (k = i ; k < j ; ++k)
+			barcodeKmerCount.AddCount(reads[k].read) ;
+
+		for (k = i ; k < j ; ++k)
+			barcodeKmerCount.GetCountStatsAndTrim(reads[k].read, NULL,
+					reads[k].barcodeMinCnt, reads[k].barcodeMedianCnt,
+					reads[k].barcodeAvgCnt ) ;  
+
+		barcodeKmerCount.Clear() ;
+		i = j ;
 	}
+	barcodeKmerCount.Release() ;
 	pthread_exit(NULL) ;
 }
 
@@ -855,72 +856,6 @@ int main( int argc, char *argv[] )
 	
 	kmerCount.Release() ;
 
-	if (hasBarcode && !keepMissingBarcode) // use within barcode count 
-	{
-		PrintLog("Get barcode-wise kmer count.") ;
-		int barcodeCnt = barcodeIntToStr.size() ;
-		std::vector<KmerCount> barcodeKmerCount ;
-
-		barcodeKmerCount.reserve(barcodeCnt) ;
-		for (i = 0 ; i < barcodeCnt ; ++i)
-		{
-			barcodeKmerCount.push_back(KmerCount(21, 23)) ;
-		}
-
-		if (threadCnt == 1)
-		{
-			for (i = 0 ; i < readCnt ; ++i)
-			{
-				int bc = sortedReads[i].barcode ;
-				barcodeKmerCount[bc].AddCount(sortedReads[i].read) ;
-			}
-
-			for (i = 0 ; i < readCnt ; ++i)
-			{
-				int bc = sortedReads[i].barcode ;
-				barcodeKmerCount[bc].GetCountStatsAndTrim( sortedReads[i].read, NULL, 
-						sortedReads[i].barcodeMinCnt, sortedReads[i].barcodeMedianCnt, 
-						sortedReads[i].barcodeAvgCnt ) ;
-			}
-		}    
-		else
-		{
-			pthread_t *threads = new pthread_t[ threadCnt ] ;
-			struct _barcodeKmerCountThreadArg *args = new struct _barcodeKmerCountThreadArg[threadCnt] ;
-			pthread_attr_t attr ;
-
-			pthread_attr_init( &attr ) ;
-			pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
-
-			for ( i = 0 ; i < threadCnt ; ++i )
-			{
-				args[i].tid = i ;
-				args[i].threadCnt = threadCnt ;
-				args[i].pReads = &sortedReads ;
-				args[i].readCnt = readCnt ;
-				args[i].pBarcodeKmerCount = &barcodeKmerCount ;
-				args[i].task = 0 ;
-				pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
-			}
-
-			for ( i = 0 ; i < threadCnt ; ++i )
-				pthread_join( threads[i], NULL ) ;
-
-			for ( i = 0 ; i < threadCnt ; ++i )
-			{
-				args[i].task = 1 ;
-				pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
-			}
-
-			for ( i = 0 ; i < threadCnt ; ++i )
-				pthread_join( threads[i], NULL ) ;
-
-			delete[] threads ;
-			delete[] args ;
-		}
-		PrintLog("Finish barcode-wise kmer count.") ;
-	}
-
 	// Remaining intializations
 	for ( i = 0 ; i < readCnt ; ++i )
 	{
@@ -981,6 +916,77 @@ int main( int argc, char *argv[] )
 		delete[] args ;
 	}
 	PrintLog( "Finish rough annotations." ) ;
+	
+	if (hasBarcode)
+	{
+		// Sort barcode afterwards so annotation can reuse same sequence from different barcode
+		std::sort( sortedReads.begin(), sortedReads.end(), CompReadWithBarcode ) ;
+
+		PrintLog("Get barcode-wise kmer count.") ;
+		if (threadCnt == 1)
+		{
+			KmerCount barcodeKmerCount(21, 23) ;
+			barcodeKmerCount.SetBuffer(maxReadLen) ;
+			for (i = 0 ; i < readCnt ; )
+			{
+				for (j = i + 1 ; j < readCnt ; ++j)
+				{
+					if (sortedReads[i].barcode != sortedReads[j].barcode)
+						break ;
+				}
+
+				for (k = i ; k < j ; ++k)
+					barcodeKmerCount.AddCount(sortedReads[k].read) ;
+
+				for (k = i ; k < j ; ++k)
+					barcodeKmerCount.GetCountStatsAndTrim(sortedReads[k].read, NULL,
+							sortedReads[k].barcodeMinCnt, sortedReads[k].barcodeMedianCnt,
+							sortedReads[k].barcodeAvgCnt ) ;  
+
+				barcodeKmerCount.Clear() ;
+				i = j ;
+			}
+		}    
+		else
+		{
+			pthread_t *threads = new pthread_t[ threadCnt ] ;
+			struct _barcodeKmerCountThreadArg *args = new struct _barcodeKmerCountThreadArg[threadCnt] ;
+			pthread_attr_t attr ;
+
+			pthread_attr_init( &attr ) ;
+			pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+			{
+				args[i].tid = i ;
+				args[i].threadCnt = threadCnt ;
+				args[i].pReads = &sortedReads ;
+				args[i].readCnt = readCnt ;
+				args[i].maxReadLen = maxReadLen ;
+				pthread_create( &threads[i], &attr, BarcodeKmerCount_Thread, (void *)( args + i ) ) ;
+			}
+
+			for ( i = 0 ; i < threadCnt ; ++i )
+				pthread_join( threads[i], NULL ) ;
+
+			delete[] threads ;
+			delete[] args ;
+		}
+		PrintLog("Finish barcode-wise kmer count.") ;
+
+		// Resort to follow barcode k-mer count
+		for (i = 0 ; i < readCnt ; )
+		{
+			for (j = i + 1 ; j < readCnt ; ++j)
+				if (sortedReads[i].barcode != sortedReads[j].barcode)
+					break ;
+			if (j - i > 1)		
+				std::sort(sortedReads.begin() + i, sortedReads.begin() + j,
+						CompReadWithBarcode) ;
+			i = j ;
+		}
+		PrintLog( "Finish re-sorting the reads based on barcode." ) ;
+	}
 
 	/*for (i = 0 ; i < readCnt ; ++i)
 	{
@@ -1642,7 +1648,7 @@ int main( int argc, char *argv[] )
 					finishedBarcodes[barcode] = barcodeTotalReadCount[barcode] ;
 					if (finishedBarcodes.size() >= 1) // clean up the memory once every barcode finishes. The sort makes sure the barocde is processed one by one, so it can be efficiently removed.
 					{
-						seqSet.ReleaseFinishedBarcodeSeq(finishedBarcodes, /*release_index*/true, /*early_stop*/true) ;
+						seqSet.ReleaseFinishedBarcodeSeq(finishedBarcodes, /*release_index*/true, contigMinCov, /*early_stop*/true) ;
 						finishedBarcodes.clear() ;
 					}
 				}
