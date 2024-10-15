@@ -1652,7 +1652,8 @@ int main( int argc, char *argv[] )
 			}
 		}
 
-		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 )
+		if ( assembledReadCnt > 0 && assembledReadCnt % 10000 == 0 
+				&& !hasBarcode)
 			seqSet.UpdateAllConsensus() ;
 
 		if ( ( i + 1 ) % 100000 == 0 )

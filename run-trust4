@@ -38,6 +38,7 @@ die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
 		"\t--minHitLen INT: the minimal hit length for a valid overlap (default: auto)\n".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
+		"\t--skipReadRealign: do not realign reads in annotator, useful for reducing computation cost of barcode/UMI-based repseq (default: not used)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--imgtAdditionalGap STRING: description for additional gap codon position in IMGT (0-based), e.g. \"TRAV:7,83\" for mouse (default: no)\n".
@@ -99,6 +100,7 @@ my $outputReadAssignment = 0 ;
 my $chainsInBarcode = 2 ;
 my $assembleWithRef = 0 ;
 my $cleanup = 0 ;
+my $skipReadRealign = 0 ;
 
 print STDERR "[".localtime()."] TRUST4 $version begins.\n" ;
 for ( $i = 0 ; $i < @ARGV ; ++$i )
@@ -285,6 +287,10 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ( $ARGV[$i] eq "--repseq" )
 	{
 		$mainArgs .= " --trimLevel 2 --skipMateExtension" ;
+	}
+	elsif ( $ARGV[$i] eq "--skipReadRealign")
+	{
+		$skipReadRealign = 1 ;
 	}
 	elsif ($ARGV[$i] eq "--barcode-level" || $ARGV[$i] eq "--barcodeLevel")
 	{
@@ -499,9 +505,9 @@ if ( $stage <= 1 )
 # Annotation 
 if ( $stage <= 2 )
 {
-	if (1) #$hasBarcode == 0 || $hasUmi == 1)
+	if ( $skipReadRealign == 0) #$hasBarcode == 0 || $hasUmi == 1)
 	{
-    # Always use the read now. For consistent and reproducible abundance estimation if user want to examine read assignment.
+    # Always use the read now if otherwise instructed. For consistent and reproducible abundance estimation if user want to examine read assignment.
 		$annotatorArgs .= " -r ${prefix}_assembled_reads.fa" ;
 	}
 	else

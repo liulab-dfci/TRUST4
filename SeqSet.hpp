@@ -3764,7 +3764,7 @@ public:
 				seqs[ newSeqIdx ].consensusLen = newConsensusLen ;
 				
 				// Update the index
-				UpdateConsensus( newSeqIdx, false ) ;
+				UpdateConsensus( newSeqIdx, false ) ; 
 				seqIndex.BuildIndexFromRead( kmerCode, newConsensus, newConsensusLen, newSeqIdx, barcode ) ;
 				
 				// Update the anchor requirement.
