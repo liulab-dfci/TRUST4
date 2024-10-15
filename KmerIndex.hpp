@@ -95,6 +95,8 @@ public:
 		{
 			//printf( "remove %d %d\n", idx, offset ) ;
 			list.Remove( i ) ;
+			if (list.Size() == 0 && barcode != -1)
+				index[ GetHash(kmerCode.GetCode(), barcode) ].erase(kmerCode.GetCode()) ;
 		}
 	}
 	
@@ -176,7 +178,6 @@ public:
 			//for ( j = 0 ; j < size ; ++j )
 			//	printf( "test %d %d\n", list[j].idx, list[j].offset ) ;
 		}
-
 	}
 
 	void RemoveIndexFromRead( KmerCode &kmerCode, char *s, int len, int id, int barcode, int offset )
@@ -197,6 +198,23 @@ public:
 				Remove( kmerCode, id, i - kl + 1 + offset, 1, barcode ) ;
 			}
 		}
+	}
+
+	size_t GetSpace()
+	{
+		int i ;
+		size_t ret = 0 ;
+		ret += sizeof(*index) * KINDEX_HASH_MAX + sizeof(*this) ;
+		for (i = 0 ; i < KINDEX_HASH_MAX ; ++i)
+		{
+			ret += index[i].size() * (sizeof(int64_t) + sizeof(SimpleVector<struct _indexInfo>)) ;
+			for (std::map<uint64_t, SimpleVector<struct _indexInfo> >::iterator iter = index[i].begin() ;
+					iter != index[i].end() ; ++iter)
+			{
+				ret += iter->second.GetSpace() ;
+			}
+		}
+		return ret ;
 	}
 } ;
 

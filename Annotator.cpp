@@ -749,7 +749,7 @@ int main( int argc, char *argv[] )
 		int strand, minCnt, medCnt ;
 		k = 0 ;
 		PrintLog( "Start to realign reads for CDR3 analysis." ) ;
-		seqSet.Clean( false ) ;
+		seqSet.Clean( false ) ; // This will force create the index
 
 		std::vector<struct _assignRead> cdr3Reads ; // Keep the information of the reads aligned to cdr3 region.
 		std::vector<struct _assignRead> assembledReads ;

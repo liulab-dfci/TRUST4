@@ -2318,6 +2318,47 @@ private:
 		int ret = int(kmerLength * (log(0.01) / log(1 - kmerHitProb))) + 1;
 		return ret ;
 	}
+  
+  // return: 0 not shallow, 1 shallow. less than minCov
+  int IsContigShallow(int i, int minCov) 
+  {
+    int j ;
+    struct _seqWrapper &seq = seqs[i] ;
+    int len = seq.consensusLen ;
+    if (seq.isRef || seq.consensus == NULL)
+      return 0 ;
+
+    if (seq.posWeight.Size() == 0)
+    {
+      if (seq.numRead < minCov)
+        return 1 ;
+      else
+        return 0 ;
+    }
+
+    // The end of the contig coverage is not considered.
+    int start, end ;
+    for (j = 0 ; j < len ; ++j)
+      if (seq.posWeight[j].Sum() >= minCov)
+        break ;
+    start = j;
+
+    for (j = len - 1 ; j >= start ; --j)
+      if (seq.posWeight[j].Sum() >= minCov)
+        break ;
+    end = j ;
+
+    for (j = start ; j <= end ; ++j) // This also handles the case when start>=len
+    {
+      if (seq.posWeight[j].Sum() < minCov)
+        break ;
+    }
+
+    if (j <= end || end < start)
+      return 1 ;
+    return 0 ;
+  }
+
 public:
 	SeqSet( int kl ) 
 	{
@@ -3723,7 +3764,7 @@ public:
 				seqs[ newSeqIdx ].consensusLen = newConsensusLen ;
 				
 				// Update the index
-				UpdateConsensus( newSeqIdx, false ) ;
+				UpdateConsensus( newSeqIdx, false ) ; 
 				seqIndex.BuildIndexFromRead( kmerCode, newConsensus, newConsensusLen, newSeqIdx, barcode ) ;
 				
 				// Update the anchor requirement.
@@ -4176,10 +4217,10 @@ public:
 			}
 		}
 
-		if ( changes.Size() == 0 || seqs[seqIdx].index == false)
+		if ( changes.Size() == 0 ) //|| seqs[seqIdx].index == false)
 			return ;
 		
-		if ( updateIndex )
+		if ( updateIndex && seqs[seqIdx].index)
 		{
 			// Inefficient implementation, improve in future.
 			KmerCode kmerCode( kmerLength ) ;
@@ -4190,7 +4231,7 @@ public:
 		for ( i = 0 ; i < size ; ++i )
 			seq.consensus[ changes[i].a ] = numToNuc[ changes[i].b ] ;
 
-		if ( updateIndex )
+		if ( updateIndex && seqs[seqIdx].index)
 		{
 			KmerCode kmerCode( kmerLength ) ;
 			seqIndex.BuildIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, seqIdx, seq.barcode, 0 ) ;
@@ -10318,7 +10359,7 @@ public:
 	//   if their coverage is even
 	// Also release other part of like the index
 	// early stop, finish on the first sequence that is released
-	void ReleaseFinishedBarcodeSeq(std::map<int, int> barcodes, bool removeFromIndex, bool earlyStop)
+	void ReleaseFinishedBarcodeSeq(std::map<int, int> barcodes, bool removeFromIndex, int contigMinCov, bool earlyStop)
 	{
 		int size = seqs.size() ;
 		int len ;
@@ -10338,15 +10379,25 @@ public:
 					break ;
 				continue ;
 			}
-			UpdateConsensus(i, false) ;
+
 			struct _seqWrapper &seq = seqs[i] ;
-			
+      if (contigMinCov > 0)
+      {
+        if (IsContigShallow(i, contigMinCov))
+        {
+          seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, i, seq.barcode, 0 ) ;
+          ReleaseSeq(i) ;
+          continue ;
+        }
+      }
+
 			if (removeFromIndex)
 			{
 				seq.index = false ;
 				seqIndex.RemoveIndexFromRead( kmerCode, seq.consensus, seq.consensusLen, i, seq.barcode, 0 ) ;
 			}
 			
+			UpdateConsensus(i, false) ;
 			len = seq.consensusLen ;
 			int cov = 0 ;
 			for (j = 0 ; j < len ; ++j)	
@@ -10380,46 +10431,17 @@ public:
 		}
 	}
 
+
 	// Release contigs with bases with too few read coverage
 	void ReleaseShallowContigs(int minCov)
 	{
-		int i, j ;
+		int i ;
 		int size = seqs.size() ;
 		for (i = 0 ; i < size ; ++i)
 		{
-			struct _seqWrapper &seq = seqs[i] ;
-			int len = seq.consensusLen ;
-			if (seq.isRef || seq.consensus == NULL)
-				continue ;
-		
-			if (seq.posWeight.Size() == 0)
-			{
-				if (seq.numRead < minCov)
-					ReleaseSeq(i) ;
-				continue ;
-			}
-			
-			// The end of the contig coverage is not considered.
-			int start, end ;
-			for (j = 0 ; j < len ; ++j)
-				if (seq.posWeight[j].Sum() >= minCov)
-					break ;
-			start = j;
-
-			for (j = len - 1 ; j >= start ; --j)
-				if (seq.posWeight[j].Sum() >= minCov)
-					break ;
-			end = j ;
-
-			for (j = start ; j <= end ; ++j) // This also handles the case when start>=len
-			{
-				if (seq.posWeight[j].Sum() < minCov)
-					break ;
-			}
-
-			if (j <= end || end < start)
-				ReleaseSeq(i) ;
-		}
+      if (IsContigShallow(i, minCov))
+        ReleaseSeq(i) ;
+    }
 	}
 
 	void Output( FILE *fp, std::vector<std::string> *barcodeIntToStr = NULL )
@@ -10580,6 +10602,21 @@ public:
 			seqs[i].barcode = barcode ;
 		}
 		delete[] buffer ;
+	}
+
+	size_t GetSpace()
+	{
+		int i ;
+		size_t ret = seqIndex.GetSpace() ;
+		int seqCnt = seqs.size() ;
+		for (i = 0 ; i < seqCnt ; ++i)
+		{
+			ret += sizeof(seqs[i]) ;
+			ret += sizeof(char) * strlen(seqs[i].name) ;
+			ret += sizeof(char) * seqs[i].consensusLen ;
+			ret += seqs[i].posWeight.GetSpace() ;
+		}
+		return ret ;
 	}
 } ;
 
