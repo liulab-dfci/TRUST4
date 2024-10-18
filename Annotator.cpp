@@ -381,7 +381,7 @@ void *AnnotateReads_Thread( void *pArg )
 	{
 		if ( arg.needRC )
 		{
-			int strand = arg.refSet->HasHitInSet( arg.seqSet->GetSeqConsensus(i)) ;
+			int strand = arg.refSet->HasHitInSet( arg.seqSet->GetSeqConsensus(i), 1) ;
 			if ( strand == -1 )
 				arg.seqSet->ReverseComplementInSeqSet( i ) ;
 		}
@@ -643,7 +643,7 @@ int main( int argc, char *argv[] )
 		{
 			if ( needRC )
 			{
-				int strand = refSet.HasHitInSet( seqSet.GetSeqConsensus(i) ) ;
+				int strand = refSet.HasHitInSet( seqSet.GetSeqConsensus(i), 1 ) ;
 				if ( strand == -1 )
 					seqSet.ReverseComplementInSeqSet( i ) ;
 			}

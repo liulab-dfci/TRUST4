@@ -2866,8 +2866,9 @@ public:
 	}
 	
 	// Test whether the read share a kmer hit on the seqs.
-	// 0-no hit. Other wise return the strand
-	int HasHitInSet( char *read )
+	// mode: search mode. 0: fast. 1: slow for annotation purpose to determine the strand
+	// return: 0-no hit. Other wise return the strand
+	int HasHitInSet( char *read, int mode )
 	{
 		int i, j, k ;
 		int len = strlen( read ) ;
@@ -2908,6 +2909,7 @@ public:
 				for (j = 1 ; j < size ; ++j)
 					if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
 						++readHitCount ;
+				//printf("%d: %s %d\n", k, seqs[i].name, readHitCount) ;
 				if ( size > 0 && readHitCount > max[k] )
 				{
 					maxSeqIdx[k] = i ;
@@ -2918,10 +2920,25 @@ public:
 
 		std::vector<struct _overlap> overlaps ;
 		// There might be cases we miss the right strand
-		if ((max[0] + kmerLength - 1 >= 2 * hitLenRequired
-				&& max[1] + kmerLength - 1 >= 2 * hitLenRequired
-				&& max[0] > 0.9 * max[1] && max[1] > 0.9 * max[0])
-				|| (max[0] == max[1] && max[0] * kmerLength >= hitLenRequired))
+		if (mode == 1 && (max[0] + kmerLength - 1 >= hitLenRequired
+				&& max[1] + kmerLength - 1 >= hitLenRequired))
+		{
+			SortHits(hits, true) ;
+			GetOverlapsFromHits(hits, hitLenRequired, 1, overlaps) ;
+			maxTag = 1 ;
+			int maxMatchCnt = 0 ;
+			int size = overlaps.size() ;
+			for (i = 0 ; i < size; ++i)
+				if (overlaps[i].matchCnt > maxMatchCnt)
+				{
+					maxMatchCnt = overlaps[i].matchCnt ;
+					maxTag = (overlaps[i].strand == 1 ? 1 : 0) ;
+				}
+		}
+		else if ((max[0] + kmerLength - 1 >= hitLenRequired
+				&& max[1] + kmerLength - 1 >= hitLenRequired))
+				//&& max[0] > 0.9 * max[1] && max[1] > 0.9 * max[0])
+				//|| (max[0] == max[1] && max[0] * kmerLength >= hitLenRequired))
 		{
 			// Potential ambugious strand where both hits seem to be quite good
 			std::vector<struct _overlap> tmpOverlaps[2] ;
