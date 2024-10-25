@@ -28,6 +28,15 @@ struct _pair64
 struct _triple
 {
 	int a, b, c ;
+	bool operator<(const struct _triple &other)
+	{
+		if (a != other.a)
+			return a < other.a ;
+		else if (b != other.b)
+			return b < other.b ;
+		else
+			return c < other.c ;
+	}
 } ;
 /*struct _pair_b64
 {

@@ -2866,8 +2866,9 @@ public:
 	}
 	
 	// Test whether the read share a kmer hit on the seqs.
-	// 0-no hit. Other wise return the strand
-	int HasHitInSet( char *read )
+	// mode: search mode. 0: fast. 1: slow for annotation purpose to determine the strand
+	// return: 0-no hit. Other wise return the strand
+	int HasHitInSet( char *read, int mode )
 	{
 		int i, j, k ;
 		int len = strlen( read ) ;
@@ -2908,6 +2909,7 @@ public:
 				for (j = 1 ; j < size ; ++j)
 					if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
 						++readHitCount ;
+				//printf("%d: %s %d\n", k, seqs[i].name, readHitCount) ;
 				if ( size > 0 && readHitCount > max[k] )
 				{
 					maxSeqIdx[k] = i ;
@@ -2918,10 +2920,81 @@ public:
 
 		std::vector<struct _overlap> overlaps ;
 		// There might be cases we miss the right strand
-		if ((max[0] + kmerLength - 1 >= 2 * hitLenRequired
-				&& max[1] + kmerLength - 1 >= 2 * hitLenRequired
-				&& max[0] > 0.9 * max[1] && max[1] > 0.9 * max[0])
-				|| (max[0] == max[1] && max[0] * kmerLength >= hitLenRequired))
+		if (mode == 1 && (max[0] + kmerLength - 1 >= hitLenRequired
+				&& max[1] + kmerLength - 1 >= hitLenRequired))
+		{
+			maxTag = 1 ;
+			int maxMatchCnt = 0 ;
+			for (k = 0 ; k <= 1 ; ++k)
+			{
+				for (i = 0 ; i < seqCnt ; ++i)
+				{
+					int size = buckets[k][i].Size() ;
+
+					int readHitCount = 1 ;
+					for (j = 1 ; j < size ; ++j)
+						if (buckets[k][i][j].readOffset != buckets[k][i][j - 1].readOffset)
+							++readHitCount ;
+					
+					if (readHitCount + kmerLength - 1 < hitLenRequired)
+						continue ;
+
+					std::vector<struct _overlap> tmpOverlaps ;
+					GetOverlapsFromHits(buckets[k][i], hitLenRequired, 1, tmpOverlaps) ;
+
+					int tmpSize = tmpOverlaps.size() ;
+					bool release = true ;
+					for (int l = 0 ; l < tmpSize ; ++l)
+					{
+						//printf("%d %d %d %s: %d\n", tmpOverlaps[l].seqIdx, tmpOverlaps[l].strand,
+						//		l, seqs[tmpOverlaps[l].seqIdx].name, tmpOverlaps[l].matchCnt) ;
+						if (tmpOverlaps[l].matchCnt > maxMatchCnt)
+						{
+							if (maxMatchCnt > 0)
+							{
+								int size = overlaps.size() ;
+								for (j = 0 ; j < size ; ++j)
+									delete overlaps[j].hitCoords ;
+							}	
+							overlaps = tmpOverlaps ;
+							maxMatchCnt = overlaps[l].matchCnt ;
+							maxTag = (overlaps[l].strand == 1 ? 1 : 0) ;
+							release = false ;
+							break ;
+						}
+					}
+					
+					if (release)		
+					{
+						int size = tmpOverlaps.size() ;
+						for (j = 0 ; j < size ; ++j)
+							delete tmpOverlaps[j].hitCoords ;
+					}
+				}
+			}
+			
+			//Slower but more elegant implemenation. But the results are a bit different.
+			//  due to the filter of readHitCount+kmerLength-1
+			/*SortHits(hits, true) ;
+			GetOverlapsFromHits(hits, hitLenRequired, 1, overlaps) ;
+			maxTag = 1 ;
+			int maxMatchCnt = 0 ;
+			int size = overlaps.size() ;
+			for (i = 0 ; i < size; ++i)
+			{
+				printf("%d %d %s: %d\n", overlaps[i].seqIdx, overlaps[i].strand,
+							seqs[overlaps[i].seqIdx].name, overlaps[i].matchCnt) ;
+				if (overlaps[i].matchCnt > maxMatchCnt)
+				{
+					maxMatchCnt = overlaps[i].matchCnt ;
+					maxTag = (overlaps[i].strand == 1 ? 1 : 0) ;
+				}
+			}*/
+		}
+		else if ((max[0] + kmerLength - 1 >= hitLenRequired
+				&& max[1] + kmerLength - 1 >= hitLenRequired))
+				//&& max[0] > 0.9 * max[1] && max[1] > 0.9 * max[0])
+				//|| (max[0] == max[1] && max[0] * kmerLength >= hitLenRequired))
 		{
 			// Potential ambugious strand where both hits seem to be quite good
 			std::vector<struct _overlap> tmpOverlaps[2] ;
@@ -6550,7 +6623,7 @@ public:
 				e = len ;
 				boundS = 1 ;
 			}
-			
+
 			if ( geneOverlap[2].seqIdx != -1 && boundE > geneOverlap[2].readEnd )
 				boundE = geneOverlap[2].readEnd ;
 			if ( /*geneOverlap[0].seqIdx == -1 &&*/ s >= boundS )
@@ -6739,6 +6812,49 @@ public:
 					for ( i = s ; i >= boundS ; --i )
 					{
 						if ( DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y'
+								&& read[i + 6] == 'T' && read[i + 7] == 'G' )
+						{
+							locateS = i + 6 ; 
+							break ;
+						}
+					}
+				}
+			}
+			
+			if (locateS == -1)
+			{
+				// Try the xYC motif
+				for ( i = s ; i >= boundS ; i -= 3 )
+				{
+					if ( //DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+							DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+							&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
+					{
+						locateS = i + 6 ;
+						break ;
+					}
+				}
+
+				if ( locateS == -1 )
+				{
+					for ( i = s ; i >= boundS ; --i )
+					{
+						if ( //DnaToAa( read[i], read[i + 1], read[i + 2] ) == 'Y' 
+								DnaToAa( read[i + 3], read[i + 4], read[i + 5] )== 'Y' 
+								&& DnaToAa( read[i + 6], read[i + 7], read[i + 8] ) == 'C' )
+						{
+							locateS = i + 6 ;
+							break ;
+						}
+					}
+
+				}
+
+				if ( locateS == -1 && geneOverlap[0].seqIdx != -1 )
+				{
+					for ( i = s ; i >= boundS ; --i )
+					{
+						if ( DnaToAa( read[i + 3], read[i + 4], read[i + 5] ) == 'Y'
 								&& read[i + 6] == 'T' && read[i + 7] == 'G' )
 						{
 							locateS = i + 6 ; 

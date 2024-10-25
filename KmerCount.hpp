@@ -201,7 +201,13 @@ public:
 		if ( k == 0 )
 		{
 			minCount = -len ;
-			read[0] = '\0' ;
+			medianCount = -len ;
+			avgCount = -len ;
+			// Don't trim the read (kind of) when quality score is not give
+			//   this help keep the function consistent that it only trims when
+			//   qual score is given.
+			if (qual != NULL) 
+				read[0] = '\0' ;
 			return 0 ;
 		}
 		
