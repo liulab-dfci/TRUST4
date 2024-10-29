@@ -2319,46 +2319,79 @@ private:
 		int ret = int(kmerLength * (log(0.01) / log(1 - kmerHitProb))) + 1;
 		return ret ;
 	}
-  
-  // return: 0 not shallow, 1 shallow. less than minCov
-  int IsContigShallow(int i, int minCov) 
-  {
-    int j ;
-    struct _seqWrapper &seq = seqs[i] ;
-    int len = seq.consensusLen ;
-    if (seq.isRef || seq.consensus == NULL)
-      return 0 ;
+ 
+	void DecompressPosWeight(char *consensus, int len, SimpleVector<struct _posWeight> &weight, SimpleVector<struct _posWeight> &orig)
+	{
+		int i, k, j ;
+		orig.ExpandTo(len) ;
+		k = 0 ; // Track the position on weight (compressed posWeight)
+		j = 0 ; // Track the position on expanded original uncompressed weight
+		for (j = 0 ; j < len ; ++j)
+		{
+			if (weight[k/4].count[k%4] < 0)
+			{
+				for (i = 0 ; i < 4 ; ++i)
+				{
+					if (nucToNum[consensus[j] - 'A'] == i)
+						orig[j].count[i] = -weight[k/4].count[k%4] ;
+					else
+						orig[j].count[i] = 0 ;
+				}
+				++k ;
+			}
+			else
+			{
+				for (i = 0 ; i < 4 ; ++i, ++k)
+					orig[j].count[i] = weight[k/4].count[k%4] ;
+			}
+		}
+	}
 
-    if (seq.posWeightCompressed)
-    {
-      if (seq.numRead < minCov)
-        return 1 ;
-      else
-        return 0 ;
-    }
+	// return: 0 not shallow, 1 shallow. less than minCov
+	int IsContigShallow(int i, int minCov) 
+	{
+		int j ;
+		struct _seqWrapper &seq = seqs[i] ;
+		int len = seq.consensusLen ;
+		if (seq.isRef || seq.consensus == NULL)
+			return 0 ;
 
-    // The end of the contig coverage is not considered.
-    int start, end ;
-    for (j = 0 ; j < len ; ++j)
-      if (seq.posWeight[j].Sum() >= minCov)
-        break ;
-    start = j;
+		if (seq.posWeight.Size() == 0)
+		{
+			if (seq.numRead < minCov) 
+				return 1 ;
+			else
+				return 0 ;
+		}
 
-    for (j = len - 1 ; j >= start ; --j)
-      if (seq.posWeight[j].Sum() >= minCov)
-        break ;
-    end = j ;
+		SimpleVector<struct _posWeight> weight ;
+		if (seq.posWeightCompressed)
+			DecompressPosWeight(seqs[i].consensus, seqs[i].consensusLen, seqs[i].posWeight, weight) ;
+		else
+			weight = seq.posWeight ;
 
-    for (j = start ; j <= end ; ++j) // This also handles the case when start>=len
-    {
-      if (seq.posWeight[j].Sum() < minCov)
-        break ;
-    }
+		// The end of the contig coverage is not considered.
+		int start, end ;
+		for (j = 0 ; j < len ; ++j)
+			if (weight[j].Sum() >= minCov)
+				break ;
+		start = j;
 
-    if (j <= end || end < start)
-      return 1 ;
-    return 0 ;
-  }
+		for (j = len - 1 ; j >= start ; --j)
+			if (weight[j].Sum() >= minCov)
+				break ;
+		end = j ;
+
+		for (j = start ; j <= end ; ++j) // This also handles the case when start>=len
+		{
+			if (weight[j].Sum() < minCov)
+				break ;
+		}
+
+		if (j <= end || end < start)
+			return 1 ;
+		return 0 ;
+	}
 
 public:
 	SeqSet( int kl ) 
@@ -3732,6 +3765,7 @@ public:
 					if ( seqIdx == newSeqIdx )
 						continue ;
 
+					seqs[newSeqIdx].numRead += seqs[seqIdx].numRead ;
 					for ( j = 0 ; j < seqs[ seqIdx ].consensusLen ; ++j )
 					{
 						posWeight[ seqOffset[i] + j ] += seqs[ seqIdx ].posWeight[j] ;
@@ -3867,6 +3901,7 @@ public:
 
 				seqIdx = extendedOverlaps[0].seqIdx ;
 				struct _seqWrapper &seq = seqs[ extendedOverlaps[0].seqIdx ] ;
+				++seq.numRead ;	
 				
 				// Compute the new consensus.
 				if ( extendedOverlaps[0].readStart > 0 || extendedOverlaps[0].readEnd < len - 1 )
@@ -10627,25 +10662,7 @@ public:
 			if (seqs[i].posWeight.Size() > 0)
 			{
 				// Check whether it is compressed
-				bool compressed = false ;
-				if (barcodeIntToStr)
-				{
-					for (j = 0 ; j < seqs[i].consensusLen ; ++j)
-					{
-						for (k = 0 ; k < 4 ; ++k)
-						{
-							if (seqs[i].posWeight[j].count[k] < 0)
-							{
-								compressed = true ;
-								break ;
-							}
-						}
-						if (k < 4)
-							break ;
-					}
-				}
-				
-				if (!compressed)
+				if (!seqs[i].posWeightCompressed)
 				{
 					for ( k = 0 ; k < 4 ; ++k )
 					{
@@ -10657,31 +10674,7 @@ public:
 				else
 				{
 					SimpleVector< struct _posWeight > orig ;
-					orig.Reserve(seqs[i].consensusLen) ;
-					SimpleVector<struct _posWeight> &weight = seqs[i].posWeight ;
-					int l ;
-					k = 0 ; // Track the position on weight (compressed posWeight)
-					j = 0 ; // Track the position on expanded original uncompressed weight
-					for (j = 0 ; j < seqs[i].consensusLen ; ++j)
-					{
-						if (weight[k/4].count[k%4] < 0)
-						{
-							for (l = 0 ; l < 4 ; ++l)
-							{
-								if (nucToNum[seqs[i].consensus[j] - 'A'] == l)
-									orig[j].count[l] = -weight[k/4].count[k%4] ;
-								else
-									orig[j].count[l] = 0 ;
-							}
-							++k ;
-						}
-						else
-						{
-							for (l = 0 ; l < 4 ; ++l, ++k)
-								orig[j].count[l] = weight[k/4].count[k%4] ;
-						}
-					}
-
+					DecompressPosWeight(seqs[i].consensus, seqs[i].consensusLen, seqs[i].posWeight, orig) ;
 					for ( k = 0 ; k < 4 ; ++k )
 					{
 						for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
