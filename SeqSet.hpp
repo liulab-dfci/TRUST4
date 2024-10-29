@@ -31,6 +31,7 @@ struct _seqWrapper
 	int barcode ; // transformed barcode. -1: no barcode
 	int numRead ; // number of read assigned to the seq. TODO: need to check whether this is accuracy
 	bool index ; // whether this sequence will be added to the index.
+	bool posWeightCompressed ;
 
 	bool operator<( const struct _seqWrapper &b )	const
 	{
@@ -2328,7 +2329,7 @@ private:
     if (seq.isRef || seq.consensus == NULL)
       return 0 ;
 
-    if (seq.posWeight.Size() == 0)
+    if (seq.posWeightCompressed)
     {
       if (seq.numRead < minCov)
         return 1 ;
@@ -2480,6 +2481,7 @@ public:
 			ns.isRef = true ;
 			ns.numRead = 0 ;
 			ns.index = true ;
+			ns.posWeightCompressed = false ;
 
 			int id = seqs.size() ;
 			seqs.push_back( ns ) ;
@@ -2751,6 +2753,7 @@ public:
 		sw.minLeftExtAnchor = sw.minRightExtAnchor = 0 ;
 		sw.numRead = 0 ;
 		sw.index = true ;
+		sw.posWeightCompressed = false ;
 		SetPrevAddInfo( seqIdx, 0, seqLen - 1, 0, seqLen - 1, 1 ) ;
 		return seqIdx ;
 	}	
@@ -2773,6 +2776,7 @@ public:
 		ns.barcode = barcode ;
 		ns.numRead = 1 ;
 		ns.index = true ;
+		ns.posWeightCompressed = false ; 
 		for (i = 0 ; i < 3 ; ++i)
 		{
 			struct _triple nt ;
@@ -2814,7 +2818,8 @@ public:
 		ns.barcode = -1 ;	
 		ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
 		ns.numRead = 0 ;
-		ns.index = true ; 
+		ns.index = true ;
+		ns.posWeightCompressed = false ;
 		for (int i = 0 ; i < 3 ; ++i)
 		{
 			struct _triple nt ;
@@ -2859,6 +2864,7 @@ public:
 			ns.minRightExtAnchor = in.seqs[i].minRightExtAnchor ;
 			ns.numRead = in.seqs[i].numRead ;
 			ns.index = in.seqs[i].index ;
+			ns.posWeightCompressed = false ;
 			if (ns.index)
 				seqIndex.BuildIndexFromRead( kmerCode, ns.consensus, ns.consensusLen, id, ns.barcode) ;
 			seqs.push_back( ns ) ;
@@ -4168,6 +4174,7 @@ public:
 			ns.minLeftExtAnchor = ns.minRightExtAnchor = 0 ;
 			ns.numRead = 1 ;
 			ns.index = true ;
+			ns.posWeightCompressed = false ;
 			seqs.push_back( ns ) ;
 
 			// Don't forget to update index.
@@ -4263,7 +4270,7 @@ public:
 		int i, j ;
 		struct _seqWrapper &seq = seqs[ seqIdx ] ;
 		SimpleVector<struct _pair> changes ;
-		if (seq.posWeight.Size() == 0)
+		if (seq.posWeightCompressed)
 			return ;
 
 		for ( i = 0 ; i < seq.consensusLen ; ++i )
@@ -4635,6 +4642,7 @@ public:
 				ns.posWeight.SetZero( 0, newConsensusLen ) ;
 				ns.numRead = 0 ;
 				ns.index = true ;
+				ns.posWeightCompressed = false ;
 				for ( j = 0 ; j < k ; ++j )
 				{
 					int l ;
@@ -8847,6 +8855,7 @@ public:
 				ns.isRef = false ;
 				ns.numRead = 0 ;
 				ns.index = true ;
+				ns.posWeightCompressed = false ;
 				
 				ns.posWeight.Reserve( end - start + 1 ) ;
 				int l ;
@@ -10213,6 +10222,7 @@ public:
 			ns.posWeight.SetZero( 0, newConsensusLen ) ;
 			ns.numRead = 0 ;
 			ns.index = true ;
+			ns.posWeightCompressed = false ;
 
 			// Assign the posWeight of the core part.	
 			int newSeqIdx = seqs.size() ;
@@ -10539,11 +10549,50 @@ public:
 			}
 
 			if (j < len) // Coverage is not even
-				continue ;
+			{
+				// Reduce the size of posWeight
+				// When a number x is negative, means the -x is the count and there is no ambiguous. Otherwise, it will be four numbers per position, including the case for 'N'
+				// The implementation guarantees that if every position is "ambiguous", the posWeight content is the same as before.
+				k = 0 ;
+				int l ;
+				for (j = 0 ; j < len ; ++j)
+				{
+					int nonZeroCnt = 0 ;
+					int nonZeroValue = 0 ;
+					for (l = 0 ; l < 4 ; ++l)
+					{
+						if (seq.posWeight[j].count[l] > 0)
+						{
+							++nonZeroCnt ;
+							nonZeroValue = seq.posWeight[j].count[l] ;
+						}
+					}
 
-			// This sequence has even coverage
-			seq.numRead = cov ;
-			seq.posWeight.Release() ;
+					if (nonZeroCnt != 1) // a position with non-unique support
+					{
+						for (l = 0 ; l < 4 ; ++l)
+						{
+							seq.posWeight[k/4].count[k%4] = seq.posWeight[j].count[l] ;
+							++k ;
+						}
+					}
+					else
+					{
+						seq.posWeight[k/4].count[k%4] = -nonZeroValue ;
+						++k ;
+					}
+				}
+				int newSize = k / 4 + (k % 4 == 0 ? 0 : 1) ;
+				seq.posWeight.Resize(newSize) ;
+				seq.posWeight.TightenCapacity() ;
+			}
+			else
+			{
+				// This sequence has even coverage
+				seq.numRead = cov ;
+				seq.posWeight.Release() ;
+			}
+			seq.posWeightCompressed = true ;
 		}
 	}
 
@@ -10577,11 +10626,69 @@ public:
 			
 			if (seqs[i].posWeight.Size() > 0)
 			{
-				for ( k = 0 ; k < 4 ; ++k )
+				// Check whether it is compressed
+				bool compressed = false ;
+				if (barcodeIntToStr)
 				{
-					for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
-						fprintf( fp, "%d ", seqs[i].posWeight[j].count[k] ) ;
-					fprintf( fp, "\n" ) ;
+					for (j = 0 ; j < seqs[i].consensusLen ; ++j)
+					{
+						for (k = 0 ; k < 4 ; ++k)
+						{
+							if (seqs[i].posWeight[j].count[k] < 0)
+							{
+								compressed = true ;
+								break ;
+							}
+						}
+						if (k < 4)
+							break ;
+					}
+				}
+				
+				if (!compressed)
+				{
+					for ( k = 0 ; k < 4 ; ++k )
+					{
+						for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
+							fprintf( fp, "%d ", seqs[i].posWeight[j].count[k] ) ;
+						fprintf( fp, "\n" ) ;
+					}
+				}
+				else
+				{
+					SimpleVector< struct _posWeight > orig ;
+					orig.Reserve(seqs[i].consensusLen) ;
+					SimpleVector<struct _posWeight> &weight = seqs[i].posWeight ;
+					int l ;
+					k = 0 ; // Track the position on weight (compressed posWeight)
+					j = 0 ; // Track the position on expanded original uncompressed weight
+					for (j = 0 ; j < seqs[i].consensusLen ; ++j)
+					{
+						if (weight[k/4].count[k%4] < 0)
+						{
+							for (l = 0 ; l < 4 ; ++l)
+							{
+								if (nucToNum[seqs[i].consensus[j] - 'A'] == l)
+									orig[j].count[l] = -weight[k/4].count[k%4] ;
+								else
+									orig[j].count[l] = 0 ;
+							}
+							++k ;
+						}
+						else
+						{
+							for (l = 0 ; l < 4 ; ++l, ++k)
+								orig[j].count[l] = weight[k/4].count[k%4] ;
+						}
+					}
+
+					for ( k = 0 ; k < 4 ; ++k )
+					{
+						for ( j = 0 ; j < seqs[i].consensusLen ; ++j )
+							fprintf( fp, "%d ", orig[j].count[k] ) ;
+						fprintf( fp, "\n" ) ;
+					}
+
 				}
 			}
 			else
