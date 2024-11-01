@@ -262,6 +262,16 @@ public:
 		return capacity ;
 	}
 
+	// Set the capacity to the size
+	void TightenCapacity()
+	{
+		capacity = size ;
+		inc = capacity ;
+		if ( inc > maxInc )
+			inc = maxInc ;
+		s = (T *)realloc(s, sizeof(T) * size) ;
+	}
+
 	void Clear()
 	{
 		size = 0 ;
