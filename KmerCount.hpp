@@ -157,7 +157,9 @@ public:
 			return 0 ;
 	}
 
-	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, float &avgCount )
+	// This is thread-safe when providedBuffer is given
+	int GetCountStatsAndTrim( char *read, char *qual, int &minCount, int &medianCount, float &avgCount,
+			int *providedBuffer = NULL)
 	{
 		int i, k ;
 		int sum ;
@@ -167,8 +169,13 @@ public:
 		if ( maxReadLen == -1 )
 			return 0 ;
 
+		int *c = providedBuffer ;
 		if ( c == NULL )
-			c = new int[ maxReadLen ] ;
+		{
+			if (this->c == NULL)
+				this->c = new int[ maxReadLen ] ;
+			c = this->c ;
+		}
 		int len = strlen( read ) ;
 		if ( len < kmerLength )
 		{
@@ -176,7 +183,8 @@ public:
 			return 0 ;
 		}
 
-		kmerCode.Restart() ;
+		//kmerCode.Restart() ;
+		KmerCode kmerCode( this->kmerCode.GetKmerLength() ) ; 
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( read[i] ) ;
 		k = 0 ;

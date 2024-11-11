@@ -143,13 +143,18 @@ struct _quickAnnotateReadsThreadArg
 	int readCnt ;
 } ;
 
-struct _barcodeKmerCountThreadArg
+// The structure used for threads related to kmer count, including read trimming and barcode-level kmer count
+struct _kmerCountThreadArg
 {
 	int tid ;
 	int threadCnt ;
+	KmerCount *pKmerCount ;
+
 	std::vector<struct _sortRead> *pReads ;
 	int readCnt ;
 	int maxReadLen ;
+
+	int trimLevel ;
 } ;
 
 struct _assignReadsThreadArg
@@ -226,10 +231,45 @@ void *QuickAnnotateReads_Thread( void *pArg )
 	pthread_exit( NULL ) ;
 }
 
+void *GetReadCountStatsAndTrim_Thread(void *pArg)
+{
+	int i ;
+	struct _kmerCountThreadArg &arg = *((struct _kmerCountThreadArg*)pArg) ;
+	std::vector< struct _sortRead> &reads = *arg.pReads ;
+	int readCnt = arg.readCnt ;
+	
+	KmerCount &kmerCount = *arg.pKmerCount ;
+	int *buffer = new int[arg.maxReadLen] ;
+	for (i = arg.tid ; i < readCnt ; i += arg.threadCnt)
+	{
+		if ( arg.trimLevel == 0 )
+			kmerCount.GetCountStatsAndTrim( reads[i].read, NULL, 
+					reads[i].minCnt, reads[i].medianCnt, reads[i].avgCnt, buffer ) ;
+		else
+			kmerCount.GetCountStatsAndTrim( reads[i].read, reads[i].qual, 
+					reads[i].minCnt, reads[i].medianCnt, reads[i].avgCnt, buffer ) ;
+
+		if ( reads[i].qual != NULL )
+		{
+			free( reads[i].qual ) ;
+			reads[i].qual = NULL ;
+		}
+
+		if ( reads[i].read[0] == '\0' )
+		{
+			free( reads[i].read ) ;
+			free( reads[i].id ) ;
+			reads[i].read = NULL ;
+		}
+	}
+	delete[] buffer ;
+	pthread_exit(NULL) ;
+}
+
 void *BarcodeKmerCount_Thread(void *pArg)
 {
 	int i, j, k ;
-	struct _barcodeKmerCountThreadArg &arg = *((struct _barcodeKmerCountThreadArg*)pArg) ;
+	struct _kmerCountThreadArg &arg = *((struct _kmerCountThreadArg*)pArg) ;
 	std::vector< struct _sortRead> &reads = *arg.pReads ;
 	int readCnt = arg.readCnt ;
 
@@ -801,36 +841,66 @@ int main( int argc, char *argv[] )
 	}
 
 	kmerCount.SetBuffer( maxReadLen ) ;
-	for ( i = 0 ; i < readCnt ; ++i )
+	if (threadCnt == 1)
 	{
-		if ( trimLevel == 0 )
-			kmerCount.GetCountStatsAndTrim( sortedReads[i].read, NULL, 
-					sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
-		else
-			kmerCount.GetCountStatsAndTrim( sortedReads[i].read, sortedReads[i].qual, 
-					sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
-
-		if ( sortedReads[i].qual != NULL )
+		for ( i = 0 ; i < readCnt ; ++i )
 		{
-			/*char *qual = sortedReads[i].qual ;
-			double avgQual = 0 ;
-			for (j = 0 ; qual[j] ; ++j)
-				avgQual += qual[j] ;
-			sortedReads[i].avgQual = avgQual / j ;*/
+			if ( trimLevel == 0 )
+				kmerCount.GetCountStatsAndTrim( sortedReads[i].read, NULL, 
+						sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
+			else
+				kmerCount.GetCountStatsAndTrim( sortedReads[i].read, sortedReads[i].qual, 
+						sortedReads[i].minCnt, sortedReads[i].medianCnt, sortedReads[i].avgCnt ) ;
 
-			free( sortedReads[i].qual ) ;
-			sortedReads[i].qual = NULL ;
+			if ( sortedReads[i].qual != NULL )
+			{
+				/*char *qual = sortedReads[i].qual ;
+					double avgQual = 0 ;
+					for (j = 0 ; qual[j] ; ++j)
+					avgQual += qual[j] ;
+					sortedReads[i].avgQual = avgQual / j ;*/
+
+				free( sortedReads[i].qual ) ;
+				sortedReads[i].qual = NULL ;
+			}
+			//else
+			//	sortedReads[i].avgQual = 0 ;
+
+
+			if ( sortedReads[i].read[0] == '\0' )
+			{
+				free( sortedReads[i].read ) ;
+				free( sortedReads[i].id ) ;
+				sortedReads[i].read = NULL ;
+			}
 		}
-		//else
-		//	sortedReads[i].avgQual = 0 ;
+	}
+	else
+	{
+		pthread_t *threads = new pthread_t[ threadCnt ] ;
+		struct _kmerCountThreadArg *args = new struct _kmerCountThreadArg[threadCnt] ;
+		pthread_attr_t attr ;
 
+		pthread_attr_init( &attr ) ;
+		pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
 
-		if ( sortedReads[i].read[0] == '\0' )
+		for ( i = 0 ; i < threadCnt ; ++i )
 		{
-			free( sortedReads[i].read ) ;
-			free( sortedReads[i].id ) ;
-			sortedReads[i].read = NULL ;
+			args[i].tid = i ;
+			args[i].threadCnt = threadCnt ;
+			args[i].pReads = &sortedReads ;
+			args[i].pKmerCount = &kmerCount ;
+			args[i].readCnt = readCnt ;
+			args[i].maxReadLen = maxReadLen ;
+			args[i].trimLevel = trimLevel ;
+			pthread_create( &threads[i], &attr, GetReadCountStatsAndTrim_Thread, (void *)( args + i ) ) ;
 		}
+
+		for ( i = 0 ; i < threadCnt ; ++i )
+			pthread_join( threads[i], NULL ) ;
+
+		delete[] threads ;
+		delete[] args ;
 	}
 	
 	k = 0 ;
@@ -948,7 +1018,7 @@ int main( int argc, char *argv[] )
 		else
 		{
 			pthread_t *threads = new pthread_t[ threadCnt ] ;
-			struct _barcodeKmerCountThreadArg *args = new struct _barcodeKmerCountThreadArg[threadCnt] ;
+			struct _kmerCountThreadArg *args = new struct _kmerCountThreadArg[threadCnt] ;
 			pthread_attr_t attr ;
 
 			pthread_attr_init( &attr ) ;
