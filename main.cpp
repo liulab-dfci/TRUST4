@@ -489,6 +489,7 @@ void ProcessReadsWithThreads(std::vector<struct _sortRead> &r1Batch, std::vector
 		args[i].pRead1Batch = &r1Batch ;
 		args[i].pRead2Batch = &r2Batch ;
 		args[i].pReads = new std::vector<struct _sortRead> ;
+		args[i].countKmer = countKmer ;
 		args[i].pKmerCount = &kmerCount ;
 		args[i].pSeqSet = &seqSet ;
 		pthread_create( &threads[i], &attr, ProcessReads_Thread, (void *)( args + i ) ) ;
@@ -754,6 +755,7 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+	PrintLog( "Start to assemble reads." ) ;
 
 	if ( trimLevel > 1 ) 
 	{
@@ -774,6 +776,8 @@ int main( int argc, char *argv[] )
 
 	std::vector<struct _sortRead> readBuffer, mateReadBuffer ;
 	i = 0 ;
+	if (threadCnt > 1)
+		kmerCount.SetPthreadLocks() ;
 	while ( reads.Next() )
 	{
 		/*struct _overlap geneOverlap[4] ;
@@ -843,9 +847,9 @@ int main( int argc, char *argv[] )
 
 		++i ;
 
-		if ( countMyself && i % 100000 == 0 )
+		if ( threadCnt == 1 && countMyself && i % 100000 == 0 )
 			PrintLog( "Read in and count kmers for %d reads.", i ) ;
-		else if ( !countMyself && i % 1000000 == 0 )
+		else if ( threadCnt == 1 && !countMyself && i % 1000000 == 0 )
 			PrintLog( "Read in %d reads.", i ) ;
 		
 		if ( firstReadLen == -1 )
@@ -869,9 +873,9 @@ int main( int argc, char *argv[] )
 			
 			++i ;
 
-			if ( countMyself && i % 100000 == 0 )
+			if ( threadCnt == 1 && countMyself && i % 100000 == 0 )
 				PrintLog( "Read in and count kmers for %d reads.", i ) ;
-			else if ( !countMyself && i % 1000000 == 0 )
+			else if ( threadCnt == 1 && !countMyself && i % 1000000 == 0 )
 				PrintLog( "Read in %d reads.", i ) ;
     }
 		else if ( hasMate ) 
@@ -892,6 +896,11 @@ int main( int argc, char *argv[] )
 				ProcessReadsWithThreads(readBuffer, mateReadBuffer, countMyself, kmerCount, seqSet, sortedReads, threadCnt) ;
 				readBuffer.clear() ;
 				mateReadBuffer.clear() ;
+			
+				if (countMyself)
+					PrintLog( "Read in and count kmers for %d reads.", i ) ;
+				else 
+					PrintLog( "Read in %d reads.", i ) ;
 			}
 		}
   }

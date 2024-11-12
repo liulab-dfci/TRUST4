@@ -5,6 +5,7 @@
 
 #include <map>
 #include <algorithm>
+#include <pthread.h>
 
 #include "KmerCode.hpp"
 
@@ -15,6 +16,7 @@ private:
 	int kmerLength ;
 	int maxReadLen ;
 	int khashMax ;
+	pthread_mutex_t **locks ;
 
 	int *c ;
 
@@ -30,6 +32,7 @@ public:
 		maxReadLen = -1 ;
 		c = NULL ;
 		count = new std::map<uint64_t, int>[khashMax] ;
+		locks = NULL ;
 	}
 
 	KmerCount(const KmerCount &b)
@@ -39,14 +42,23 @@ public:
 		maxReadLen = -1 ;
 		c = NULL ;
 		count = new std::map<uint64_t, int>[khashMax] ;
+		locks = NULL ;
 	}
 
 	~KmerCount() 
 	{
-		if ( c != NULL )
-			delete[] c ;
-		if ( count != NULL )
-			delete[] count ;
+		Release() ;
+	}
+
+	void SetPthreadLocks() 
+	{
+		locks = new pthread_mutex_t *[khashMax] ;
+		int i ;
+		for (i = 0 ; i < khashMax ; ++i)
+		{
+			locks[i] = new pthread_mutex_t ;
+			pthread_mutex_init(locks[i], NULL) ;
+		}
 	}
 
 	int AddCount( char *read )
@@ -66,7 +78,12 @@ public:
 			if ( kmerCode.IsValid() )
 			{
 				uint64_t kcode = kmerCode.GetCanonicalKmerCode() ;
-				++count[ GetHash(kcode) ][ kcode ] ;
+				int h = GetHash(kcode) ;
+				if (locks)
+					pthread_mutex_lock(locks[h]) ;
+				++count[h][ kcode ] ;
+				if (locks)
+					pthread_mutex_unlock(locks[h]) ;
 				/*if ( count[ GetHash( kcode ) ][ kcode ] >= 500 )
 				{
 					printf( "%s\n", read + i - kmerLength + 1 ) ;
@@ -286,6 +303,18 @@ public:
 
 		c = NULL ;
 		count = NULL ;
+
+		if (locks != NULL)
+		{
+			int i ;
+			for (i = 0 ; i < khashMax ; ++i)
+			{
+				pthread_mutex_destroy(locks[i]) ;
+				delete locks[i] ;
+			}
+			delete[] locks ;
+			locks = NULL ;
+		}
 	}
 } ;
 
