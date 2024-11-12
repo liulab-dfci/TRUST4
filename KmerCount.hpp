@@ -102,10 +102,9 @@ public:
 		fclose( fp ) ;
 	}
 
-	void Output( char *file )
+	void Output(FILE *fp)
 	{
 		int i, j ;
-		FILE *fp = fopen( file, "r" ) ;
 		char *buffer = new char[kmerLength + 1] ;
 		for ( i = 0 ; i < khashMax ; ++i )	
 		{
@@ -116,7 +115,7 @@ public:
 				
 				for ( j = 0 ; j < kmerLength ; ++j )
 				{
-					buffer[j] = nucToNum[ ( it->first >> ( 2 * j ) ) & 3 ] ;  
+					buffer[j] = numToNuc[ ( it->first >> ( 2 * j ) ) & 3 ] ;  
 				}
 				buffer[j] = '\0' ;
 				fprintf( fp, ">%d\n%s\n", it->second, buffer ) ;
@@ -165,7 +164,6 @@ public:
 		int sum ;
 		//minCount = medianCount = avgCount = 1 ;
 		//return 0 ;
-
 		if ( maxReadLen == -1 )
 			return 0 ;
 

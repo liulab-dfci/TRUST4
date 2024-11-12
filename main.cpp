@@ -812,6 +812,7 @@ int main( int argc, char *argv[] )
 		sortedReads[i].len = strlen( sortedReads[i].read ) ;
 		if (sortedReads[i].len > maxReadLen)
 			maxReadLen = sortedReads[i].len ;
+		//printf("%s %s %s\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].qual) ;
 	}
 
 	// empty file
@@ -864,7 +865,6 @@ int main( int argc, char *argv[] )
 		readCnt = k ;
 		sortedReads.resize( k ) ;
 	}
-
 	kmerCount.SetBuffer( maxReadLen ) ;
 	if (threadCnt == 1)
 	{
@@ -934,6 +934,7 @@ int main( int argc, char *argv[] )
 		if ( sortedReads[i].read == NULL )
 			continue ;
 		sortedReads[k] = sortedReads[i] ;
+		sortedReads[k].len = strlen( sortedReads[i].read ) ;
 		++k ;
 	}
 	readCnt = k ;
