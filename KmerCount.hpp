@@ -13,7 +13,6 @@ class KmerCount
 private:
 	std::map<uint64_t, int> *count ;
 	int kmerLength ;
-	KmerCode kmerCode ;
 	int maxReadLen ;
 	int khashMax ;
 
@@ -24,7 +23,7 @@ private:
 		return k % khashMax ;
 	}
 public:
-	KmerCount( int k, int hmax = 1000003 ): kmerCode( k )
+	KmerCount( int k, int hmax = 1000003 )
 	{ 
 		kmerLength = k ;
 		khashMax = hmax ;
@@ -33,7 +32,7 @@ public:
 		count = new std::map<uint64_t, int>[khashMax] ;
 	}
 
-	KmerCount(const KmerCount &b): kmerCode(b.kmerLength)
+	KmerCount(const KmerCount &b)
 	{
 		kmerLength = b.kmerLength ;
 		khashMax = b.khashMax ;
@@ -57,7 +56,7 @@ public:
 		if ( len < kmerLength )
 			return 0 ;
 
-		kmerCode.Restart() ;
+		KmerCode kmerCode(kmerLength) ;
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( read[i] ) ;
 
@@ -86,6 +85,7 @@ public:
 		char buffer[100] ;
 		int i ;
 
+		KmerCode kmerCode(kmerLength) ;
 		while ( fscanf( fp, "%s", buffer ) != EOF )
 		{
 			int c = atoi( &buffer[ 1 ] ) ;
@@ -141,7 +141,7 @@ public:
 	int GetCount( char *kmer )
 	{
 		int i ;
-		kmerCode.Restart() ;
+		KmerCode kmerCode(kmerLength) ;
 		for ( i = 0 ; i < kmerLength ; ++i )
 			kmerCode.Append( kmer[i] ) ;
 		if ( kmerCode.IsValid() )
@@ -183,8 +183,7 @@ public:
 			return 0 ;
 		}
 
-		//kmerCode.Restart() ;
-		KmerCode kmerCode( this->kmerCode.GetKmerLength() ) ; 
+		KmerCode kmerCode(kmerLength) ; 
 		for ( i = 0 ; i < kmerLength - 1 ; ++i )
 			kmerCode.Append( read[i] ) ;
 		k = 0 ;
