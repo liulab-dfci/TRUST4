@@ -148,8 +148,13 @@ struct _kmerCountThreadArg
 {
 	int tid ;
 	int threadCnt ;
-	KmerCount *pKmerCount ;
 
+	int countKmer ;
+	KmerCount *pKmerCount ;
+	SeqSet *pSeqSet ;
+	std::vector<struct _sortRead> *pRead1Batch ;
+	std::vector<struct _sortRead> *pRead2Batch ;
+	
 	std::vector<struct _sortRead> *pReads ;
 	int readCnt ;
 	int maxReadLen ;
@@ -214,16 +219,16 @@ void PrintLog( const char *fmt, ... )
 // This includes readthrough, mate pair merging, and kmer count
 // The r1, r2's content can be modified in the process, including release
 // origR1, origR2 and the content from the original input 
-void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, const char *rawR1, const char *rawR2, int countKmer, KmerCount &kmerCount, SeqSet &seqSet, std::vector<struct _sortRead> &reads)
+void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, int countKmer, KmerCount &kmerCount, SeqSet &seqSet, std::vector<struct _sortRead> &reads)
 {
 	int j, k ;
 	int rWeight = 1 ;
 	// Check chimeric. After reverse-complement, the mate should be after the current read.
-	if (rawR2 != NULL)
+	if (r2.read != NULL)
 	{
-		int flen = strlen(rawR2) ;
+		int flen = strlen(r2.read) ;
 		int slen = strlen(r1.read) ;
-		seqSet.ReverseComplement(r2.read, rawR2, flen ) ;
+		seqSet.ReverseComplementInPlace(r2.read, flen ) ;
 		if (r2.qual != NULL)
 		{
 			// Reverse the mateR's quality score
@@ -346,7 +351,9 @@ void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, const char *rawR1, 
 				}
 				if ( useFirst )
 				{
-					free( r2.read ) ; free( r2.id ) ; free( r2.qual ) ;
+					free( r2.read ) ; free( r2.id ) ; 
+					if (r2.qual)
+						free( r2.qual ) ;
 					r2.read = NULL ;
 				}
 				else
@@ -357,16 +364,25 @@ void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, const char *rawR1, 
 					free( r2.id ) ;
 
 					r1.read = r2.read ;
-					//TODO: quality score should be reversed back if using r2!
+					seqSet.ReverseComplementInPlace(r1.read, flen) ;
 					r1.qual = r2.qual ;
-					strcpy( r1.read, rawR2 ) ;
+					/* Not sure why, keeping it reversed seems better
+					if (r1.qual != NULL)
+					{
+						for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
+						{
+							char tmp = r1.qual[j] ;
+							r1.qual[j] = r1.qual[k] ;
+							r1.qual[k] = tmp ;
+						}
+					}*/
 					r2.read = NULL ;
 				}
 			}
 		}
 		else // Nothing changes
 		{
-			strcpy( r2.read, rawR2 ) ;
+			seqSet.ReverseComplementInPlace(r2.read, flen) ;
 			if (r2.qual != NULL)
 			{
 				for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
@@ -379,7 +395,7 @@ void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, const char *rawR1, 
 		}
 	} // End of testing read-through or overlapped paired-end.
 
-	if ( !IsLowComplexity(rawR1) )
+	if ( !IsLowComplexity(r1.read) )
 	{
 		reads.push_back( r1 ) ;
 		if ( countKmer )
@@ -413,9 +429,9 @@ void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, const char *rawR1, 
 			free( r1.qual ) ;
 	}
 
-	if (rawR2 != NULL && r2.read != NULL )
+	if (r2.read != NULL )
 	{
-		if ( !IsLowComplexity(rawR2) )
+		if ( !IsLowComplexity(r2.read) )
 		{
 			reads.push_back(r2) ;
 			if ( countKmer )
@@ -428,6 +444,67 @@ void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, const char *rawR1, 
 				free( r2.qual ) ;
 		}
 	}
+}
+
+void *ProcessReads_Thread(void *pArg)
+{
+	struct _kmerCountThreadArg &arg = *((struct _kmerCountThreadArg*)pArg) ;
+	std::vector< struct _sortRead> &reads = *arg.pReads ;
+	std::vector<struct _sortRead> &read1Batch = *arg.pRead1Batch ;	
+	std::vector<struct _sortRead> &read2Batch = *arg.pRead2Batch ;	
+	KmerCount &kmerCount = *arg.pKmerCount ;
+	SeqSet &seqSet = *arg.pSeqSet ;
+
+	int readCnt = read1Batch.size() ;
+	int i, start, end ;
+	
+	int block = readCnt / arg.threadCnt ;
+	if (readCnt % arg.threadCnt)
+		++block ;
+	start = arg.tid * block ;
+	end = start + block - 1 ;
+	if (end >= readCnt)
+		end = readCnt - 1 ;
+
+	for (i = start ; i <= end ; ++i)
+		ProcessRead(read1Batch[i], read2Batch[i], arg.countKmer, kmerCount, seqSet, reads) ;
+
+	pthread_exit(NULL) ;
+}
+
+void ProcessReadsWithThreads(std::vector<struct _sortRead> &r1Batch, std::vector<struct _sortRead> &r2Batch, int countKmer, KmerCount &kmerCount, SeqSet &seqSet, std::vector<struct _sortRead> &reads, int threadCnt)
+{
+	int i ;
+	pthread_t *threads = new pthread_t[ threadCnt ] ;
+	struct _kmerCountThreadArg *args = new struct _kmerCountThreadArg[threadCnt] ;
+	pthread_attr_t attr ;
+
+	pthread_attr_init( &attr ) ;
+	pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+	for ( i = 0 ; i < threadCnt ; ++i )
+	{
+		args[i].tid = i ;
+		args[i].threadCnt = threadCnt ;
+		args[i].pRead1Batch = &r1Batch ;
+		args[i].pRead2Batch = &r2Batch ;
+		args[i].pReads = new std::vector<struct _sortRead> ;
+		args[i].pKmerCount = &kmerCount ;
+		args[i].pSeqSet = &seqSet ;
+		pthread_create( &threads[i], &attr, ProcessReads_Thread, (void *)( args + i ) ) ;
+	}
+
+	for ( i = 0 ; i < threadCnt ; ++i )
+		pthread_join( threads[i], NULL ) ;
+
+	for (i = 0 ; i < threadCnt ; ++i)
+	{
+		reads.insert(reads.end(), args[i].pReads->begin(), args[i].pReads->end()) ;
+		delete args[i].pReads ;
+	}
+
+	delete[] threads ;
+	delete[] args ;
 }
 
 void *QuickAnnotateReads_Thread( void *pArg )
@@ -695,6 +772,7 @@ int main( int argc, char *argv[] )
 	SimpleVector<int> barcodeReadCount ;
 	std::map<int, int> finishedBarcodes ; 
 
+	std::vector<struct _sortRead> readBuffer, mateReadBuffer ;
 	i = 0 ;
 	while ( reads.Next() )
 	{
@@ -801,8 +879,27 @@ int main( int argc, char *argv[] )
 			fprintf( stderr, "The two mate-pair read files have different number of reads.\n" ) ;
 			exit( 1 ) ;
 		}
-		ProcessRead(nr, mateR, reads.seq, mateReads.seq, countMyself, kmerCount, seqSet, sortedReads) ;
+
+		if (threadCnt == 1)
+			ProcessRead(nr, mateR, countMyself, kmerCount, seqSet, sortedReads) ;
+		else
+		{
+			readBuffer.push_back(nr) ;
+			mateReadBuffer.push_back(mateR) ;
+
+			if ((int)readBuffer.size() >= 100000 * threadCnt)
+			{
+				ProcessReadsWithThreads(readBuffer, mateReadBuffer, countMyself, kmerCount, seqSet, sortedReads, threadCnt) ;
+				readBuffer.clear() ;
+				mateReadBuffer.clear() ;
+			}
+		}
   }
+
+	if (readBuffer.size() > 0)
+	{
+		ProcessReadsWithThreads(readBuffer, mateReadBuffer, countMyself, kmerCount, seqSet, sortedReads, threadCnt) ;
+	}
 
 	int readCnt = sortedReads.size() ;
 	
