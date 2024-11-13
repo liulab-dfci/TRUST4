@@ -2452,7 +2452,7 @@ public:
 		seqIndex.SetConsiderBarcode(s) ;
 	}
 
-	void ReverseComplement( char *rcSeq, char *seq, int len )
+	void ReverseComplement( char *rcSeq, const char *seq, int len )
 	{
 		int i ;
 		for ( i = 0 ; i < len ; ++i )
@@ -2463,6 +2463,32 @@ public:
 				rcSeq[i] = 'N' ;
 		}
 		rcSeq[i] = '\0' ;
+	}
+
+	void ReverseComplementInPlace(char *seq, int len)
+	{
+		int i, j ;
+		for (i = 0, j = len - 1 ; i < j ; ++i, --j)
+		{
+			char tmp = seq[j] ;
+
+			if (seq[i] != 'N')
+				seq[j] = numToNuc[3-nucToNum[seq[i] - 'A']];
+			else
+				seq[j] = 'N' ;
+
+			if (tmp != 'N')
+				seq[i] = numToNuc[3-nucToNum[tmp-'A']] ;
+			else
+				seq[i] = 'N' ;
+		}
+		if (i == j)
+		{
+			if (seq[i] != 'N')
+				seq[i] = numToNuc[3 - nucToNum[seq[i] - 'A']] ;
+			else
+				seq[i] = 'N' ;
+		}
 	}
 
 	void ReverseComplementInSeqSet(int idx)

@@ -148,8 +148,13 @@ struct _kmerCountThreadArg
 {
 	int tid ;
 	int threadCnt ;
-	KmerCount *pKmerCount ;
 
+	int countKmer ;
+	KmerCount *pKmerCount ;
+	SeqSet *pSeqSet ;
+	std::vector<struct _sortRead> *pRead1Batch ;
+	std::vector<struct _sortRead> *pRead2Batch ;
+	
 	std::vector<struct _sortRead> *pReads ;
 	int readCnt ;
 	int maxReadLen ;
@@ -173,7 +178,7 @@ bool CompSortReadById( const struct _Read &a, const struct _Read &b )
 	return strcmp( a.id, b.id ) < 0 ;
 }
 
-bool IsLowComplexity( char *seq )
+bool IsLowComplexity( const char *seq )
 {
 	int cnt[5] = {0, 0, 0, 0, 0} ;
 	int i ;
@@ -208,6 +213,299 @@ void PrintLog( const char *fmt, ... )
 	char stime[500] ;
 	strftime( stime, sizeof( stime ), "%c", localT ) ;
 	fprintf( stderr, "[%s] %s\n", stime, buffer ) ;
+}
+
+// Process one read (pair), and append the result to reads
+// This includes readthrough, mate pair merging, and kmer count
+// The r1, r2's content can be modified in the process, including release
+// origR1, origR2 and the content from the original input 
+void ProcessRead(struct _sortRead &r1, struct _sortRead &r2, int countKmer, KmerCount &kmerCount, SeqSet &seqSet, std::vector<struct _sortRead> &reads)
+{
+	int j, k ;
+	int rWeight = 1 ;
+	// Check chimeric. After reverse-complement, the mate should be after the current read.
+	if (r2.read != NULL)
+	{
+		int flen = strlen(r2.read) ;
+		int slen = strlen(r1.read) ;
+		seqSet.ReverseComplementInPlace(r2.read, flen ) ;
+		if (r2.qual != NULL)
+		{
+			// Reverse the mateR's quality score
+			for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
+			{
+				char tmp = r2.qual[j] ;
+				r2.qual[j] = r2.qual[k] ;
+				r2.qual[k] = tmp ;
+			}
+		}
+		int minOverlap = ( flen + slen ) / 10 ;
+		int minOverlap2 = ( flen + slen ) / 20 ;
+		if ( minOverlap > 31 )
+			minOverlap = 31 ;
+		if ( minOverlap2 > 31 )
+			minOverlap2 = 31 ;
+		int offset = -1 ;
+		int bestMatchCnt = -1 ;
+
+		/*if ( AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt ) >= 0 )
+			{
+			printf( "Outie\n%s\n%s\n", nr.read, mateR.read ) ;
+			}
+			else if ( AlignAlgo::IsMateOverlap( nr.read, slen, mateR.read, flen, minOverlap, offset, bestMatchCnt ) >= 0 )
+			{
+			printf( "Innie\n%s\n%s\n", nr.read, mateR.read ) ;
+			}
+			else
+			printf( "Uncertain\n" ) ;*/
+
+		int overlapSize = AlignAlgo::IsMateOverlap( r2.read, flen, r1.read, slen, minOverlap, offset, bestMatchCnt, false ) ;
+		if ( overlapSize >= 0 )
+		{
+			// Wrong order (read-through) happened, 
+			// Only keep the overlapped portion.
+			r1.read[ overlapSize ] = '\0' ;
+			if ( r1.qual != NULL )
+			{
+				r1.qual[ overlapSize ] = '\0' ;
+
+				for ( j = 0 ; j < overlapSize ; ++j )
+				{
+					if ( r2.qual[j + offset] > r1.qual[j] || r1.read[j] == 'N' )
+					{
+						r1.read[j] = r2.read[j + offset] ;
+						r1.qual[j] = r2.qual[j + offset] ;
+					}
+				}
+			}
+
+			// Release the mate.
+			free( r2.read ) ; free( r2.id ) ; 
+			if (r2.qual)
+				free(r2.qual) ;
+			r2.read = NULL ;
+		}
+		else if (  ( overlapSize = 
+					AlignAlgo::IsMateOverlap( r1.read, slen, r2.read, flen, minOverlap2, offset, bestMatchCnt ) ) >= 0 )
+		{
+			// Merge paired-end reads
+			if ( bestMatchCnt >= 0.95 * overlapSize )
+			{
+				char *r = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
+				char *q = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
+				for ( j = 0 ; j < flen ; ++j )
+				{
+					r[ offset + j ] = r2.read[j] ;
+					q[ offset + j ] = r2.qual[j] ;
+				}
+				int len = offset + j ;
+				for ( j = 0 ; j < slen && j < len ; ++j )
+				{
+					if ( j < offset || r1.qual[j] >= q[j] - 14 || r[j] == 'N' )
+					{
+						r[j] = r1.read[j] ;
+						q[j] = r1.qual[j] ;
+					}
+				}
+
+				//if ( j > len ) 
+				//	len = j ;
+				r[len] = q[len] = '\0' ;
+
+				if ( 0 )//len > 4 )
+				{
+					for ( j = 2 ; j <= len ; ++j )
+					{
+						r[j - 2] = r[j] ;
+						q[j - 2] = q[j] ;
+					}
+					r[len - 4] = '\0' ;
+					q[len - 4] = '\0' ;
+					len -= 4 ;
+				}
+
+				free( r2.read ) ; free( r2.id ) ; 
+				if (r2.qual)
+						free( r2.qual ) ;
+				r2.read = NULL ;
+				free( r1.read ) ; free( r1.qual ) ;
+				r1.read = r ;
+				r1.qual = q ;
+				++rWeight ;
+			}
+			else
+			{
+				// Discard one of the read
+				bool useFirst = true ;
+				if ( r1.qual != NULL )
+				{
+					double avgQualR = 0, avgQualMate = 0 ;
+					for ( j = offset ; j < slen ; ++j )
+						avgQualR += r1.qual[j] - 32 ;
+					for ( j = flen - 1 ; j >= flen - overlapSize ; --j )
+						avgQualMate += r2.qual[j] - 32 ;
+
+					avgQualR /= overlapSize ; avgQualMate /= overlapSize ;
+					if ( avgQualR + 10 < avgQualMate )
+						useFirst = false ;
+				}
+				if ( useFirst )
+				{
+					free( r2.read ) ; free( r2.id ) ; 
+					if (r2.qual)
+						free( r2.qual ) ;
+					r2.read = NULL ;
+				}
+				else
+				{
+					free( r1.read ) ; 
+					if (r1.qual)
+						free(r1.qual) ;
+					free( r2.id ) ;
+
+					r1.read = r2.read ;
+					seqSet.ReverseComplementInPlace(r1.read, flen) ;
+					r1.qual = r2.qual ;
+					/* Not sure why, keeping it reversed seems better
+					if (r1.qual != NULL)
+					{
+						for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
+						{
+							char tmp = r1.qual[j] ;
+							r1.qual[j] = r1.qual[k] ;
+							r1.qual[k] = tmp ;
+						}
+					}*/
+					r2.read = NULL ;
+				}
+			}
+		}
+		else // Nothing changes
+		{
+			seqSet.ReverseComplementInPlace(r2.read, flen) ;
+			if (r2.qual != NULL)
+			{
+				for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
+				{
+					char tmp = r2.qual[j] ;
+					r2.qual[j] = r2.qual[k] ;
+					r2.qual[k] = tmp ;
+				}
+			}
+		}
+	} // End of testing read-through or overlapped paired-end.
+
+	if ( !IsLowComplexity(r1.read) )
+	{
+		reads.push_back( r1 ) ;
+		if ( countKmer )
+			kmerCount.AddCount( r1.read ) ;
+
+		if ( rWeight == 2 )
+		{
+			struct _sortRead wr ;
+			wr = r1 ;
+			wr.read = strdup( r1.read ) ;
+			if ( r1.qual != NULL )
+				wr.qual = strdup( r1.qual ) ;
+			else
+				wr.qual = NULL ;
+			int len = strlen( r1.id ) ;
+			wr.id = ( char * )malloc( sizeof( char ) * ( len + 3 ) ) ;
+			strcpy( wr.id, r1.id ) ;
+			wr.id[len] = '.' ;
+			wr.id[len + 1] = '1' ;
+			wr.id[len + 2] = '\0' ;
+
+			reads.push_back( wr ) ;
+			if ( countKmer )
+				kmerCount.AddCount( wr.read ) ;
+		}
+	}
+	else
+	{
+		free( r1.read ) ; free( r1.id ) ; 
+		if (r1.qual)
+			free( r1.qual ) ;
+	}
+
+	if (r2.read != NULL )
+	{
+		if ( !IsLowComplexity(r2.read) )
+		{
+			reads.push_back(r2) ;
+			if ( countKmer )
+				kmerCount.AddCount(r2.read ) ;
+		}
+		else
+		{
+			free( r2.read ) ; free( r2.id ) ; 
+			if (r2.qual)
+				free( r2.qual ) ;
+		}
+	}
+}
+
+void *ProcessReads_Thread(void *pArg)
+{
+	struct _kmerCountThreadArg &arg = *((struct _kmerCountThreadArg*)pArg) ;
+	std::vector< struct _sortRead> &reads = *arg.pReads ;
+	std::vector<struct _sortRead> &read1Batch = *arg.pRead1Batch ;	
+	std::vector<struct _sortRead> &read2Batch = *arg.pRead2Batch ;	
+	KmerCount &kmerCount = *arg.pKmerCount ;
+	SeqSet &seqSet = *arg.pSeqSet ;
+
+	int readCnt = read1Batch.size() ;
+	int i, start, end ;
+	
+	int block = readCnt / arg.threadCnt ;
+	if (readCnt % arg.threadCnt)
+		++block ;
+	start = arg.tid * block ;
+	end = start + block - 1 ;
+	if (end >= readCnt)
+		end = readCnt - 1 ;
+
+	for (i = start ; i <= end ; ++i)
+		ProcessRead(read1Batch[i], read2Batch[i], arg.countKmer, kmerCount, seqSet, reads) ;
+
+	pthread_exit(NULL) ;
+}
+
+void ProcessReadsWithThreads(std::vector<struct _sortRead> &r1Batch, std::vector<struct _sortRead> &r2Batch, int countKmer, KmerCount &kmerCount, SeqSet &seqSet, std::vector<struct _sortRead> &reads, int threadCnt)
+{
+	int i ;
+	pthread_t *threads = new pthread_t[ threadCnt ] ;
+	struct _kmerCountThreadArg *args = new struct _kmerCountThreadArg[threadCnt] ;
+	pthread_attr_t attr ;
+
+	pthread_attr_init( &attr ) ;
+	pthread_attr_setdetachstate( &attr, PTHREAD_CREATE_JOINABLE ) ;
+
+	for ( i = 0 ; i < threadCnt ; ++i )
+	{
+		args[i].tid = i ;
+		args[i].threadCnt = threadCnt ;
+		args[i].pRead1Batch = &r1Batch ;
+		args[i].pRead2Batch = &r2Batch ;
+		args[i].pReads = new std::vector<struct _sortRead> ;
+		args[i].countKmer = countKmer ;
+		args[i].pKmerCount = &kmerCount ;
+		args[i].pSeqSet = &seqSet ;
+		pthread_create( &threads[i], &attr, ProcessReads_Thread, (void *)( args + i ) ) ;
+	}
+
+	for ( i = 0 ; i < threadCnt ; ++i )
+		pthread_join( threads[i], NULL ) ;
+
+	for (i = 0 ; i < threadCnt ; ++i)
+	{
+		reads.insert(reads.end(), args[i].pReads->begin(), args[i].pReads->end()) ;
+		delete args[i].pReads ;
+	}
+
+	delete[] threads ;
+	delete[] args ;
 }
 
 void *QuickAnnotateReads_Thread( void *pArg )
@@ -347,7 +645,7 @@ int main( int argc, char *argv[] )
 	ReadFiles reads ;
 	ReadFiles mateReads ;
 	ReadFiles barcodeFile, umiFile ;
-	bool countMyself = true ;
+	bool countMyself = true ; // Count using our procedure, or read from some kmer count tool's output.
 	int maxReadLen = -1 ;
 	int firstReadLen = -1 ;
 	int trimLevel = 1 ;
@@ -457,6 +755,7 @@ int main( int argc, char *argv[] )
 		fprintf( stderr, "Need to use -f to specify the receptor genome sequence.\n" ) ;
 		return EXIT_FAILURE ;
 	}
+	PrintLog( "Start to assemble reads." ) ;
 
 	if ( trimLevel > 1 ) 
 	{
@@ -475,7 +774,10 @@ int main( int argc, char *argv[] )
 	SimpleVector<int> barcodeReadCount ;
 	std::map<int, int> finishedBarcodes ; 
 
+	std::vector<struct _sortRead> readBuffer, mateReadBuffer ;
 	i = 0 ;
+	if (threadCnt > 1)
+		kmerCount.SetPthreadLocks() ;
 	while ( reads.Next() )
 	{
 		/*struct _overlap geneOverlap[4] ;
@@ -533,8 +835,7 @@ int main( int argc, char *argv[] )
 			}
 		}
 
-		struct _sortRead nr ;
-		int rWeight = 1 ;
+		struct _sortRead nr, mateR ;
 		nr.read = strdup( reads.seq ) ;
 		nr.id = strdup( reads.id ) ;
 		if ( reads.qual != NULL )
@@ -546,9 +847,9 @@ int main( int argc, char *argv[] )
 
 		++i ;
 
-		if ( countMyself && i % 100000 == 0 )
+		if ( threadCnt == 1 && countMyself && i % 100000 == 0 )
 			PrintLog( "Read in and count kmers for %d reads.", i ) ;
-		else if ( !countMyself && i % 1000000 == 0 )
+		else if ( threadCnt == 1 && !countMyself && i % 1000000 == 0 )
 			PrintLog( "Read in %d reads.", i ) ;
 		
 		if ( firstReadLen == -1 )
@@ -556,7 +857,6 @@ int main( int argc, char *argv[] )
 			firstReadLen = strlen( reads.seq ) ;
 		}
 
-		struct _sortRead mateR ;
 		mateR.read = NULL ;
 		if ( mateReads.Next() )
 		{
@@ -573,222 +873,56 @@ int main( int argc, char *argv[] )
 			
 			++i ;
 
-			if ( countMyself && i % 100000 == 0 )
+			if ( threadCnt == 1 && countMyself && i % 100000 == 0 )
 				PrintLog( "Read in and count kmers for %d reads.", i ) ;
-			else if ( !countMyself && i % 1000000 == 0 )
+			else if ( threadCnt == 1 && !countMyself && i % 1000000 == 0 )
 				PrintLog( "Read in %d reads.", i ) ;
-			
-			// Check chimeric. After reverse-complement, the mate should be after the current read.
-			int flen = strlen( mateReads.seq ) ;
-			int slen = strlen( nr.read ) ;
-			seqSet.ReverseComplement( mateR.read, mateReads.seq, flen ) ;
-			if (mateR.qual != NULL)
-			{
-				// Reverse the mateR's quality score
-				for (j = 0, k = flen - 1 ; j < k ; ++j, --k)
-				{
-					char tmp = mateR.qual[j] ;
-					mateR.qual[j] = mateR.qual[k] ;
-					mateR.qual[k] = tmp ;
-				}
-			}
-			int minOverlap = ( flen + slen ) / 10 ;
-			int minOverlap2 = ( flen + slen ) / 20 ;
-			if ( minOverlap > 31 )
-				minOverlap = 31 ;
-			if ( minOverlap2 > 31 )
-				minOverlap2 = 31 ;
-			int offset = -1 ;
-			int bestMatchCnt = -1 ;
-			
-			/*if ( AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt ) >= 0 )
-			{
-				printf( "Outie\n%s\n%s\n", nr.read, mateR.read ) ;
-			}
-			else if ( AlignAlgo::IsMateOverlap( nr.read, slen, mateR.read, flen, minOverlap, offset, bestMatchCnt ) >= 0 )
-			{
-				printf( "Innie\n%s\n%s\n", nr.read, mateR.read ) ;
-			}
-			else
-				printf( "Uncertain\n" ) ;*/
-			
-			int overlapSize = AlignAlgo::IsMateOverlap( mateR.read, flen, nr.read, slen, minOverlap, offset, bestMatchCnt, false ) ;
-			if ( overlapSize >= 0 )
-			{
-				// Wrong order happened, 
-				// Only keep the overlapped portion.
-				nr.read[ overlapSize ] = '\0' ;
-				if ( nr.qual != NULL )
-				{
-					nr.qual[ overlapSize ] = '\0' ;
-
-					for ( j = 0 ; j < overlapSize ; ++j )
-					{
-						if ( mateR.qual[j + offset] > nr.qual[j] || nr.read[j] == 'N' )
-						{
-							nr.read[j] = mateR.read[j + offset] ;
-							nr.qual[j] = mateR.qual[j + offset] ;
-						}
-					}
-				}
-
-				// filter the mate.
-				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
-				mateR.read = NULL ;
-			}
-			else if (  ( overlapSize = 
-				AlignAlgo::IsMateOverlap( nr.read, slen, mateR.read, flen, minOverlap2, offset, bestMatchCnt ) ) >= 0 )
-			{
-				if ( bestMatchCnt >= 0.95 * overlapSize )
-				{
-					char *r = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
-					char *q = (char *)malloc( sizeof( char ) * ( slen + flen + 1 ) ) ;
-					for ( j = 0 ; j < flen ; ++j )
-					{
-						r[ offset + j ] = mateR.read[j] ;
-						q[ offset + j ] = mateR.qual[j] ;
-					}
-					int len = offset + j ;
-					for ( j = 0 ; j < slen && j < len ; ++j )
-					{
-						if ( j < offset || nr.qual[j] >= q[j] - 14 || r[j] == 'N' )
-						{
-							r[j] = nr.read[j] ;
-							q[j] = nr.qual[j] ;
-						}
-					}
-
-					//if ( j > len ) 
-					//	len = j ;
-					r[len] = q[len] = '\0' ;
-					
-					if ( 0 )//len > 4 )
-					{
-						for ( j = 2 ; j <= len ; ++j )
-						{
-							r[j - 2] = r[j] ;
-							q[j - 2] = q[j] ;
-						}
-						r[len - 4] = '\0' ;
-						q[len - 4] = '\0' ;
-						len -= 4 ;
-					}
-					
-					free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
-					mateR.read = NULL ;
-					free( nr.read ) ; free( nr.qual ) ;
-					nr.read = r ;
-					nr.qual = q ;
-					++rWeight ;
-				}
-				else
-				{
-					// Discard one of the read
-					bool useFirst = true ;
-					if ( nr.qual != NULL )
-					{
-						double avgQualR = 0, avgQualMate = 0 ;
-						for ( j = offset ; j < slen ; ++j )
-							avgQualR += nr.qual[j] - 32 ;
-						for ( j = flen - 1 ; j >= flen - overlapSize ; --j )
-							avgQualMate += mateR.qual[j] - 32 ;
-
-						avgQualR /= overlapSize ; avgQualMate /= overlapSize ;
-						if ( avgQualR + 10 < avgQualMate )
-							useFirst = false ;
-					}
-					if ( useFirst )
-					{
-						free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
-						mateR.read = NULL ;
-					}
-					else
-					{
-						free( nr.read ) ; free( nr.qual ) ;
-						free( mateR.id ) ;
-
-						nr.read = mateR.read ;
-						nr.qual = mateR.qual ;
-						strcpy( nr.read, mateReads.seq ) ;
-						mateR.read = NULL ;
-					}
-				}
-			}
-			else
-			{
-				strcpy( mateR.read, mateReads.seq ) ;
-				strcpy( mateR.qual, mateReads.qual ) ;
-			}
-		}
+    }
 		else if ( hasMate ) 
 		{
 			fprintf( stderr, "The two mate-pair read files have different number of reads.\n" ) ;
 			exit( 1 ) ;
 		}
-		
-		
-		if ( !IsLowComplexity( reads.seq ) )
-		{
-			sortedReads.push_back( nr ) ;
-			if ( countMyself )
-				kmerCount.AddCount( nr.read ) ;
-			
-			if ( rWeight == 2 )
-			{
-				struct _sortRead wr ;
-				wr = nr ;
-				wr.read = strdup( nr.read ) ;
-				if ( nr.qual != NULL )
-					wr.qual = strdup( nr.qual ) ;
-				else
-					wr.qual = NULL ;
-				int len = strlen( nr.id ) ;
-				wr.id = ( char * )malloc( sizeof( char ) * ( len + 3 ) ) ;
-				strcpy( wr.id, nr.id ) ;
-				wr.id[len] = '.' ;
-				wr.id[len + 1] = '1' ;
-				wr.id[len + 2] = '\0' ;
 
-				sortedReads.push_back( wr ) ;
-				if ( countMyself )
-					kmerCount.AddCount( wr.read ) ;
-			}
-
-			int len = strlen( nr.read ) ;
-			if ( len > maxReadLen )
-				maxReadLen = len ;
-		}
+		if (threadCnt == 1)
+			ProcessRead(nr, mateR, countMyself, kmerCount, seqSet, sortedReads) ;
 		else
 		{
-			free( nr.read ) ; free( nr.id ) ; free( nr.qual ) ;
-		}
+			readBuffer.push_back(nr) ;
+			mateReadBuffer.push_back(mateR) ;
 
-		if ( mateR.read != NULL )
-		{
-			if ( !IsLowComplexity( mateReads.seq ) )
+			if ((int)readBuffer.size() >= 100000 * threadCnt)
 			{
-				sortedReads.push_back( mateR ) ;
-				if ( countMyself )
-					kmerCount.AddCount( mateR.read ) ;
-
-				
-				int len = strlen( mateR.read ) ;
-				if ( len > maxReadLen )
-					maxReadLen = len ;
-			}
-			else
-			{
-				free( mateR.read ) ; free( mateR.id ) ; free( mateR.qual ) ;
+				ProcessReadsWithThreads(readBuffer, mateReadBuffer, countMyself, kmerCount, seqSet, sortedReads, threadCnt) ;
+				readBuffer.clear() ;
+				mateReadBuffer.clear() ;
+			
+				if (countMyself)
+					PrintLog( "Read in and count kmers for %d reads.", i ) ;
+				else 
+					PrintLog( "Read in %d reads.", i ) ;
 			}
 		}
-	
-		/*if ( countMyself && i % 100000 == 0 )
-			PrintLog( "Read in and count kmers for %d reads.", i ) ;
-		else if ( !countMyself && i % 1000000 == 0 )
-			PrintLog( "Read in %d reads.", i ) ;*/
+  }
+
+	if (readBuffer.size() > 0)
+	{
+		ProcessReadsWithThreads(readBuffer, mateReadBuffer, countMyself, kmerCount, seqSet, sortedReads, threadCnt) ;
 	}
+
+	int readCnt = sortedReads.size() ;
+	
+	maxReadLen = 0 ;
+	for (i = 0 ; i < readCnt ; ++i)
+	{
+		sortedReads[i].len = strlen( sortedReads[i].read ) ;
+		if (sortedReads[i].len > maxReadLen)
+			maxReadLen = sortedReads[i].len ;
+		//printf("%s %s %s\n", sortedReads[i].id, sortedReads[i].read, sortedReads[i].qual) ;
+	}
+
 	// empty file
-	if ( maxReadLen <= 0 )
+	if ( readCnt <= 0 )
 	{
 		sprintf( buffer, "%s_raw.out", outputPrefix ) ;
 		FILE *fp = fopen( buffer, "w" ) ;
@@ -807,7 +941,6 @@ int main( int argc, char *argv[] )
 #ifdef DEBUG
 	printf( "Finish read in the reads and kmer count.\n") ;
 #endif
-	int readCnt = sortedReads.size() ;
 
 	// Remove the reads from the barcode with too few reads
 	if (contigMinCov > 0)
@@ -833,13 +966,11 @@ int main( int argc, char *argv[] )
 			if ( sortedReads[i].read == NULL )
 				continue ;
 			sortedReads[k] = sortedReads[i] ;
-			sortedReads[k].len = strlen( sortedReads[i].read ) ;
 			++k ;
 		}
 		readCnt = k ;
 		sortedReads.resize( k ) ;
 	}
-
 	kmerCount.SetBuffer( maxReadLen ) ;
 	if (threadCnt == 1)
 	{

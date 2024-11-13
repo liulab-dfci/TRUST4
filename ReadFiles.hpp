@@ -249,6 +249,18 @@ class ReadFiles
 			fileInd = currentFpInd ;
 			return batchSize ;
 		}
+    
+		void FreeBatch(struct _Read *readBatch, int batchSize)
+		{
+			int i ;
+			for (i = 0 ; i < batchSize ; ++i)
+			{
+				free(readBatch[i].id) ;
+				free(readBatch[i].seq) ;
+				if (readBatch[i].qual)
+					free(readBatch[i].qual) ;
+			}
+		}
 
 		int GetFpUsed()
 		{
