@@ -335,13 +335,14 @@ private:
 	}
 
 	// The O(nlogn) method for solving LIS problem, suppose there are n hits.
+  // Assuming hits.b is sorted
 	// Return the LIS, the LIS's length is returned by the function
 	int LongestIncreasingSubsequence( SimpleVector<struct _pair> &hits, SimpleVector<struct _pair> &LIS ) 
 	{
 		// Only use the first hit of each qhit
 		// Bias towards left
 
-		int i, k ;
+		int i, j, k ;
 		int ret = 0 ;
 		int size = hits.Size() ;
 
@@ -351,13 +352,16 @@ private:
 
 		int rcnt = 1 ;
 		record[0] = 0 ;
+    double avgDiff = 0 ;
 		for ( i = 1 ; i < size ; ++i )
 		{
 			//if ( hits[i].b == hits[i - 1].b )
 			//	continue ;
 			record[rcnt] = i ;
 			++rcnt ;
+      avgDiff += (hits[i].a - hits[i].b) ; 
 		}
+    avgDiff /= size ;
 		top[0] = 0 ;
 		link[0] = -1 ;
 		ret = 1 ;
@@ -382,14 +386,13 @@ private:
 					++ret ;
 					link[ record[i] ] = top[tag] ;
 				}
-				else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
+        else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
 				{
 					top[ tag + 1 ] = record[i] ;
 					link[ record[i] ] = top[tag] ;
 				}
 			}
 		}
-
 
 		k = top[ret - 1] ;
 		for ( i = ret - 1 ; i >= 0 ; --i )
@@ -400,7 +403,7 @@ private:
 		LIS.Reverse() ;
 		//for ( i = 0 ; i < ret ; ++i )
 		//	LIS.PushBack( hits[ top[i] ] ) ;
-		
+    		
 		// Remove elements with same b.
 		if ( ret > 0 )
 		{
@@ -413,6 +416,40 @@ private:
 				++k ;
 			}
 			ret = k ;
+		}
+		
+		// Go over the list again to see whether we can replace some hits with better hits (e.g. less divergent)that won't change the overall number of elements in LIS
+		if (ret > 0)
+		{
+			i = 0 ; j = 0 ;
+			while (i < ret && j < size)
+			{
+				//printf("try replacement: %d %d %d %d %d %d\n", i, LIS[i].a, LIS[i].b,
+				//		j, hits[j].a, hits[j].b) ;
+				if (hits[j].b < LIS[i].b)
+				{
+					++j ;
+				}
+				else if (i < ret && LIS[i + 1].b <= hits[j].b)
+				{
+					++i ;
+				} 
+				else if (LIS[i] == hits[j])
+				{
+					++j ;
+				}
+				else // Now the b should satisify LIS_i.b <= hits.b < LIS_{i+1}.b
+					//if (hits[ record[i] ].a == hits[ top[tag + 1] ].a)
+        {
+          if (LIS[i].a <= hits[j].a && (i == ret - 1 || hits[j].a < LIS[i + 1].a) 
+							&& ABS(hits[j].a - hits[j].b - avgDiff) < 
+              ABS(LIS[i].a - LIS[i].b - avgDiff))
+          {
+						LIS[i] = hits[j] ;
+          }
+					++j ;
+        }
+			}
 		}
 
 		delete []top ;
@@ -1199,6 +1236,8 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
+    if (seqs[0].isRef) // This seqset is for reference
+      skipLimit = 0 ;
 
 		int skipCnt = 0 ;
 		int downSample = 1 ;
@@ -1677,8 +1716,9 @@ private:
 			matchCnt += 2 * kmerLength ;
 			signed char *align = new signed char[ overlaps[i].readEnd - overlaps[i].readStart + 1 + 
 				overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 1] ;
-			for ( j = 1 ; j < hitCnt ; ++j )
+      for ( j = 1 ; j < hitCnt ; ++j )
 			{
+        //printf( "%d %d=>%d %d. %d\n", hitCoords[j - 1].a, hitCoords[j - 1].b, hitCoords[j].a, hitCoords[j].b, matchCnt) ;
 				if ( hitCoords[j - 1].b - hitCoords[j - 1].a == hitCoords[j].b - hitCoords[j].a )
 				{
 					if ( hitCoords[j - 1].a + kmerLength - 1 >= hitCoords[j].a )
@@ -1706,6 +1746,12 @@ private:
 								r + hitCoords[j - 1].a + kmerLength, 
 								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
 								align ) ;
+              /*AlignAlgo::VisualizeAlignment( 
+										seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
+										hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ) ,
+										r + hitCoords[j - 1].a + kmerLength, 
+										hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
+										align ) ;*/
 						}
 						else
 						{
@@ -1847,7 +1893,7 @@ private:
 			} // for j
 			delete[] align ;
 			
-			//printf( "%d: %d %d %d %lf\n", overlaps[i].seqIdx, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
+			//printf( "%d %s: %d %d %d %lf\n", overlaps[i].seqIdx, seqs[overlaps[i].seqIdx].name, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
 			overlaps[i].matchCnt = matchCnt ;
 			if ( similarity == 1 )
 				overlaps[i].similarity = (double)matchCnt / ( overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 
@@ -5823,7 +5869,6 @@ public:
 		}
 		delete[] contigBuffer ;
 
-
 		// Extend overlaps that can cross contigs
 		int *seqUsed = new int[ seqs.size() ] ;
 		if ( detailLevel >= 1 )
@@ -6326,7 +6371,6 @@ public:
 							allOverlaps[i].matchCnt += 2 * matchLen ;
 							allOverlaps[i].similarity = (double)(allOverlaps[i].matchCnt ) / (tmp + 2 * matchLen) ;
 						}
-		
 					}
 				}
 			}
@@ -6343,6 +6387,22 @@ public:
 			{
 				//printf( "%d %s %lf %d: %d %d\n", i, seqs[ allOverlaps[i].seqIdx].name, allOverlaps[i].similarity, allOverlaps[i].matchCnt, allOverlaps[i].readStart, allOverlaps[i].readEnd ) ;
 				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
+        /*if (geneType == 0)
+        {
+          printf("%s %d\n", seqs[ allOverlaps[i].seqIdx ].name,
+              allOverlaps[i].matchCnt) ;
+          struct _overlap vgene = allOverlaps[i] ; // Overlap with v-gene
+          signed char *vAlign = new signed char[ len + seqs[ vgene.seqIdx ].consensusLen + 2 ] ;
+          AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+              read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
+          AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+          	read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign, 60 ) ;
+          int matchCnt, tmp ;
+          GetAlignStats(vAlign, false, matchCnt, tmp, tmp) ;
+          printf("%d\n", 2*matchCnt) ;
+          delete[] vAlign ;
+        }*/
+
 				if ( IsBetterGeneMatch( allOverlaps[i], geneOverlap[ geneType ], 1.0 ) )
 				{
 					//if ( geneOverlap[ geneType].seqIdx != -1 )

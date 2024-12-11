@@ -979,12 +979,11 @@ public:
 		return maxScore ;
 	}
 
-	static void VisualizeAlignment( char *t, int lent, char *p, int lenp, signed char *align )
+	static void VisualizeAlignment( char *t, int lent, char *p, int lenp, signed char *align, int width = 100 )
 	{
 		int i, k, j;
 		int taga ;
 		taga = 0 ;
-		int width = 100 ;
 		k = j = 0 ;
 		/*for ( i = 0 ; align[i] != -1 ; ++i )
 		  printf( "%d", align[i] ) ;
