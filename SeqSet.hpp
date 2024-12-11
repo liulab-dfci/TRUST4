@@ -430,7 +430,7 @@ private:
 				{
 					++j ;
 				}
-				else if (i < ret && LIS[i + 1].b <= hits[j].b)
+				else if (i + 1 < ret && LIS[i + 1].b <= hits[j].b)
 				{
 					++i ;
 				} 
@@ -1236,8 +1236,8 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
-    if (seqs[0].isRef) // This seqset is for reference
-      skipLimit = 0 ;
+    if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
+			skipLimit = 0 ; ///= 2 ;
 
 		int skipCnt = 0 ;
 		int downSample = 1 ;
@@ -6247,7 +6247,8 @@ public:
 				// This would avoid the mismatches near the end that forced the terminating of 
 				// alignment extension above.
 				if ( geneType == 2 && seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 > 0 &&
-					seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 < 5 )
+					(seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 < 5 
+					 || len - allOverlaps[i].readEnd - 1 < 5))
 				{
 					int extendLen = seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1;
 					for ( j = 0 ; j < extendLen ; ++j )
@@ -6274,6 +6275,7 @@ public:
 					scoreThresholdAdjust = 0.25 ;
 				AlignAlgo::GlobalAlignment_OneEnd( rvs, allOverlaps[i].seqStart, rvr, allOverlaps[i].readStart, 
 						0, scoreThresholdAdjust, align ) ;
+				//printf("left\n") ;
 				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
@@ -6301,8 +6303,8 @@ public:
 				}
 				delete[] rvs ;
 				// Force extension if the difference is very small.
-				if ( (geneType == 0 || geneType == 3 ) && allOverlaps[i].seqStart > 0 &&
-					allOverlaps[i].seqStart < 5 )
+				if ( (geneType == 0 || geneType == 3 ) && 
+					(allOverlaps[i].seqStart < 5 || allOverlaps[i].readStart < 5))
 				{
 					int extendLen = allOverlaps[i].seqStart;
 					for ( j = 0 ; j < extendLen ; ++j )
