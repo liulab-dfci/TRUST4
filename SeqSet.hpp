@@ -459,6 +459,52 @@ private:
 		return ret ;
 	}
 
+	// Some hits seem to be caused by random hits, so need to be removed
+	void RemoveLowQualityHitsFromChain(SimpleVector<struct _pair> &chain)
+	{
+		int i, j, k ;
+		int size = chain.Size() ;
+		if (size == 0)
+			return ;
+
+		SimpleVector<struct _triple> intervals ; // hits with the same offset (colinear hits)
+		intervals.Reserve(size) ;
+		for (i = 0 ; i < size ;)
+		{
+			for (j = i + 1 ; j < size ; ++j)
+			{
+				if (chain[j].a - chain[j].b != chain[i].a - chain[i].b)
+					break ;
+			}
+			struct _triple nt ;
+			nt.a = i ;
+			nt.b = j - 1 ;
+			nt.c = chain[i].a - chain[i].b ;
+			intervals.PushBack(nt) ;
+			i = j ;
+		}
+
+		int isize = intervals.Size() ;
+		k = intervals[0].b ;
+		int stretch = 3 ;
+		for (i = 1 ; i < isize - 1 ; ++i)
+		{
+			if (intervals[i].c != intervals[i - 1].c && intervals[i - 1].c == intervals[i + 1].c
+					&& intervals[i].b - intervals[i].a + 1 < stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch)
+				continue ;
+
+			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
+				chain[k] = chain[j] ;
+		}
+	
+		if (isize > 1)
+			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
+				chain[k] = chain[j] ;
+		chain.Resize(k) ;
+	}
+
 	void GetAlignStats( signed char *align, bool update, int &matchCnt, int &mismatchCnt, int &indelCnt)
 	{
 		int k ;
@@ -652,7 +698,7 @@ private:
 	}
 	
 	// Use the hits to extract overlaps from SeqSet
-	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, int filter, std::vector<struct _overlap> &overlaps )
+	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, int filter, bool conservativeChain, std::vector<struct _overlap> &overlaps )
 	{
 		int i, j, k ;
 		int hitSize = hits.Size() ;
@@ -861,6 +907,9 @@ private:
 					continue ;
 				}
 
+				if (conservativeChain)
+					RemoveLowQualityHitsFromChain(hitCoordLIS) ;
+
 				// Rebuild the hits.
 				int lisStart = 0 ;
 				int lisEnd = lisSize - 1 ;
@@ -975,7 +1024,7 @@ private:
 			}
 		}
 
-		GetOverlapsFromHits( VJhits, 17, 0, overlaps ) ;
+		GetOverlapsFromHits( VJhits, 17, 0, false, overlaps ) ;
 		
 		// Extract the best VJ pair 
 		int overlapCnt = overlaps.size() ;
@@ -1236,8 +1285,8 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
-    if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
-			skipLimit = 0 ; ///= 2 ;
+    //if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
+		//	skipLimit = 0 ; ///= 2 ;
 
 		int skipCnt = 0 ;
 		int downSample = 1 ;
@@ -1408,7 +1457,7 @@ private:
 		{
 			GetHitsFromRead( read, rcRead, strand, barcode, true, hits, puse ) ;
 			SortHits( hits, true ) ;
-			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, 0, overlaps ) ;
+			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, 0, false, overlaps ) ;
 
 			if ( overlapCnt == 0 )
 			{
@@ -1439,7 +1488,7 @@ private:
 				filterHits = 1 ;
 			}
 
-			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
+			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, readType == 0 ? false : true, overlaps ) ;
 		}
 		delete[] rcRead ;
 		//if ( seqs.size() != 620 )
@@ -3051,7 +3100,7 @@ public:
 						continue ;
 
 					std::vector<struct _overlap> tmpOverlaps ;
-					GetOverlapsFromHits(buckets[k][i], hitLenRequired, 1, tmpOverlaps) ;
+					GetOverlapsFromHits(buckets[k][i], hitLenRequired, 1, false, tmpOverlaps) ;
 
 					int tmpSize = tmpOverlaps.size() ;
 					bool release = true ;
@@ -3109,8 +3158,8 @@ public:
 		{
 			// Potential ambugious strand where both hits seem to be quite good
 			std::vector<struct _overlap> tmpOverlaps[2] ;
-			GetOverlapsFromHits( buckets[0][maxSeqIdx[0]], hitLenRequired, 1, tmpOverlaps[0] ) ;
-			GetOverlapsFromHits( buckets[1][maxSeqIdx[1]], hitLenRequired, 1, tmpOverlaps[1] ) ;
+			GetOverlapsFromHits( buckets[0][maxSeqIdx[0]], hitLenRequired, 1, false, tmpOverlaps[0] ) ;
+			GetOverlapsFromHits( buckets[1][maxSeqIdx[1]], hitLenRequired, 1, false, tmpOverlaps[1] ) ;
 
 			if (tmpOverlaps[0].size() > 0 && tmpOverlaps[1].size() > 0)
 			{
@@ -3145,7 +3194,7 @@ public:
 		else
 		{
 			maxTag = (max[1] >= max[0] ? 1 : 0);
-			GetOverlapsFromHits( buckets[maxTag][maxSeqIdx[maxTag]], hitLenRequired, 1, overlaps ) ;
+			GetOverlapsFromHits( buckets[maxTag][maxSeqIdx[maxTag]], hitLenRequired, 1, false, overlaps ) ;
 		}
 
 		delete[] buckets[0] ;
