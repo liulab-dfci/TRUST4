@@ -5096,6 +5096,21 @@ public:
 				return true ;
 			}
 		}
+    else if (geneType == 0 && threshold == 1)
+    {
+      // b tends to have unequal indel
+      if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
+          && ABS(a.readStart - b.readStart) <= 5
+          //&& ABS(a.seqStart - b.seqStart) <= 5
+          && b.seqEnd - b.seqStart != b.readEnd - b.readStart
+          && a.seqEnd - a.seqStart == a.readEnd - a.readStart
+          && b.similarity < 0.9)
+      {
+        if (a.similarity > b.similarity + 0.03
+            && a.matchCnt > b.matchCnt - 20)
+          return true ;
+      }
+    }
 		
 		//if ( threshold == 1 )
 		//	printf( "%s %d %lf %s %d %lf\n", seqs[ a.seqIdx ].name, a.matchCnt, a.similarity,
