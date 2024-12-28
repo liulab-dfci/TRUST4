@@ -81,6 +81,7 @@ struct _overlap
 	int strand ;
 	
 	int matchCnt ; // The number of matched bases, count TWICE.
+  int indelCnt ; // the number of bases facing an indel on the other end
 	double similarity ;
 
 	SimpleVector<struct _pair> *hitCoords ;
@@ -93,6 +94,7 @@ struct _overlap
 		readStart = readEnd = seqStart = seqEnd = -1 ;
 		strand = 1 ;
 		matchCnt = 0 ;
+    indelCnt = 0 ;
 		similarity = 0 ;
 		hitCoords = NULL ;
 		info = NULL ;
@@ -1944,6 +1946,7 @@ private:
 			
 			//printf( "%d %s: %d %d %d %lf\n", overlaps[i].seqIdx, seqs[overlaps[i].seqIdx].name, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
 			overlaps[i].matchCnt = matchCnt ;
+      overlaps[i].indelCnt = indelCnt ;
 			if ( similarity == 1 )
 				overlaps[i].similarity = (double)matchCnt / ( overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 
 								overlaps[i].readEnd - overlaps[i].readStart + 1 ) ;
@@ -1954,7 +1957,7 @@ private:
 				overlaps[i].similarity = 0 ;
 			
 		  //printf( "%d %s: %d %d %d %lf. %d %d\n", overlaps[i].seqIdx, seqs[overlaps[i].seqIdx].name, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, overlaps[i].similarity, hitCnt, overlaps[i].matchCnt ) ;
-			overlaps[i].matchCnt = matchCnt ;
+			//overlaps[i].matchCnt = matchCnt ;
 			if ( !seqs[ overlaps[i].seqIdx ].isRef && overlaps[i].similarity > 0 )
 			{
 				if ( bestNovelOverlap == -1 || overlaps[i] < overlaps[ bestNovelOverlap ] ) // the less than means has higher priority
@@ -2003,6 +2006,7 @@ private:
 					overlaps[i].seqEnd = hitCoords[ maxE ].b + kmerLength - 1 ;
 					overlaps[i].similarity = 1.0 ;
 					overlaps[i].matchCnt = 2 * maxLen ;
+          overlaps[i].indelCnt = 0 ;
 				}
 			}
 
@@ -5102,11 +5106,13 @@ public:
       if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
           && ABS(a.readStart - b.readStart) <= 5
           //&& ABS(a.seqStart - b.seqStart) <= 5
-          && b.seqEnd - b.seqStart != b.readEnd - b.readStart
-          && a.seqEnd - a.seqStart == a.readEnd - a.readStart
+          //&& b.seqEnd - b.seqStart != b.readEnd - b.readStart
+          //&& a.seqEnd - a.seqStart == a.readEnd - a.readStart
+          && a.indelCnt < b.indelCnt
           && b.similarity < 0.9)
       {
-        if (a.similarity > b.similarity + 0.03
+        if ((a.similarity > b.similarity + 0.03
+              || (a.similarity > b.similarity && a.readStart < b.readStart))
             && a.matchCnt > b.matchCnt - 20)
           return true ;
       }
@@ -5929,7 +5935,7 @@ public:
 			
 			//std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
 			//for ( i = 0 ; i < contigOverlapCnt ; ++i )
-			//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
+			//	printf( "%d: %d %s %lf %d (%d): %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].indelCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
 		}
 		delete[] contigBuffer ;
 
@@ -6302,6 +6308,7 @@ public:
 							++allOverlaps[i].readEnd ;
 						else if ( align[j] == EDIT_DELETE )
 							++allOverlaps[i].seqEnd ;
+            ++allOverlaps[i].indelCnt ;
 					}
 					else
 						break ;
@@ -6361,6 +6368,7 @@ public:
 							--allOverlaps[i].readStart ;
 						else if ( align[j] == EDIT_DELETE )
 							--allOverlaps[i].seqStart ;
+            ++allOverlaps[i].indelCnt ;
 					}
 					else
 						break ;
@@ -6451,7 +6459,7 @@ public:
 			
 			for ( i = 0 ; i < size ; ++i )
 			{
-				//printf( "%d %s %lf %d: %d %d\n", i, seqs[ allOverlaps[i].seqIdx].name, allOverlaps[i].similarity, allOverlaps[i].matchCnt, allOverlaps[i].readStart, allOverlaps[i].readEnd ) ;
+				//printf( "%d %s %lf %d (%d): %d %d. %d %d\n", i, seqs[ allOverlaps[i].seqIdx].name, allOverlaps[i].similarity, allOverlaps[i].matchCnt, allOverlaps[i].indelCnt, allOverlaps[i].readStart, allOverlaps[i].readEnd, allOverlaps[i].seqStart, allOverlaps[i].seqEnd) ;
 				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
         /*if (geneType == 0)
         {
