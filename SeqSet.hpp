@@ -81,6 +81,7 @@ struct _overlap
 	int strand ;
 	
 	int matchCnt ; // The number of matched bases, count TWICE.
+  int indelCnt ; // the number of bases facing an indel on the other end
 	double similarity ;
 
 	SimpleVector<struct _pair> *hitCoords ;
@@ -93,6 +94,7 @@ struct _overlap
 		readStart = readEnd = seqStart = seqEnd = -1 ;
 		strand = 1 ;
 		matchCnt = 0 ;
+    indelCnt = 0 ;
 		similarity = 0 ;
 		hitCoords = NULL ;
 		info = NULL ;
@@ -335,13 +337,14 @@ private:
 	}
 
 	// The O(nlogn) method for solving LIS problem, suppose there are n hits.
+  // Assuming hits.b is sorted
 	// Return the LIS, the LIS's length is returned by the function
 	int LongestIncreasingSubsequence( SimpleVector<struct _pair> &hits, SimpleVector<struct _pair> &LIS ) 
 	{
 		// Only use the first hit of each qhit
 		// Bias towards left
 
-		int i, k ;
+		int i, j, k ;
 		int ret = 0 ;
 		int size = hits.Size() ;
 
@@ -351,13 +354,16 @@ private:
 
 		int rcnt = 1 ;
 		record[0] = 0 ;
+    double avgDiff = 0 ;
 		for ( i = 1 ; i < size ; ++i )
 		{
 			//if ( hits[i].b == hits[i - 1].b )
 			//	continue ;
 			record[rcnt] = i ;
 			++rcnt ;
+      avgDiff += (hits[i].a - hits[i].b) ; 
 		}
+    avgDiff /= size ;
 		top[0] = 0 ;
 		link[0] = -1 ;
 		ret = 1 ;
@@ -382,14 +388,13 @@ private:
 					++ret ;
 					link[ record[i] ] = top[tag] ;
 				}
-				else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
+        else if ( hits[ record[i] ].a < hits[ top[tag + 1] ].a )
 				{
 					top[ tag + 1 ] = record[i] ;
 					link[ record[i] ] = top[tag] ;
 				}
 			}
 		}
-
 
 		k = top[ret - 1] ;
 		for ( i = ret - 1 ; i >= 0 ; --i )
@@ -400,7 +405,7 @@ private:
 		LIS.Reverse() ;
 		//for ( i = 0 ; i < ret ; ++i )
 		//	LIS.PushBack( hits[ top[i] ] ) ;
-		
+    		
 		// Remove elements with same b.
 		if ( ret > 0 )
 		{
@@ -414,12 +419,92 @@ private:
 			}
 			ret = k ;
 		}
+		
+		// Go over the list again to see whether we can replace some hits with better hits (e.g. less divergent)that won't change the overall number of elements in LIS
+		if (ret > 0)
+		{
+			i = 0 ; j = 0 ;
+			while (i < ret && j < size)
+			{
+				//printf("try replacement: %d %d %d %d %d %d\n", i, LIS[i].a, LIS[i].b,
+				//		j, hits[j].a, hits[j].b) ;
+				if (hits[j].b < LIS[i].b)
+				{
+					++j ;
+				}
+				else if (i + 1 < ret && LIS[i + 1].b <= hits[j].b)
+				{
+					++i ;
+				} 
+				else if (LIS[i] == hits[j])
+				{
+					++j ;
+				}
+				else // Now the b should satisify LIS_i.b <= hits.b < LIS_{i+1}.b
+					//if (hits[ record[i] ].a == hits[ top[tag + 1] ].a)
+        {
+          if (LIS[i].a <= hits[j].a && (i == ret - 1 || hits[j].a < LIS[i + 1].a) 
+							&& ABS(hits[j].a - hits[j].b - avgDiff) < 
+              ABS(LIS[i].a - LIS[i].b - avgDiff))
+          {
+						LIS[i] = hits[j] ;
+          }
+					++j ;
+        }
+			}
+		}
 
 		delete []top ;
 		delete []record ;
 		delete []link ;
 
 		return ret ;
+	}
+
+	// Some hits seem to be caused by random hits, so need to be removed
+	void RemoveLowQualityHitsFromChain(SimpleVector<struct _pair> &chain)
+	{
+		int i, j, k ;
+		int size = chain.Size() ;
+		if (size == 0)
+			return ;
+
+		SimpleVector<struct _triple> intervals ; // hits with the same offset (colinear hits)
+		intervals.Reserve(size) ;
+		for (i = 0 ; i < size ;)
+		{
+			for (j = i + 1 ; j < size ; ++j)
+			{
+				if (chain[j].a - chain[j].b != chain[i].a - chain[i].b)
+					break ;
+			}
+			struct _triple nt ;
+			nt.a = i ;
+			nt.b = j - 1 ;
+			nt.c = chain[i].a - chain[i].b ;
+			intervals.PushBack(nt) ;
+			i = j ;
+		}
+
+		int isize = intervals.Size() ;
+		k = intervals[0].b ;
+		int stretch = 3 ;
+		for (i = 1 ; i < isize - 1 ; ++i)
+		{
+			if (intervals[i].c != intervals[i - 1].c && intervals[i - 1].c == intervals[i + 1].c
+					&& intervals[i].b - intervals[i].a + 1 < stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch)
+				continue ;
+
+			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
+				chain[k] = chain[j] ;
+		}
+	
+		if (isize > 1)
+			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
+				chain[k] = chain[j] ;
+		chain.Resize(k) ;
 	}
 
 	void GetAlignStats( signed char *align, bool update, int &matchCnt, int &mismatchCnt, int &indelCnt)
@@ -615,7 +700,7 @@ private:
 	}
 	
 	// Use the hits to extract overlaps from SeqSet
-	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, int filter, std::vector<struct _overlap> &overlaps )
+	int GetOverlapsFromHits( SimpleVector<struct _hit> &hits, int hitLenRequired, int filter, bool conservativeChain, std::vector<struct _overlap> &overlaps )
 	{
 		int i, j, k ;
 		int hitSize = hits.Size() ;
@@ -824,6 +909,9 @@ private:
 					continue ;
 				}
 
+				if (conservativeChain)
+					RemoveLowQualityHitsFromChain(hitCoordLIS) ;
+
 				// Rebuild the hits.
 				int lisStart = 0 ;
 				int lisEnd = lisSize - 1 ;
@@ -938,7 +1026,7 @@ private:
 			}
 		}
 
-		GetOverlapsFromHits( VJhits, 17, 0, overlaps ) ;
+		GetOverlapsFromHits( VJhits, 17, 0, false, overlaps ) ;
 		
 		// Extract the best VJ pair 
 		int overlapCnt = overlaps.size() ;
@@ -1199,6 +1287,8 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
+    //if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
+		//	skipLimit = 0 ; ///= 2 ;
 
 		int skipCnt = 0 ;
 		int downSample = 1 ;
@@ -1369,7 +1459,7 @@ private:
 		{
 			GetHitsFromRead( read, rcRead, strand, barcode, true, hits, puse ) ;
 			SortHits( hits, true ) ;
-			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, 0, overlaps ) ;
+			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, 0, false, overlaps ) ;
 
 			if ( overlapCnt == 0 )
 			{
@@ -1400,7 +1490,7 @@ private:
 				filterHits = 1 ;
 			}
 
-			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, overlaps ) ;
+			overlapCnt = GetOverlapsFromHits( hits, hitLenRequired, filterHits, readType == 0 ? false : true, overlaps ) ;
 		}
 		delete[] rcRead ;
 		//if ( seqs.size() != 620 )
@@ -1677,8 +1767,9 @@ private:
 			matchCnt += 2 * kmerLength ;
 			signed char *align = new signed char[ overlaps[i].readEnd - overlaps[i].readStart + 1 + 
 				overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 1] ;
-			for ( j = 1 ; j < hitCnt ; ++j )
+      for ( j = 1 ; j < hitCnt ; ++j )
 			{
+        //printf( "%d %d=>%d %d. %d\n", hitCoords[j - 1].a, hitCoords[j - 1].b, hitCoords[j].a, hitCoords[j].b, matchCnt) ;
 				if ( hitCoords[j - 1].b - hitCoords[j - 1].a == hitCoords[j].b - hitCoords[j].a )
 				{
 					if ( hitCoords[j - 1].a + kmerLength - 1 >= hitCoords[j].a )
@@ -1706,6 +1797,12 @@ private:
 								r + hitCoords[j - 1].a + kmerLength, 
 								hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
 								align ) ;
+              /*AlignAlgo::VisualizeAlignment( 
+										seqs[ overlaps[i].seqIdx ].consensus + hitCoords[j - 1].b + kmerLength,
+										hitCoords[j].b - ( hitCoords[j - 1].b + kmerLength ) ,
+										r + hitCoords[j - 1].a + kmerLength, 
+										hitCoords[j].a - ( hitCoords[j - 1].a + kmerLength), 
+										align ) ;*/
 						}
 						else
 						{
@@ -1847,8 +1944,9 @@ private:
 			} // for j
 			delete[] align ;
 			
-			//printf( "%d: %d %d %d %lf\n", overlaps[i].seqIdx, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
+			//printf( "%d %s: %d %d %d %lf\n", overlaps[i].seqIdx, seqs[overlaps[i].seqIdx].name, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, similarity ) ;
 			overlaps[i].matchCnt = matchCnt ;
+      overlaps[i].indelCnt = indelCnt ;
 			if ( similarity == 1 )
 				overlaps[i].similarity = (double)matchCnt / ( overlaps[i].seqEnd - overlaps[i].seqStart + 1 + 
 								overlaps[i].readEnd - overlaps[i].readStart + 1 ) ;
@@ -1859,7 +1957,7 @@ private:
 				overlaps[i].similarity = 0 ;
 			
 		  //printf( "%d %s: %d %d %d %lf. %d %d\n", overlaps[i].seqIdx, seqs[overlaps[i].seqIdx].name, matchCnt, overlaps[i].seqEnd - overlaps[i].seqStart + 1, overlaps[i].readEnd - overlaps[i].readStart + 1, overlaps[i].similarity, hitCnt, overlaps[i].matchCnt ) ;
-			overlaps[i].matchCnt = matchCnt ;
+			//overlaps[i].matchCnt = matchCnt ;
 			if ( !seqs[ overlaps[i].seqIdx ].isRef && overlaps[i].similarity > 0 )
 			{
 				if ( bestNovelOverlap == -1 || overlaps[i] < overlaps[ bestNovelOverlap ] ) // the less than means has higher priority
@@ -1908,6 +2006,7 @@ private:
 					overlaps[i].seqEnd = hitCoords[ maxE ].b + kmerLength - 1 ;
 					overlaps[i].similarity = 1.0 ;
 					overlaps[i].matchCnt = 2 * maxLen ;
+          overlaps[i].indelCnt = 0 ;
 				}
 			}
 
@@ -3005,7 +3104,7 @@ public:
 						continue ;
 
 					std::vector<struct _overlap> tmpOverlaps ;
-					GetOverlapsFromHits(buckets[k][i], hitLenRequired, 1, tmpOverlaps) ;
+					GetOverlapsFromHits(buckets[k][i], hitLenRequired, 1, false, tmpOverlaps) ;
 
 					int tmpSize = tmpOverlaps.size() ;
 					bool release = true ;
@@ -3063,8 +3162,8 @@ public:
 		{
 			// Potential ambugious strand where both hits seem to be quite good
 			std::vector<struct _overlap> tmpOverlaps[2] ;
-			GetOverlapsFromHits( buckets[0][maxSeqIdx[0]], hitLenRequired, 1, tmpOverlaps[0] ) ;
-			GetOverlapsFromHits( buckets[1][maxSeqIdx[1]], hitLenRequired, 1, tmpOverlaps[1] ) ;
+			GetOverlapsFromHits( buckets[0][maxSeqIdx[0]], hitLenRequired, 1, false, tmpOverlaps[0] ) ;
+			GetOverlapsFromHits( buckets[1][maxSeqIdx[1]], hitLenRequired, 1, false, tmpOverlaps[1] ) ;
 
 			if (tmpOverlaps[0].size() > 0 && tmpOverlaps[1].size() > 0)
 			{
@@ -3099,7 +3198,7 @@ public:
 		else
 		{
 			maxTag = (max[1] >= max[0] ? 1 : 0);
-			GetOverlapsFromHits( buckets[maxTag][maxSeqIdx[maxTag]], hitLenRequired, 1, overlaps ) ;
+			GetOverlapsFromHits( buckets[maxTag][maxSeqIdx[maxTag]], hitLenRequired, 1, false, overlaps ) ;
 		}
 
 		delete[] buckets[0] ;
@@ -5001,6 +5100,23 @@ public:
 				return true ;
 			}
 		}
+    else if (geneType == 0 && threshold == 1)
+    {
+      // b tends to have unequal indel
+      if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
+          && ABS(a.readStart - b.readStart) <= 5
+          //&& ABS(a.seqStart - b.seqStart) <= 5
+          //&& b.seqEnd - b.seqStart != b.readEnd - b.readStart
+          //&& a.seqEnd - a.seqStart == a.readEnd - a.readStart
+          && a.indelCnt < b.indelCnt
+          && b.similarity < 0.9)
+      {
+        if ((a.similarity > b.similarity + 0.03
+              || (a.similarity > b.similarity && a.readStart < b.readStart))
+            && a.matchCnt > b.matchCnt - 20)
+          return true ;
+      }
+    }
 		
 		//if ( threshold == 1 )
 		//	printf( "%s %d %lf %s %d %lf\n", seqs[ a.seqIdx ].name, a.matchCnt, a.similarity,
@@ -5819,10 +5935,9 @@ public:
 			
 			//std::vector<struct _overlap> &overlaps = contigOverlaps[k] ;
 			//for ( i = 0 ; i < contigOverlapCnt ; ++i )
-			//	printf( "%d: %d %s %lf %d: %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
+			//	printf( "%d: %d %s %lf %d (%d): %d %d. %d %d\n", k, i, seqs[ overlaps[i].seqIdx].name, overlaps[i].similarity, overlaps[i].matchCnt, overlaps[i].indelCnt, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ;
 		}
 		delete[] contigBuffer ;
-
 
 		// Extend overlaps that can cross contigs
 		int *seqUsed = new int[ seqs.size() ] ;
@@ -6193,6 +6308,7 @@ public:
 							++allOverlaps[i].readEnd ;
 						else if ( align[j] == EDIT_DELETE )
 							++allOverlaps[i].seqEnd ;
+            ++allOverlaps[i].indelCnt ;
 					}
 					else
 						break ;
@@ -6202,7 +6318,8 @@ public:
 				// This would avoid the mismatches near the end that forced the terminating of 
 				// alignment extension above.
 				if ( geneType == 2 && seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 > 0 &&
-					seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 < 5 )
+					(seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1 < 5 
+					 || len - allOverlaps[i].readEnd - 1 < 5))
 				{
 					int extendLen = seqs[allOverlaps[i].seqIdx].consensusLen - allOverlaps[i].seqEnd - 1;
 					for ( j = 0 ; j < extendLen ; ++j )
@@ -6229,6 +6346,7 @@ public:
 					scoreThresholdAdjust = 0.25 ;
 				AlignAlgo::GlobalAlignment_OneEnd( rvs, allOverlaps[i].seqStart, rvr, allOverlaps[i].readStart, 
 						0, scoreThresholdAdjust, align ) ;
+				//printf("left\n") ;
 				//AlignAlgo::VisualizeAlignment( rvs, geneOverlap[i].readStart, rvr, rvr[geneOverlap[i].readStart], align ) ;
 				for ( j = 0 ; align[j] != -1 ; ++j )
 				{
@@ -6250,14 +6368,15 @@ public:
 							--allOverlaps[i].readStart ;
 						else if ( align[j] == EDIT_DELETE )
 							--allOverlaps[i].seqStart ;
+            ++allOverlaps[i].indelCnt ;
 					}
 					else
 						break ;
 				}
 				delete[] rvs ;
 				// Force extension if the difference is very small.
-				if ( (geneType == 0 || geneType == 3 ) && allOverlaps[i].seqStart > 0 &&
-					allOverlaps[i].seqStart < 5 )
+				if ( (geneType == 0 || geneType == 3 ) && 
+					(allOverlaps[i].seqStart < 5 || allOverlaps[i].readStart < 5))
 				{
 					int extendLen = allOverlaps[i].seqStart;
 					for ( j = 0 ; j < extendLen ; ++j )
@@ -6326,7 +6445,6 @@ public:
 							allOverlaps[i].matchCnt += 2 * matchLen ;
 							allOverlaps[i].similarity = (double)(allOverlaps[i].matchCnt ) / (tmp + 2 * matchLen) ;
 						}
-		
 					}
 				}
 			}
@@ -6341,8 +6459,24 @@ public:
 			
 			for ( i = 0 ; i < size ; ++i )
 			{
-				//printf( "%d %s %lf %d: %d %d\n", i, seqs[ allOverlaps[i].seqIdx].name, allOverlaps[i].similarity, allOverlaps[i].matchCnt, allOverlaps[i].readStart, allOverlaps[i].readEnd ) ;
+				//printf( "%d %s %lf %d (%d): %d %d. %d %d\n", i, seqs[ allOverlaps[i].seqIdx].name, allOverlaps[i].similarity, allOverlaps[i].matchCnt, allOverlaps[i].indelCnt, allOverlaps[i].readStart, allOverlaps[i].readEnd, allOverlaps[i].seqStart, allOverlaps[i].seqEnd) ;
 				int geneType = GetGeneType( seqs[ allOverlaps[i].seqIdx ].name ) ;
+        /*if (geneType == 0)
+        {
+          printf("%s %d\n", seqs[ allOverlaps[i].seqIdx ].name,
+              allOverlaps[i].matchCnt) ;
+          struct _overlap vgene = allOverlaps[i] ; // Overlap with v-gene
+          signed char *vAlign = new signed char[ len + seqs[ vgene.seqIdx ].consensusLen + 2 ] ;
+          AlignAlgo::GlobalAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+              read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign ) ;
+          AlignAlgo::VisualizeAlignment( seqs[ vgene.seqIdx ].consensus + vgene.seqStart, vgene.seqEnd - vgene.seqStart + 1,
+          	read + vgene.readStart, vgene.readEnd - vgene.readStart + 1, vAlign, 60 ) ;
+          int matchCnt, tmp ;
+          GetAlignStats(vAlign, false, matchCnt, tmp, tmp) ;
+          printf("%d\n", 2*matchCnt) ;
+          delete[] vAlign ;
+        }*/
+
 				if ( IsBetterGeneMatch( allOverlaps[i], geneOverlap[ geneType ], 1.0 ) )
 				{
 					//if ( geneOverlap[ geneType].seqIdx != -1 )

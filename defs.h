@@ -18,6 +18,12 @@ typedef int index_t ;
 struct _pair
 {
 	int a, b ;
+	bool operator==(const struct _pair &other)
+	{
+		if (a == other.a && b == other.b)
+			return true ;
+		return false ;
+	}
 } ;
 
 struct _pair64
