@@ -5100,20 +5100,31 @@ public:
 				return true ;
 			}
 		}
-    else if (geneType == 0 && threshold == 1)
+    else if (geneType == 0)
     {
       // b tends to have unequal indel
-      if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
-          && ABS(a.readStart - b.readStart) <= 5
-          //&& ABS(a.seqStart - b.seqStart) <= 5
-          //&& b.seqEnd - b.seqStart != b.readEnd - b.readStart
-          //&& a.seqEnd - a.seqStart == a.readEnd - a.readStart
-          && a.indelCnt < b.indelCnt
-          && b.similarity < 0.9)
+      if (threshold == 1)
       {
-        if ((a.similarity > b.similarity + 0.03
-              || (a.similarity > b.similarity && a.readStart < b.readStart))
-            && a.matchCnt > b.matchCnt - 20)
+        if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
+            && seqs[a.seqIdx].info[2].a != -1 && seqs[b.seqIdx].info[2].a != -1
+            && ABS(a.readStart - b.readStart) <= 5
+            //&& ABS(a.seqStart - b.seqStart) <= 5
+            //&& b.seqEnd - b.seqStart != b.readEnd - b.readStart
+            //&& a.seqEnd - a.seqStart == a.readEnd - a.readStart
+            && a.indelCnt < b.indelCnt
+            && (b.similarity < 0.9 || a.indelCnt == 0) )
+        {
+          if ((a.similarity > b.similarity + 0.03
+                || (a.similarity > b.similarity && a.readStart < b.readStart))
+              && (a.matchCnt > b.matchCnt - 20
+                || a.seqStart <= b.seqStart))
+            return true ;
+        }
+      }
+      else 
+      {
+        if (a.indelCnt == 0 && b.indelCnt > 0
+            && a.similarity > b.similarity)
           return true ;
       }
     }
