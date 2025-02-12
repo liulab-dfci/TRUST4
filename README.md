@@ -197,23 +197,6 @@ The run will generate the same files as from BAM input
 
 The evaluation instructions and scripts in TRUST4's manuscript is available at: https://github.com/liulab-dfci/TRUST4_manuscript_evaluation .
 
-### Terms of use
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 3 of the License, or (at your
-option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received (LICENSE.txt) a copy of the GNU General
-Public License along with this program; if not, you can obtain one from
-http://www.gnu.org/licenses/gpl.txt or by writing to the Free Software
-Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- 
 ### Support
 
 Create a [GitHub issue](https://github.com/liulab-dfci/TRUST4/issues). We will typically respond within a day or two, but it could take longer, e.g. a month, for fixing bugs and adding features.
