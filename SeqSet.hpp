@@ -2615,6 +2615,7 @@ public:
 		fa.AddReadFile( filename, false ) ;
 		
 		KmerCode kmerCode( kmerLength ) ;
+    std::map<std::string, int> existingSeq ; // for deduplication
 
 		// Variable to determine whether there is special gap
 		int chainVMotifShiftCount[7][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
@@ -2660,6 +2661,30 @@ public:
 				}
 			sw.consensus[k] = '\0' ;
 			sw.consensusLen = k ;
+
+			// Deduplication
+			std::string strForDedup(sw.consensus) ;
+			if (existingSeq.find(strForDedup) != existingSeq.end())
+			{
+				i = existingSeq[strForDedup] ;
+
+				int li = strlen(seqs[i].name) ;
+				int lcur = strlen(sw.name) ;
+				char *tmps = (char *)malloc(sizeof(char) * (li + lcur + 2)) ;
+				strcpy(tmps, seqs[i].name) ;
+				tmps[li] = '/' ; 
+				strcpy(tmps + li + 1, sw.name) ;
+
+				free(seqs[i].name) ;
+				seqs[i].name = tmps ;
+
+				free(sw.name) ;
+				free(sw.consensus) ;
+				seqs.pop_back() ;
+				continue ;
+			}
+			else
+				existingSeq[strForDedup] = id ;
 
 			// Use IMGT documented coordinate to infer CDR1,2,3 coordinate.
 			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
