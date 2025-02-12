@@ -2672,7 +2672,7 @@ public:
 				int lcur = strlen(sw.name) ;
 				char *tmps = (char *)malloc(sizeof(char) * (li + lcur + 2)) ;
 				strcpy(tmps, seqs[i].name) ;
-				tmps[li] = '/' ; 
+				tmps[li] = '|' ; 
 				strcpy(tmps + li + 1, sw.name) ;
 
 				free(seqs[i].name) ;
