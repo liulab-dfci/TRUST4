@@ -1287,8 +1287,8 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
-    //if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
-		//	skipLimit = 0 ; ///= 2 ;
+    if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
+			skipLimit = 0 ; ///= 2 ;
 
 		int skipCnt = 0 ;
 		int downSample = 1 ;
