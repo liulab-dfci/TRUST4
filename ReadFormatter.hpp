@@ -24,7 +24,8 @@ struct _segInfo
   int end ;
   int strand ; // -1: minus, 1:posiive
   
-	bool operator<( const struct _segInfo &b )	const
+  int field ; // -1: no need to search for field. Otherwise, the field is segments separated by space or tab
+  bool operator<( const struct _segInfo &b )	const
   {
     return start < b.start ; 
   }
@@ -46,6 +47,7 @@ private:
     int j = 0;  // start, end, strand section
     char buffer[20];
     int blen = 0;
+    int start; 
     
     struct _segInfo seg ;
     if (s[2] != ':')
@@ -62,9 +64,32 @@ private:
     } else {
       return false ;
     }
+
+    //Specification like: r1:hd:XX:YY. (hd is for header, XX is the field, YY is the conventional segment specification string)
+    start = 3 ;
+    seg.field = -1 ;
+    if (len >= 6 && s[3] == 'h' && s[4] == 'd' && s[5] == ':')
+    {
+      blen = 0 ;
+      start = 6 ;
+      for (i = start ; i <= len ; ++i)
+      {
+        if (i == len || s[i] == ':')
+        {
+          buffer[blen] = '\0' ;
+          seg.field = atoi(buffer) ;
+          break ;
+        }
+
+        buffer[blen] = s[i] ;
+        ++blen ;
+      }
+      start = i + 1 ;
+    }
     
     seg.strand = 1 ;
-    for (i = 3; i <= len; ++i) {
+    blen = 0 ;
+    for (i = start; i <= len; ++i) {
       if (i == len || s[i] == ':') {
         buffer[blen] = '\0';
         if (j == 0) {
@@ -177,10 +202,23 @@ public:
     {
       if (_segs[category][0].start == 0  
           && _segs[category][0].end == -1
-          && _segs[category][0].strand == 1)
+          && _segs[category][0].strand == 1
+          && _segs[category][0].field == -1)
         return 0 ;
     }
     return 1 ;
+  }
+
+  bool HasField(int category)
+  {
+    if (_segs[category].size() > 0 && _segs[category][0].field >= 0)
+      return true ;
+    return false ;
+  }
+
+  bool IsInComment(int category)
+  {
+    return HasField(category) ;
   }
 
   // needComplement=true: reverse complement. Otherwise, just reverse
@@ -208,18 +246,48 @@ public:
 
     char *buffer = _buffers.Get(bufferId, len + 1) ;
     i = 0 ;
+    
     for (k = 0 ; k < segSize ; ++k)
     {
       int start = seg[k].start ;
       int end = seg[k].end ;
       
-      if (start < 0)
-        start = len + start ;
+      int lenk = len ;
+      if (HasField(category))
+      {
+        // Move seq to the appropriate section and adjust start, end, lenk
+        // Assume seq is the comment
+        int f = 0 ; 
+        int fstart = 0, fend = 0 ;
+        for (j = 0 ; j <= len ; ++j)
+        {
+          if (seq[j] == ' ' || seq[j] == '\t' || seq[j] == '\0')
+          {
+            ++f ;
+            if (f == seg[k].field)
+              fstart = j + 1 ;
+            else if (f == seg[k].field + 1)
+            {
+              fend = j - 1 ;
+              break ;
+            }
+          }
+        }
 
-      if (end >= len)
-        end = len - 1 ;
+        if (start >= 0)
+          start += fstart ;
+        if (end >= 0)
+          end += fstart ;
+        lenk = fend + 1 ;
+      }
+      
+      if (start < 0)
+        start = lenk + start ;
+
+      if (end >= lenk)
+        end = lenk - 1 ;
       else if (end < 0)
-        end = len + end ;
+        end = lenk + end ;
 
       for (j = start ; j <= end ; ++j)
       {
