@@ -418,6 +418,7 @@ private:
 				++k ;
 			}
 			ret = k ;
+			LIS.Resize(k) ;
 		}
 		
 		// Go over the list again to see whether we can replace some hits with better hits (e.g. less divergent)that won't change the overall number of elements in LIS
@@ -447,6 +448,7 @@ private:
 							&& ABS(hits[j].a - hits[j].b - avgDiff) < 
               ABS(LIS[i].a - LIS[i].b - avgDiff))
           {
+            //printf("replaced\n") ;
 						LIS[i] = hits[j] ;
           }
 					++j ;
@@ -458,16 +460,18 @@ private:
 		delete []record ;
 		delete []link ;
 
+    //for (i = 0 ; i < ret ; ++i)
+    //  printf("%d: %d %d\n", i, LIS[i].a, LIS[i].b) ;
 		return ret ;
 	}
 
 	// Some hits seem to be caused by random hits, so need to be removed
-	void RemoveLowQualityHitsFromChain(SimpleVector<struct _pair> &chain)
+	int RemoveLowQualityHitsFromChain(SimpleVector<struct _pair> &chain)
 	{
 		int i, j, k ;
 		int size = chain.Size() ;
 		if (size == 0)
-			return ;
+			return 0 ;
 
 		SimpleVector<struct _triple> intervals ; // hits with the same offset (colinear hits)
 		intervals.Reserve(size) ;
@@ -505,6 +509,7 @@ private:
 			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
 				chain[k] = chain[j] ;
 		chain.Resize(k) ;
+    return k ;
 	}
 
 	void GetAlignStats( signed char *align, bool update, int &matchCnt, int &mismatchCnt, int &indelCnt)
@@ -910,8 +915,10 @@ private:
 				}
 
 				if (conservativeChain)
-					RemoveLowQualityHitsFromChain(hitCoordLIS) ;
-
+					lisSize = RemoveLowQualityHitsFromChain(hitCoordLIS) ;
+        //for (i = 0 ; i < lisSize ; ++i)
+        //  printf("%d: %d %d\n", i, hitCoordLIS[i].a, hitCoordLIS[i].b) ;
+        
 				// Rebuild the hits.
 				int lisStart = 0 ;
 				int lisEnd = lisSize - 1 ;
@@ -1501,7 +1508,7 @@ private:
 			exit( 1 ) ;
 		}*/
 		//if ( !strcmp(read, "ACCCGTTGGGGCATTGAAGGGGGGCTCTCTCGCACAGTAATATACGGCCGT") && readType == 0)
-		//  for ( i = 0 ; i < overlapCnt ; ++i )
+		// for ( i = 0 ; i < overlapCnt ; ++i )
 		//	  fprintf( stderr, "small test %d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
 		
 		// Determine whether we want to add this reads by looking at the quality of overlap
@@ -8897,6 +8904,9 @@ public:
 		AlignAlgo::GlobalAlignment( seqs[ gene.seqIdx ].consensus + gene.seqStart,
 				gene.seqEnd - gene.seqStart + 1,
 				read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
+		//AlignAlgo::VisualizeAlignment( seqs[ gene.seqIdx ].consensus + gene.seqStart,
+		//		gene.seqEnd - gene.seqStart + 1,
+		//		read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
 		return align ;
 	}
 
