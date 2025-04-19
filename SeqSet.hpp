@@ -491,14 +491,14 @@ private:
 		}
 
 		int isize = intervals.Size() ;
-		k = intervals[0].b ;
+		k = intervals[0].b + 1 ;
 		int stretch = 3 ;
 		for (i = 1 ; i < isize - 1 ; ++i)
 		{
 			if (intervals[i].c != intervals[i - 1].c && intervals[i - 1].c == intervals[i + 1].c
 					&& intervals[i].b - intervals[i].a + 1 < stretch
 					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch
-					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch)
+					&& intervals[i + 1].b - intervals[i + 1].a + 1 >= stretch)
 				continue ;
 
 			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
