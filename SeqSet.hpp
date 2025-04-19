@@ -490,9 +490,17 @@ private:
 			i = j ;
 		}
 
+		int stretch = 3 ;
 		int isize = intervals.Size() ;
 		k = intervals[0].b + 1 ;
-		int stretch = 3 ;
+		if (isize > 1)
+		{
+			if (intervals[0].c != intervals[1].c 
+					&& intervals[0].b - intervals[0].a + 1 < stretch
+					&& intervals[1].b - intervals[0].a + 1 >= stretch)
+				k = 0 ;
+		}
+
 		for (i = 1 ; i < isize - 1 ; ++i)
 		{
 			if (intervals[i].c != intervals[i - 1].c && intervals[i - 1].c == intervals[i + 1].c
@@ -506,8 +514,15 @@ private:
 		}
 	
 		if (isize > 1)
-			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
-				chain[k] = chain[j] ;
+		{
+			if (!(intervals[i - 1].c != intervals[i].c
+					&& intervals[i].b - intervals[i].a + 1 < stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch))
+			{
+				for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
+					chain[k] = chain[j] ;
+			}
+		}
 		chain.Resize(k) ;
     return k ;
 	}
