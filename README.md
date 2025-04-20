@@ -133,9 +133,11 @@ TRUST4 supports using wildcard in the -1 -2/-u option, so a typical way to run 1
 
 	run-trust4 -f hg38_bcrtcr.fa --ref human_IMGT+C.fa -u path_to_10X_fastqs/*_R2_*.fastq.gz --barcode path_to_10X_fastqs/*_R1_*.fastq.gz --readFormat bc:0:15 --barcodeWhitelist cellranger_folder/cellranger-cs/VERSION/lib/python/cellranger/barcodes/737K-august-2016.txt [other options]
 
-The exact options depend on your 10X Genomics ikit.
+The exact options depend on your 10X Genomics kit.
 
 Besides, TRUST4 can translate input cell barcodes to another set of barcodes. You can specify the translation file through the option --barcodeTranslate. The translation file is a two-column tsv/csv file with the translated barcode on the first column and the original barcode on the second column. This option also supports combinatorial barcoding, such as SHARE-seq. TRUST4 can translate each barcode segment provided in the second column to the ID in the first column and add "-" to concatenate the IDs in the output.
+
+The bc and um option can parse the barcode and UMI from the fastq header comment field. The format is [bc|um]:hd:field:start:end:strand. "hd" is a keyword so the search will be in the header comment. "field" can be a number (0-based), which is specifies which field in the comment (read id is excluded) contains the barcode/UMI. "field" can also be a string, and it search for the pattern starting with the "field" and extract the barcode/UMI from there. For example, if the header looks like "@r1 CR:Z:NNNN CB:Z:ACGT UR:Z:NNNN", then "bc:hd:1:5:-1" or "bc:hd:CB:5:-1" will extract the barcode "ACGT" from the header. 
 
 In the output, the abundance in the report will use the number of barcodes for the CDR3 instead of read count. TRUST4 will also generate the file trust_barcode_report.tsv. In this file, TRUST4 will pick the most abundance pair of chains as the representative for the barcode(cell). The format is:
 
