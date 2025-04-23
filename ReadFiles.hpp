@@ -15,6 +15,7 @@ KSEQ_INIT( gzFile, gzread ) ;
 struct _Read
 {
 	char *id ;
+	char *comment ;
 	char *seq ;
 	char *qual ;
 } ;
@@ -28,6 +29,7 @@ class ReadFiles
 		int FILE_TYPE[MAX_READ_FILE] ; // 0-FASTA, 1-FASTQ
 		int fpUsed ;
 		int currentFpInd ;
+		bool needComment ; 
 
 		void GetFileName( char *in, char *out ) 
 		{
@@ -51,12 +53,14 @@ class ReadFiles
 
 	public:
 		char *id ;
+		char *comment ;
 		char *seq ;
 		char *qual ;
 
 		ReadFiles(): fpUsed(0), currentFpInd(0)
 		{
-			id = seq = qual = NULL ;
+			needComment = false ;
+			id = comment = seq = qual = NULL ;
 		}
 
 		~ReadFiles()
@@ -64,20 +68,24 @@ class ReadFiles
 			int i ;
 			if ( id != NULL )
 				free( id ) ;
+			if ( comment != NULL )
+				free( comment ) ;
 			if ( seq != NULL )
 				free( seq ) ;
 			if ( qual != NULL )
 				free( qual ) ;
-
 			
 			for ( i = 0 ; i < fpUsed ; ++i )
 			{
 				kseq_destroy( inSeq[i] ) ;
 				gzclose( gzFp[i] ) ;
 			}
-
 		}
 
+		void SetNeedComment(bool in)
+		{
+			needComment = in ;
+		}
 
 		void AddReadFile( const char *file, bool fileHasMate )
 		{
@@ -117,7 +125,6 @@ class ReadFiles
 			++fpUsed ;
 		}
 
-
 		bool HasQuality()
 		{
 			return ( FILE_TYPE[ currentFpInd ] != 0  ) ;
@@ -134,6 +141,8 @@ class ReadFiles
 			
 			if ( id != NULL )
 				free( id ) ;
+			if ( comment != NULL )
+				free( comment ) ;
 			if ( seq != NULL )
 				free( seq ) ;
 			if ( qual != NULL )
@@ -160,6 +169,8 @@ class ReadFiles
 			}*/
 			if ( id != NULL )	
 				free( id ) ;
+			if ( comment != NULL )
+				free( comment ) ;
 			if ( seq != NULL )
 				free( seq ) ;
 			if ( qual != NULL )
@@ -172,8 +183,11 @@ class ReadFiles
 			{
 				id[len - 2] = '\0' ;
 			}
-			
 			seq = strdup( inSeq[ currentFpInd ]->seq.s ) ;
+			if ( needComment && inSeq[ currentFpInd]->comment.l )
+				comment = strdup(inSeq[ currentFpInd]->comment.s) ;
+			else
+				comment = NULL ;
 			if ( inSeq[ currentFpInd ]->qual.l )
 				qual = strdup( inSeq[ currentFpInd]->qual.s ) ;
 			else
@@ -182,7 +196,7 @@ class ReadFiles
 			return 1 ;
 		}
 
-		int NextWithBuffer( char **id, char **seq, char **qual, bool removeReturn = true, bool stopWhenFileEnds = false ) 
+		int NextWithBuffer( char **id, char **seq, char **qual, char **comment, bool removeReturn = true, bool stopWhenFileEnds = false ) 
 		{
 			//int len ;
 			//char buffer[2048] ;
@@ -197,6 +211,8 @@ class ReadFiles
 			
 			if ( *id != NULL )	
 				free( *id ) ;
+			if ( *comment != NULL )
+				free( *comment ) ;
 			if ( *seq != NULL )
 				free( *seq ) ;
 			if ( *qual != NULL )
@@ -212,6 +228,11 @@ class ReadFiles
 						break ;
 				(*seq)[i + 1] = '\0' ;
 			}*/
+			if ( needComment && inSeq[ currentFpInd]->comment.l )
+				*comment = strdup(inSeq[ currentFpInd]->comment.s) ;
+			else
+				*comment = NULL ;
+			
 			if ( inSeq[ currentFpInd ]->qual.l )
 				*qual = strdup( inSeq[ currentFpInd]->qual.s ) ;
 			else
@@ -228,7 +249,8 @@ class ReadFiles
 			while ( batchSize < maxBatchSize ) 
 			{
 				int tmp = NextWithBuffer( &readBatch[ batchSize].id, &readBatch[batchSize].seq,
-							&readBatch[batchSize].qual, trimReturn, stopWhenFileEnds ) ;
+							&readBatch[batchSize].qual, &readBatch[batchSize].comment,
+							trimReturn, stopWhenFileEnds ) ;
 				if ( tmp == -1 && batchSize > 0 )
 				{
 					--currentFpInd ;
@@ -257,6 +279,8 @@ class ReadFiles
 			{
 				free(readBatch[i].id) ;
 				free(readBatch[i].seq) ;
+				if (needComment && readBatch[i].comment)
+					free(readBatch[i].comment) ;
 				if (readBatch[i].qual)
 					free(readBatch[i].qual) ;
 			}

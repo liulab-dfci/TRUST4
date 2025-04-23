@@ -418,6 +418,7 @@ private:
 				++k ;
 			}
 			ret = k ;
+			LIS.Resize(k) ;
 		}
 		
 		// Go over the list again to see whether we can replace some hits with better hits (e.g. less divergent)that won't change the overall number of elements in LIS
@@ -447,6 +448,7 @@ private:
 							&& ABS(hits[j].a - hits[j].b - avgDiff) < 
               ABS(LIS[i].a - LIS[i].b - avgDiff))
           {
+            //printf("replaced\n") ;
 						LIS[i] = hits[j] ;
           }
 					++j ;
@@ -458,16 +460,18 @@ private:
 		delete []record ;
 		delete []link ;
 
+    //for (i = 0 ; i < ret ; ++i)
+    //  printf("%d: %d %d\n", i, LIS[i].a, LIS[i].b) ;
 		return ret ;
 	}
 
 	// Some hits seem to be caused by random hits, so need to be removed
-	void RemoveLowQualityHitsFromChain(SimpleVector<struct _pair> &chain)
+	int RemoveLowQualityHitsFromChain(SimpleVector<struct _pair> &chain)
 	{
 		int i, j, k ;
 		int size = chain.Size() ;
 		if (size == 0)
-			return ;
+			return 0 ;
 
 		SimpleVector<struct _triple> intervals ; // hits with the same offset (colinear hits)
 		intervals.Reserve(size) ;
@@ -486,15 +490,23 @@ private:
 			i = j ;
 		}
 
-		int isize = intervals.Size() ;
-		k = intervals[0].b ;
 		int stretch = 3 ;
+		int isize = intervals.Size() ;
+		k = intervals[0].b + 1 ;
+		if (isize > 1)
+		{
+			if (intervals[0].c != intervals[1].c 
+					&& intervals[0].b - intervals[0].a + 1 < stretch
+					&& intervals[1].b - intervals[0].a + 1 >= stretch)
+				k = 0 ;
+		}
+
 		for (i = 1 ; i < isize - 1 ; ++i)
 		{
 			if (intervals[i].c != intervals[i - 1].c && intervals[i - 1].c == intervals[i + 1].c
 					&& intervals[i].b - intervals[i].a + 1 < stretch
 					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch
-					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch)
+					&& intervals[i + 1].b - intervals[i + 1].a + 1 >= stretch)
 				continue ;
 
 			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
@@ -502,9 +514,17 @@ private:
 		}
 	
 		if (isize > 1)
-			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
-				chain[k] = chain[j] ;
+		{
+			if (!(intervals[i - 1].c != intervals[i].c
+					&& intervals[i].b - intervals[i].a + 1 < stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch))
+			{
+				for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
+					chain[k] = chain[j] ;
+			}
+		}
 		chain.Resize(k) ;
+    return k ;
 	}
 
 	void GetAlignStats( signed char *align, bool update, int &matchCnt, int &mismatchCnt, int &indelCnt)
@@ -910,8 +930,10 @@ private:
 				}
 
 				if (conservativeChain)
-					RemoveLowQualityHitsFromChain(hitCoordLIS) ;
-
+					lisSize = RemoveLowQualityHitsFromChain(hitCoordLIS) ;
+        //for (i = 0 ; i < lisSize ; ++i)
+        //  printf("%d: %d %d\n", i, hitCoordLIS[i].a, hitCoordLIS[i].b) ;
+        
 				// Rebuild the hits.
 				int lisStart = 0 ;
 				int lisEnd = lisSize - 1 ;
@@ -1287,8 +1309,8 @@ private:
 		// Locate the hits from the same-strand case.
 		//int skipLimit = 3 ;
 		int skipLimit = kmerLength / 2 ; 
-    //if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
-		//	skipLimit = 0 ; ///= 2 ;
+    if (seqs.size() > 0 && seqs[0].isRef) // This seqset is for reference
+			skipLimit = 0 ; ///= 2 ;
 
 		int skipCnt = 0 ;
 		int downSample = 1 ;
@@ -1501,7 +1523,7 @@ private:
 			exit( 1 ) ;
 		}*/
 		//if ( !strcmp(read, "ACCCGTTGGGGCATTGAAGGGGGGCTCTCTCGCACAGTAATATACGGCCGT") && readType == 0)
-		//  for ( i = 0 ; i < overlapCnt ; ++i )
+		// for ( i = 0 ; i < overlapCnt ; ++i )
 		//	  fprintf( stderr, "small test %d: %d %s %d. %d %d %d %d\n", i, overlaps[i].seqIdx,seqs[ overlaps[i].seqIdx ].name, overlaps[i].strand, overlaps[i].readStart, overlaps[i].readEnd, overlaps[i].seqStart, overlaps[i].seqEnd ) ; 
 		
 		// Determine whether we want to add this reads by looking at the quality of overlap
@@ -2615,6 +2637,7 @@ public:
 		fa.AddReadFile( filename, false ) ;
 		
 		KmerCode kmerCode( kmerLength ) ;
+    std::map<std::string, int> existingSeq ; // for deduplication
 
 		// Variable to determine whether there is special gap
 		int chainVMotifShiftCount[7][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
@@ -2660,6 +2683,30 @@ public:
 				}
 			sw.consensus[k] = '\0' ;
 			sw.consensusLen = k ;
+
+			// Deduplication
+			std::string strForDedup(sw.consensus) ;
+			if (existingSeq.find(strForDedup) != existingSeq.end())
+			{
+				i = existingSeq[strForDedup] ;
+
+				int li = strlen(seqs[i].name) ;
+				int lcur = strlen(sw.name) ;
+				char *tmps = (char *)malloc(sizeof(char) * (li + lcur + 2)) ;
+				strcpy(tmps, seqs[i].name) ;
+				tmps[li] = '|' ; 
+				strcpy(tmps + li + 1, sw.name) ;
+
+				free(seqs[i].name) ;
+				seqs[i].name = tmps ;
+
+				free(sw.name) ;
+				free(sw.consensus) ;
+				seqs.pop_back() ;
+				continue ;
+			}
+			else
+				existingSeq[strForDedup] = id ;
 
 			// Use IMGT documented coordinate to infer CDR1,2,3 coordinate.
 			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
@@ -5100,20 +5147,31 @@ public:
 				return true ;
 			}
 		}
-    else if (geneType == 0 && threshold == 1)
+    else if (geneType == 0)
     {
       // b tends to have unequal indel
-      if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
-          && ABS(a.readStart - b.readStart) <= 5
-          //&& ABS(a.seqStart - b.seqStart) <= 5
-          //&& b.seqEnd - b.seqStart != b.readEnd - b.readStart
-          //&& a.seqEnd - a.seqStart == a.readEnd - a.readStart
-          && a.indelCnt < b.indelCnt
-          && b.similarity < 0.9)
+      if (threshold == 1)
       {
-        if ((a.similarity > b.similarity + 0.03
-              || (a.similarity > b.similarity && a.readStart < b.readStart))
-            && a.matchCnt > b.matchCnt - 20)
+        if (a.seqEnd >= seqs[a.seqIdx].info[2].a && b.seqEnd >= seqs[b.seqIdx].info[2].a
+            && seqs[a.seqIdx].info[2].a != -1 && seqs[b.seqIdx].info[2].a != -1
+            && ABS(a.readStart - b.readStart) <= 5
+            //&& ABS(a.seqStart - b.seqStart) <= 5
+            //&& b.seqEnd - b.seqStart != b.readEnd - b.readStart
+            //&& a.seqEnd - a.seqStart == a.readEnd - a.readStart
+            && a.indelCnt < b.indelCnt
+            && (b.similarity < 0.9 || a.indelCnt == 0) )
+        {
+          if ((a.similarity > b.similarity + 0.03
+                || (a.similarity > b.similarity && a.readStart < b.readStart))
+              && (a.matchCnt > b.matchCnt - 20
+                || a.seqStart <= b.seqStart))
+            return true ;
+        }
+      }
+      else 
+      {
+        if (a.indelCnt == 0 && b.indelCnt > 0
+            && a.similarity > b.similarity)
           return true ;
       }
     }
@@ -8861,6 +8919,9 @@ public:
 		AlignAlgo::GlobalAlignment( seqs[ gene.seqIdx ].consensus + gene.seqStart,
 				gene.seqEnd - gene.seqStart + 1,
 				read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
+		//AlignAlgo::VisualizeAlignment( seqs[ gene.seqIdx ].consensus + gene.seqStart,
+		//		gene.seqEnd - gene.seqStart + 1,
+		//		read + gene.readStart, gene.readEnd - gene.readStart + 1, align ) ;
 		return align ;
 	}
 
