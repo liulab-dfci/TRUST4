@@ -315,13 +315,13 @@ public:
       int start = seg[k].start ;
       int end = seg[k].end ;
       
-      int lenk = len ;
+      int lenk = len ; // For pattern not in the comment field, this is the length of the seuqnece. For pattern in the comment, this represents the length of the field.
       if (IsInComment(category))
       {
         // Move seq to the appropriate section and adjust start, end, lenk
         // Assume seq is the comment
         int f = 0 ; 
-        int fstart = 0, fend = 0 ;
+        int fstart = 0, fend = 0 ; // where the field starts and ends
         if (seg[k].field >= 0)
         {
           for (j = 0 ; j <= len ; ++j)
@@ -338,14 +338,28 @@ public:
               }
             }
           }
+          
+          if (f <= seg[k].field) // Field is not found 
+          {
+            fstart = len ;
+            fend = len - 1 ; 
+          }
         }
         else
         {
           char *p = strstr(seq, seg[k].fieldPrefix) ;
-          fstart = p - seq ;
-          for (; *p != ' ' && *p != '\t' && *p != '\0' ; ++p)
-            ;
-          fend = p - seq - 1 ;
+          if (p != NULL)
+          {
+            fstart = p - seq ;
+            for (; *p != ' ' && *p != '\t' && *p != '\0' ; ++p)
+              ;
+            fend = p - seq - 1 ;
+          }
+          else // No pattern hit.
+          {
+            fstart = len ; // Make sure actual start begins later than fend
+            fend = len - 1 ;
+          }
         }
 
         if (start >= 0)
