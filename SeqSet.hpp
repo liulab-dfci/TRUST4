@@ -2689,8 +2689,10 @@ public:
 			if (existingSeq.find(strForDedup) != existingSeq.end())
 			{
 				i = existingSeq[strForDedup] ;
-
+				
 				int li = strlen(seqs[i].name) ;
+				if (strstr(seqs[i].name, sw.name) != NULL) // duplicate gene name and duplicated sequence
+					continue ;
 				int lcur = strlen(sw.name) ;
 				char *tmps = (char *)malloc(sizeof(char) * (li + lcur + 2)) ;
 				strcpy(tmps, seqs[i].name) ;
