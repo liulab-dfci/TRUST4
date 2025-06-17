@@ -2692,7 +2692,13 @@ public:
 				
 				int li = strlen(seqs[i].name) ;
 				if (strstr(seqs[i].name, sw.name) != NULL) // duplicate gene name and duplicated sequence
+				{
+					free(sw.name) ;
+					free(sw.consensus) ;
+					seqs.pop_back() ;
 					continue ;
+				}
+
 				int lcur = strlen(sw.name) ;
 				char *tmps = (char *)malloc(sizeof(char) * (li + lcur + 2)) ;
 				strcpy(tmps, seqs[i].name) ;
