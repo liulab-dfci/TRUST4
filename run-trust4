@@ -7,7 +7,7 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-my $version = "v1.1.7-r600" ;
+my $version = "v1.1.7-r601" ;
 
 die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
