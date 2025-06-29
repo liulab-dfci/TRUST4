@@ -450,6 +450,8 @@ int main( int argc, char *argv[] )
 	}
 	if ( len / (i * 5) > hitLenRequired )
 		hitLenRequired = len / (i * 5) ;
+  if (hitLenRequired > 101) // just in case long read set a unrealistic long hit len required
+    hitLenRequired = 101 ;
 	refSet.SetHitLenRequired( hitLenRequired ) ;
 	reads.Rewind() ;
 	

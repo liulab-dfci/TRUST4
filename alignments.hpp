@@ -10,6 +10,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <math.h>
+#include <vector>
 
 #include "defs.h"
 
@@ -55,7 +56,7 @@ private:
 		atEnd = false ;
 	}
 public:
-	struct _pair64 segments[MAX_SEG_COUNT] ;		
+  std::vector<struct _pair64> segments ;		
 	int segCnt ;
 
 	int totalReadCnt ;
@@ -179,6 +180,7 @@ public:
 
 			// Compute the exons segments from the reads
 			segCnt = 0 ;
+      segments.clear() ;
 			start = b->core.pos ; //+ 1 ;
 			rawCigar = bam1_cigar( b ) ; 
 			// Check whether the query length is compatible with the read
@@ -218,9 +220,10 @@ public:
 						num = 0 ; break ;
 					case BAM_CREF_SKIP:
 						{
-							segments[ segCnt ].a = start ;
-							segments[ segCnt ].b = start + len - 1 ;
-							++segCnt ;
+              struct _pair64 np ;
+              np.a = start ;
+              np.b = start + len - 1 ;
+							segments.push_back(np) ;
 							segmentsSum += len ;
 							start = start + len + num ;
 							len = 0 ;
@@ -237,11 +240,13 @@ public:
 
 			if ( len > 0 )
 			{
-				segments[ segCnt ].a = start ;
-				segments[ segCnt ].b = start + len - 1 ;
-				++segCnt ;
+        struct _pair64 np ;
+        np.a = start ;
+        np.b = start + len - 1 ;
+        segments.push_back(np) ;
 				segmentsSum += len ;
 			}
+      segCnt = segments.size() ;
 			/*if ( !strcmp( bam1_qname( b ), "chr1:109656301-109749401W:ENST00000490758.2:381:1480:1090:1290:X" ) )
 			{
 				for ( i = 0 ; i < segCnt ; ++i )
@@ -611,7 +616,7 @@ public:
 		qsort( lens, lensCnt, sizeof( int ), CompInt ) ;
 		readLen = lens[ lensCnt - 1 ] ;
 		
-		if ( hasMateCnt >= totalReadCnt / 2 ) //mateDiffCnt > 0 )
+		if ( hasMateCnt > totalReadCnt / 2 ) //mateDiffCnt > 0 )
 		{
 			matePaired = true ;
 
@@ -635,7 +640,7 @@ public:
 		}
 		//printf( "readLen = %d\nfragLen = %d, fragStdev = %d\n", readLen, fragLen, fragStdev ) ;	
 
-		if ( hasMateCnt >= totalReadCnt / 2 && fragStdev == 0 )
+		if ( hasMateCnt > totalReadCnt / 2 && fragStdev == 0 )
 			fragStdev = 1 ;
 
 		delete[] lens ;

@@ -11,6 +11,7 @@
 #include <string>
 
 #include "alignments.hpp"
+#include "BufferManager.hpp"
 #include "SeqSet.hpp"
 
 char usage[] = "./bam-extractor [OPTIONS]:\n"
@@ -34,10 +35,6 @@ static struct option long_options[] = {
 			} ;
 
 char buffer[100001] ;
-char buffer2[100001] ;
-char bufferQual[100001] ;
-char bufferQual2[100001] ;
-char seqBuffer[100001] ;
 int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
@@ -93,7 +90,6 @@ struct _threadInfo
 	FILE *fp1, *fp2 ;
 	FILE *fpBc, *fpUMI ;
 	SeqSet *refSet ;
-	char *seqBuffer ;
 	
 	struct _unmappedCandidate *outputQueue ;
 	int *oqCnt ;
@@ -356,7 +352,6 @@ void InitCustomData( FILE *fp1, FILE *fp2, FILE *fpBc, FILE *fpUMI, SeqSet *refS
 		threadArgs[i].info.fpBc = fpBc ;
 		threadArgs[i].info.fpUMI = fpUMI ;
 		threadArgs[i].info.refSet = refSet ;
-		threadArgs[i].info.seqBuffer = new char[100001] ;
 		threadArgs[i].info.outputQueue = outputQueue ;
 		threadArgs[i].info.oqCnt = oqCnt ;
 	}
@@ -399,9 +394,6 @@ void AddWorkQueue( struct _unmappedCandidate &c, std::vector<struct _unmappedCan
 
 void ReleaseCustomData( struct _threadArg *threadArgs, int threadCnt )
 {
-	int i ;
-	for ( i = 0 ; i < threadCnt ; ++i )
-		delete[] threadArgs[i].info.seqBuffer ;
 	delete[] threadArgs[0].info.outputQueue ;
 	delete threadArgs[0].info.oqCnt ;
 }
@@ -469,9 +461,11 @@ int main( int argc, char *argv[] )
 		return 0 ;
 	}
 
+  int i ;
 	int c, option_index ;
 	option_index = 0 ;
 	FILE *fpRef = NULL ;
+  BufferManager<char> buffers ;
 	char prefix[1024] = "toassemble" ;
 	char bcField[1024] = "" ; // barcode field in bam file.
 	char umiField[1024] = "" ; // UMI field
@@ -573,11 +567,14 @@ int main( int argc, char *argv[] )
 	alignments.GetGeneralInfo( true ) ;
 	alignments.Rewind() ;
 	
+	// This is less than fastq-extractor, because most reads is aligned and out of VDJ region, so we don't need to worry too much about false positive hit
 	int hitLenRequired = 21 ;
 	if ( alignments.fragStdev == 0 )
 		hitLenRequired = 17 ; // For single end, be more aggressive.
 	if ( alignments.readLen / 5 > hitLenRequired )
 		hitLenRequired = alignments.readLen / 5 ;
+	if (hitLenRequired > 101) // just in case long read set a unrealistic long hit len required
+		hitLenRequired = 101 ;
 	//refSet.SetRadius( 1 ) ;	
 	refSet.SetHitLenRequired( hitLenRequired ) ;
 
@@ -614,6 +611,11 @@ int main( int argc, char *argv[] )
 	struct _threadArg *threadArgs ;
 	pthread_attr_t attr ;
 	std::vector<struct _unmappedCandidate> threadsWorkQueue ;
+	buffers.Init(4) ; // 0,1:buffer for seq, qual for read1; 2,3: buffers for seq, qual for read2
+
+	for (i = 0 ; i < 4 ; ++i)
+		buffers.Get(i, 100001) ;
+
 	if ( threadCnt > 1 )
 	{
 		InitWork( &threads, &threadArgs, attr, threadCnt - 1 ) ;
@@ -638,22 +640,25 @@ int main( int argc, char *argv[] )
 				&& !abnormalUnalignedFlag ) // And the two reads of unaligned template should come together. 
 			{
 				//printf( "filtered\n" ) ;
+				char *buffer = buffers.Get(0, alignments.GetReadLength() + 1) ;
+				char *bufferQual = buffers.Get(1, alignments.GetReadLength() + 1) ;
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
 				
 				std::string name( alignments.GetReadId() ) ;
-				strcpy( buffer2, buffer ) ;
-				alignments.GetQual( bufferQual2 ) ;
-
 				if ( !alignments.Next() )
 				{
 					fprintf( stderr, "Two reads from the unaligned fragment are not showing up together. Please use -u(--abnormalUnmapFlag from wrapper) option.\n") ;
 					return EXIT_FAILURE ;
 				}
 				std::string mateName( alignments.GetReadId() ) ;
-				alignments.GetReadSeq( buffer ) ;
-				alignments.GetQual( bufferQual ) ;
-				TrimName( name, mateIdLen ) ;
+
+				char *buffer2 = buffers.Get(2, alignments.GetReadLength() + 1) ;
+				char *bufferQual2 = buffers.Get(3, alignments.GetReadLength() + 1) ;
+				alignments.GetReadSeq( buffer2 ) ;
+				alignments.GetQual( bufferQual2 ) ;
+				
+        TrimName( name, mateIdLen ) ;
 				TrimName( mateName, mateIdLen ) ;
 				if ( name.compare( mateName ) != 0 )
 				{
@@ -669,15 +674,15 @@ int main( int argc, char *argv[] )
 						( refSet.HasHitInSet( buffer2, 0 ) != 0 || 
 						 refSet.HasHitInSet( buffer, 0 ) != 0 ) ) 
 					{
-						if ( !alignments.IsFirstMate() )
+						if ( !alignments.IsFirstMate() ) // alignments now points to the second read
 						{
-							OutputSeq( fp1, name.c_str(), buffer2, bufferQual2 ) ;
-							OutputSeq( fp2, name.c_str(), buffer, bufferQual  ) ;
+							OutputSeq( fp1, name.c_str(), buffer, bufferQual ) ;
+							OutputSeq( fp2, name.c_str(), buffer2, bufferQual2  ) ;
 						}
 						else
 						{
-							OutputSeq( fp1, name.c_str(), buffer, bufferQual ) ;
-							OutputSeq( fp2, name.c_str(), buffer2, bufferQual2 ) ;
+							OutputSeq( fp1, name.c_str(), buffer2, bufferQual2 ) ;
+							OutputSeq( fp2, name.c_str(), buffer, bufferQual ) ;
 						}
 						if ( fpBc != NULL )
 							OutputBarcode( fpBc, name.c_str(), alignments.GetFieldZ( bcField ), NULL ) ;
@@ -691,17 +696,17 @@ int main( int argc, char *argv[] )
 					nw.name = strdup( name.c_str() ) ;
 					if ( !alignments.IsFirstMate() )
 					{
-						nw.mate1 = strdup( buffer2 ) ;
-						nw.qual1 = strdup( bufferQual2 ) ;
-						nw.mate2 = strdup( buffer ) ;
-						nw.qual2 = strdup( bufferQual ) ;
-					}
-					else
-					{
 						nw.mate1 = strdup( buffer ) ;
 						nw.qual1 = strdup( bufferQual ) ;
 						nw.mate2 = strdup( buffer2 ) ;
 						nw.qual2 = strdup( bufferQual2 ) ;
+					}
+					else
+					{
+						nw.mate1 = strdup( buffer2 ) ;
+						nw.qual1 = strdup( bufferQual2 ) ;
+						nw.mate2 = strdup( buffer ) ;
+						nw.qual2 = strdup( bufferQual ) ;
 					}
 
 					if ( bcField[0] && alignments.GetFieldZ( bcField ) )
@@ -723,6 +728,8 @@ int main( int argc, char *argv[] )
 			if ( alignments.fragStdev != 0 )
 			{
 				// reads from alternative chromosomes, or the unmapped flag is not set appropriately
+				char *buffer = buffers.Get(0, alignments.GetReadLength()) ;
+				char *bufferQual = buffers.Get(1, alignments.GetReadLength()) ;
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
 				if ( !IsLowComplexity( buffer ) && refSet.HasHitInSet( buffer, 0 ) != 0)
@@ -740,6 +747,8 @@ int main( int argc, char *argv[] )
 			else 
 			{
 				// single-end 
+				char *buffer = buffers.Get(0, alignments.GetReadLength() + 1) ;
+				char *bufferQual = buffers.Get(1, alignments.GetReadLength() + 1) ;
 				alignments.GetReadSeq( buffer ) ;
 				alignments.GetQual( bufferQual ) ;
 				if ( threadCnt == 1 ||  alignments.IsAligned() ) 
@@ -807,6 +816,8 @@ int main( int argc, char *argv[] )
 				|| ( chrId == genes[tag].chrId && end <= genes[tag].start ) )
 			continue ;
 		
+		char *buffer = buffers.Get(0, alignments.GetReadLength() + 1) ;
+		char *bufferQual = buffers.Get(1, alignments.GetReadLength() + 1) ;
 		alignments.GetReadSeq( buffer ) ;
 		if ( IsLowComplexity( buffer ) )
 			continue ;
@@ -881,6 +892,8 @@ int main( int argc, char *argv[] )
 		if ( it == candidates.end() )
 			continue ;
 
+		char *buffer = buffers.Get(0, alignments.GetReadLength() + 1) ;
+		char *bufferQual = buffers.Get(1, alignments.GetReadLength() + 1) ;
 		alignments.GetReadSeq( buffer ) ;
 		alignments.GetQual( bufferQual ) ;
 		if ( alignments.IsFirstMate() )
