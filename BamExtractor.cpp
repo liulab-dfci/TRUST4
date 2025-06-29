@@ -35,9 +35,6 @@ static struct option long_options[] = {
 			} ;
 
 char buffer[100001] ;
-char buffer2[100001] ;
-char bufferQual[100001] ;
-char bufferQual2[100001] ;
 int nucToNum[26] = { 0, -1, 1, -1, -1, -1, 2, 
 	-1, -1, -1, -1, -1, -1, 0,
 	-1, -1, -1, -1, -1, 3,
