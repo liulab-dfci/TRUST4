@@ -70,6 +70,7 @@ class BarcodeTranslator {
         //std::cerr << "Barcode " << bc_from << " does not exist in the translation table."
         //          << std::endl;
         //exit(-1);
+        ret = "";
         return ret; // ret should be empty
       }
       std::string bc_to(
