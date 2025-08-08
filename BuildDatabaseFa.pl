@@ -40,7 +40,7 @@ open FP1, $ARGV[2] ;
 while ( <FP1> )
 {
 	chomp ;
-	$interestedGeneName{ $_ } = 1 ;
+	$interestedGeneName{ uc($_) } = 1 ;
 }
 close FP1 ;
 
