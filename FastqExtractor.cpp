@@ -641,7 +641,7 @@ int main( int argc, char *argv[] )
 				int barcodeNoError = 1 ;
 				if ( hasBarcode )
 					barcodeNoError = OutputBarcode( 
-						fpBc, readBatch[i].id, readBatch[i].comment, barcodeBatch[i].seq, barcodeBatch[i].qual, 
+						fpBc, readBatch[i].id, barcodeBatch[i].comment, barcodeBatch[i].seq, barcodeBatch[i].qual, 
 						readFormatter, FORMAT_BARCODE,
 						hasBarcodeWhitelist ? &barcodeCorrector : NULL, 
 						barcodeTranslator.isSet() ? &barcodeTranslator : NULL,
@@ -653,7 +653,7 @@ int main( int argc, char *argv[] )
 				if ( readBatch2 != NULL )
 					OutputSeq( fp2, readBatch[i].id, readBatch2[i].seq, readBatch2[i].qual, readFormatter, FORMAT_READ2) ;
 				if ( hasUmi )
-					OutputBarcode( fpUmi, readBatch[i].id, readBatch[i].comment, umiBatch[i].seq, umiBatch[i].qual, 
+					OutputBarcode( fpUmi, readBatch[i].id, umiBatch[i].comment, umiBatch[i].seq, umiBatch[i].qual, 
 						readFormatter, FORMAT_UMI, NULL, NULL, false) ; 
 			}
 		}
