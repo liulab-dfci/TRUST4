@@ -2679,6 +2679,17 @@ public:
 					sw.consensus[k] = sw.consensus[i] ;
 					if (sw.consensus[k] >= 'a' && sw.consensus[k] <= 'z') // lower case to upper case
 						sw.consensus[k] -= 'a' + 'A' ;
+    
+          if (sw.consensus[k] >= 'A' && sw.consensus[k] <= 'Z') 
+          {
+            if ( nucToNum[sw.consensus[k] - 'A'] == -1 
+                && sw.consensus[k] != 'N') // Handle special characters
+            {
+              sw.consensus[k] = 'N' ;
+            }
+          }
+          else
+            sw.consensus[k] = 'N' ;
 					++k ;
 				}
 			sw.consensus[k] = '\0' ;
