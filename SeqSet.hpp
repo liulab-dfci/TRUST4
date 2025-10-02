@@ -5901,7 +5901,7 @@ public:
 		seqCnt = dGeneSeqIdx.Size() ;
 		std::vector<struct _overlap> dOverlaps ;
 		int cdr3Len = cdr[2].readEnd - cdr[2].readStart + 1 ;
-		signed char *align = new signed char[ cdr3Len ] ;
+		signed char *align = new signed char[ maxDlen + cdr3Len + 1] ;
 		for ( i = 0 ; i < seqCnt ; ++i )
 		{
 			int seqStart ;
