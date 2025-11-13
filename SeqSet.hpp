@@ -394,6 +394,18 @@ private:
 					link[ record[i] ] = top[tag] ;
 				}
 			}
+			else if (hits[record[i]].a == hits[ top[tag] ].a) // repeats
+			{
+				if ( ABS(hits[record[i]].a - hits[record[i]].b - avgDiff) < 
+						ABS(hits[top[tag]].a - hits[top[tag]].b - avgDiff))	
+				{
+					top[tag] = record[i] ;
+					if (tag > 0)
+						link[record[i]] = top[tag - 1] ;
+					else
+						link[record[i]] = -1 ;
+				}
+			}
 		}
 
 		k = top[ret - 1] ;
@@ -407,20 +419,41 @@ private:
 		//	LIS.PushBack( hits[ top[i] ] ) ;
     		
 		// Remove elements with same b.
+		// Keep the one with the least divergence
 		if ( ret > 0 )
 		{
-			k = 1 ;
-			for ( i = 1 ; i < ret ; ++i )
+			k = 0 ;
+			for ( i = 0 ; i < ret ; )
 			{
-				if ( LIS[i].b == LIS[k - 1].b )
-					continue ;
-				LIS[k] = LIS[i] ;
+				for (j = i + 1 ; j < ret ; ++j)
+					if ( LIS[i].b != LIS[j].b )
+						break ;
+				
+				if (j == i + 1)
+				{
+					LIS[k] = LIS[i] ;
+				}
+				else
+				{
+					int l ;
+					int mintag = i ;
+					double minDiff = ABS(LIS[i].a - LIS[i].b - avgDiff) ;
+					for (l = i + 1 ; l < j ; ++l)
+						if (ABS(LIS[l].a - LIS[l].b - avgDiff) < minDiff)
+						{
+							minDiff = ABS(LIS[l].a - LIS[l].b - avgDiff) ;
+							mintag = l ;
+						}
+					LIS[k] = LIS[mintag] ;
+				}
+
+				i = j ;
 				++k ;
 			}
 			ret = k ;
 			LIS.Resize(k) ;
 		}
-		
+
 		// Go over the list again to see whether we can replace some hits with better hits (e.g. less divergent)that won't change the overall number of elements in LIS
 		if (ret > 0)
 		{
@@ -507,6 +540,13 @@ private:
 					&& intervals[i].b - intervals[i].a + 1 < stretch
 					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= stretch
 					&& intervals[i + 1].b - intervals[i + 1].a + 1 >= stretch)
+				continue ;
+      
+			// More relaxed filter
+			if (intervals[i].c != intervals[i - 1].c && intervals[i - 1].c == intervals[i + 1].c
+					&& intervals[i].b - intervals[i].a + 1 < 2 * stretch
+					&& intervals[i - 1].b - intervals[i - 1].a + 1 >= 10 * stretch
+					&& intervals[i + 1].b - intervals[i + 1].a + 1 >= 10 * stretch)
 				continue ;
 
 			for (j = intervals[i].a ; j <= intervals[i].b ; ++j, ++k)
@@ -5212,7 +5252,8 @@ public:
 				char *name = seqs[b.seqIdx].name ;
 				for ( i = 0 ; name[i + 1] ; ++i )
 				{
-					if ((name[i + 1] == '-' || name[i + 1] == '*') && (name[i] < '0' || name[i] > '9'))
+					if ((name[i + 1] == '-' || name[i + 1] == '*') && (name[i] < '0' || name[i] > '9')
+							&& geneType != 3)
 						return true ;
 					if (name[i] == 'O' && name[i + 1] == 'R')
 						return true ;
