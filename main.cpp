@@ -32,6 +32,7 @@ char usage[] = "./trust4 [OPTIONS]:\n"
 		"\t--trimLevel INT: 0: no trim; 1: trim low quality; 2: trim unmatched (default: 1)\n"
 		"\t--barcode STRING: the path to the barcode file (default: not used)\n"
 		"\t--UMI STRING: the path to the UMI file (default: not used)\n"
+		"\t--cgeneEnd INT: skipping reads mapped to C gene coordinate greater than INT (default: 200)\n"
 		"\t--keepNoBarcode: assemble the reads with missing barcodes. (default: ignore the reads)\n" 
 		"\t--contigMinCov INT: ignore contigs that have bases covered by fewer than INT reads (default: 0)\n" ;
 
@@ -54,6 +55,7 @@ static struct option long_options[] = {
 			{ "skipMateExtension", no_argument, 0, 10005},
 			{ "minHitLen", required_argument, 0, 10006},
 			{ "contigMinCov", required_argument, 0, 10007},
+			{ "cgeneEnd", required_argument, 0, 10008},
 			{ (char *)0, 0, 0, 0} 
 			} ;
 
@@ -129,8 +131,8 @@ bool CompReadWithBarcode(const struct _sortRead &a, const struct _sortRead &b)
 		return a.barcode < b.barcode ;
 	else if ( a.barcode != -1 && b.barcode != -1 && a.barcodeMinCnt != b.barcodeMinCnt )
 		return a.barcodeMinCnt > b.barcodeMinCnt ;
-  else
-    return a < b ;
+	else
+		return a < b ;
 }
 
 struct _quickAnnotateReadsThreadArg
@@ -738,6 +740,10 @@ int main( int argc, char *argv[] )
 		{
 			contigMinCov = atoi( optarg ) ;
 		}
+		else if ( c == 10008)
+		{
+			constantGeneEnd = atoi( optarg ) ;
+		}
 		else
 		{
 			fprintf( stderr, "%s", usage ) ;
@@ -877,7 +883,7 @@ int main( int argc, char *argv[] )
 				PrintLog( "Read in and count kmers for %d reads.", i ) ;
 			else if ( threadCnt == 1 && !countMyself && i % 1000000 == 0 )
 				PrintLog( "Read in %d reads.", i ) ;
-    }
+		}
 		else if ( hasMate ) 
 		{
 			fprintf( stderr, "The two mate-pair read files have different number of reads.\n" ) ;
@@ -903,7 +909,7 @@ int main( int argc, char *argv[] )
 					PrintLog( "Read in %d reads.", i ) ;
 			}
 		}
-  }
+	}
 
 	if (readBuffer.size() > 0)
 	{
@@ -1637,8 +1643,8 @@ int main( int argc, char *argv[] )
 				//{
 				if ( geneOverlap[3].seqStart >= constantGeneEnd )
 					filter = true ;
-				else if ( geneOverlap[3].seqStart >= 100 && ( geneOverlap[3].strand == 1 
-					|| geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 < sortedReads[i].len ) )
+				else if ( constantGeneEnd <= 200 && geneOverlap[3].seqStart >= 100 && ( geneOverlap[3].strand == 1 
+					|| geneOverlap[3].readEnd - geneOverlap[3].readStart + 1 < sortedReads[i].len ) ) // This filter is for the case where short constant gene sequence is good enough. When constatnGeneEnd > 200, we assume user is not only interested in CDR3, so we filter fewer C gene reads.
 					filter = true ;
 				//}
 				

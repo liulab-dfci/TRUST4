@@ -15,6 +15,7 @@ die "TRUST4 SMART-seq pipeline usage: perl smartseq-process.pl [OPTIONS]:\n".
     "\t-o STRING: prefix of final output files. (default: TRUST)\n".
     "\t-t INT: number of threads (default: 1)\n".
     "\t--representative INT: number of representative for each detected chain (default: 1)\n".
+		"\t--cgeneEnd: skip reads aligned after the first 200bp of the C gene (default: 200)\n".
 		"\t--trust-path STRING: TRUST4 executable files (default: same as this script)\n"
 		#"\t--noclear: do not clear the intermediate results (default: clear)\n"
     if (@ARGV == 0) ;
@@ -88,7 +89,7 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 		$outputPrefix = $ARGV[$i + 1] ;
 		++$i ;
 	}
-	elsif ($ARGV[$i] eq "-t" || $ARGV[$i] eq "-f" || $ARGV[$i] eq "--ref")
+	elsif ($ARGV[$i] eq "-t" || $ARGV[$i] eq "-f" || $ARGV[$i] eq "--ref" || $ARGV[$i] eq "cgeneEnd")
 	{
 		$trust4Args .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
