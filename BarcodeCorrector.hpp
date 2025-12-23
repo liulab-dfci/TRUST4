@@ -19,7 +19,7 @@ class Trie
 {
 private:
 	struct _trie head ;	
-	char nucToNum[26] ; 
+	int nucToNum[26] ; 
 	
 	void ReleaseMemory(struct _trie *node)
 	{

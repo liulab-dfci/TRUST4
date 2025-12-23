@@ -7,7 +7,7 @@ use Cwd qw(cwd abs_path) ;
 use File::Basename ;
 use File::Path qw(make_path) ;
 
-my $version = "v1.1.8-r610" ;
+my $version = "v1.1.9-r611" ;
 
 die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "Required:\n".
@@ -39,6 +39,7 @@ die "TRUST4 $version usage: ./run-trust4 [OPTIONS]:\n".
     "\t--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)\n".
     "\t--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)\n".
 		"\t--skipReadRealign: do not realign reads in annotator, useful for reducing computation cost of barcode/UMI-based repseq (default: not used)\n".
+		"\t--cgeneEnd: skip reads aligned after the first 200bp of the C gene (default: 200)\n".
     "\t--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)\n".
     "\t--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)\n".
     "\t--imgtAdditionalGap STRING: description for additional gap codon position in IMGT (0-based), e.g. \"TRAV:7,83\" for mouse (default: no)\n".
@@ -304,6 +305,11 @@ for ( $i = 0 ; $i < @ARGV ; ++$i )
 	elsif ($ARGV[$i] eq "--imgtAdditionalGap")
 	{
 		$annotatorArgs .= " --imgtAdditionalGap ".$ARGV[$i + 1] ;
+		++$i ;
+	}
+	elsif ( $ARGV[$i] eq "--cgeneEnd")
+	{
+		$mainArgs .= " ".$ARGV[$i]." ".$ARGV[$i + 1] ;
 		++$i ;
 	}
 	else
