@@ -52,6 +52,8 @@ TRUST4 is also available form [Bioconda](https://anaconda.org/bioconda/trust4). 
 			--minHitLen INT: the minimal hit length for a valid overlap (default: auto)
 			--mateIdSuffixLen INT: the suffix length in read id for mate. (default: not used)
 			--skipMateExtension: do not extend assemblies with mate information, useful for SMART-seq (default: not used)
+			--skipReadRealign: do not realign reads in annotator, useful for reducing computation cost of barcode/UMI-based repseq (default: not used)
+			--cgeneEnd: skip reads aligned after the first 200bp of the C gene (default: 200)
 			--abnormalUnmapFlag: the flag in BAM for the unmapped read-pair is nonconcordant (default: not set)
 			--assembleWithRef: conduct the assembly with --ref file (default: use -f file)\n".
 			--noExtraction: directly use the files from provided -1 -2/-u to assemble (default: extraction first)
