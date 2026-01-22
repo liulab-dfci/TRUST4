@@ -287,6 +287,14 @@ public:
   // The outside program can modify the buffer.
   char* Extract(char *seq, int category, bool needComplement, bool retSeqWhenNoExtraction, int bufferId = 0)
   {
+    // Even when input is NULL string, we return a valid string, so downstream algorithm don't need to 
+    //   worry extract NULL.
+    if (seq == NULL)
+    {
+      char *buffer = _buffers.Get(bufferId, 1) ;
+      buffer[0] = '\0' ;
+      return buffer ;
+    }
     int len = strlen(seq) ;
     int i, j, k ;
     const std::vector<_segInfo> &seg = _segs[category] ;
