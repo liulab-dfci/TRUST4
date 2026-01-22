@@ -8907,7 +8907,7 @@ public:
 		free(alignStr) ;
 
 		//cdr1, 2
-		char cdrBuffer[1024] ;
+		char *cdrBuffer = (char *)malloc(sizeof(char) * 2 * len) ;
 		for (i = 0 ; i <= 1 ; ++i)
 		{
 			if (cdr[i].seqIdx == -1)
@@ -8956,6 +8956,7 @@ public:
 				sprintf(buffer + strlen(buffer), "\t%s\t%c", cdrBuffer, productive) ;
 			}
 		}
+		free(cdrBuffer) ;
 
 		//v,j identitiy
 		for (i = 0 ; i <= 2 ; i += 2)
