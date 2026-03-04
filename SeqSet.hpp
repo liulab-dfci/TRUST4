@@ -5971,6 +5971,11 @@ public:
 				int matchCnt, mismatchCnt, indelCnt ;
 				GetAlignStats( align, false, matchCnt, mismatchCnt, indelCnt ) ;
 
+				// Filter the D genes that are fully contained in V or J gene 
+				if ((geneOverlap[0].seqIdx != -1 && geneOverlap[0].readEnd >= readEnd)
+						|| (geneOverlap[2].seqIdx != -1 && geneOverlap[2].readStart <= readStart))
+					continue ;
+
 				struct _overlap no ;
 				no.seqIdx = seqIdx ;
 				no.seqStart = seqStart ; no.seqEnd = seqEnd ;
