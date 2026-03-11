@@ -8765,15 +8765,15 @@ public:
 		m = -1 ; // index on the sequence
 		int cdr3AdjustedStart = -1 ; // cdr3 coordinate in the alignment sequence
 		int cdr3AdjustedEnd = -1 ;
-		int prevK = -1 ;
+		int prevReadEnd = -1 ;
 		int jstart, jend ; 
 		for (k = 0 ; k < 3 ; ++k)
 		{
 			if (geneOverlap[k].seqIdx == -1)
 				continue ;
-			if (prevK != -1) // Filling the gap between the genes
+			if (prevReadEnd != -1) // Filling the gap between the genes
 			{
-				for (j = geneOverlap[prevK].readEnd + 1 ; j < geneOverlap[k].readStart ; ++j, ++i)
+				for (j = prevReadEnd + 1 ; j < geneOverlap[k].readStart ; ++j, ++i)
 				{
 					buffer2[i] = read[j] ;
 					buffer3[i] = read[j] ;
@@ -8785,23 +8785,25 @@ public:
 			}
 			j = geneOverlap[k].readStart ;
 			jstart = geneOverlap[k].readStart ; // actual start site
-			jend = geneOverlap[k].readEnd + 1 ;
-			// handle the case of overlapped gene
-			int nextK ;
-			for (nextK = k + 1 ; nextK < 3 ; ++nextK)
-				if (geneOverlap[nextK].seqIdx != -1)
-					break ;
-			if (prevK != -1 && geneOverlap[prevK].readEnd >= geneOverlap[k].readStart)	
+			jend = geneOverlap[k].readEnd + 1 ; // open end
+
+			if (prevReadEnd >= geneOverlap[k].readEnd) // the gene is contained in previous range
+				continue ;
+			if (prevReadEnd >= jstart)
+				jstart = prevReadEnd + 1 ;
+			// D gene has the lowest priority, so the jend will be pushed back if it overlaps with the next gene 
+			if (k == 1)
 			{
-				if (prevK != 1)
-					jstart = geneOverlap[prevK].readEnd ; 
+				int nextK ;
+				for (nextK = k + 1 ; nextK < 3 ; ++nextK)
+					if (geneOverlap[nextK].seqIdx != -1 && geneOverlap[nextK].readStart < jend)
+						jend = geneOverlap[nextK].readStart ;
 			}
-			if (nextK < 3 && geneOverlap[k].readEnd >= geneOverlap[nextK].readStart)
-			{
-				if (k == 1) // D gene has lwo prirority
-					jend = geneOverlap[nextK].readStart ;
-			}
-			prevK = k ;
+			if (jend - 1 > prevReadEnd)
+				prevReadEnd = jend - 1 ; // jend is open 
+			else // The effecive region is contained in previous gene
+				continue ;
+			
 			const char *seq = seqs[geneOverlap[k].seqIdx].consensus ;
 			m = geneOverlap[k].seqStart ;
 			for (l = 0 ; align[k][l] != -1 ; ++l) 
