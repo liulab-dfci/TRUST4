@@ -2806,12 +2806,19 @@ public:
 
 				// Check whether CDR3 start site is the motif
 				if (sw.info[2].a != -1 
-						&& DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
+						&& ((DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
 							sw.consensus[sw.info[2].a + 2]) != 'C'
 						&& DnaToAa(sw.consensus[sw.info[2].a - 6], sw.consensus[sw.info[2].a - 5], 
 							sw.consensus[sw.info[2].a - 4]) != 'Y' 
 						&& DnaToAa(sw.consensus[sw.info[2].a - 3], sw.consensus[sw.info[2].a - 2], 
 							sw.consensus[sw.info[2].a - 1]) != 'Y')
+							|| ( // The gap is at the motif site, this is likely to be additional gap, so we double check the motif with more relaxed criteria.
+								fa.seq[3 * (104 - 1)] == '.'
+								 && DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1], 
+									 sw.consensus[sw.info[2].a + 2]) != 'C'  
+								)
+							)
+					 )
 				{
 					// Check whether shifting a bit would work due to extra gaps
 					for (i = 1 ; i <= 4 ; ++i)
@@ -2922,7 +2929,7 @@ public:
 					if (additionalGaps.Size() == shift)
 					{
 						additionalGapValid = true ;
-						PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s. Will use --imgtAdditiona adjustment to get CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
+						PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s. Will use --imgtAdditionalGap adjustment to get CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
 					}
 					else
 					{
