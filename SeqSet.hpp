@@ -2745,23 +2745,18 @@ public:
 				if (n != 0)
 					additionalGaps.PushBack(n) ;
 
-				std::sort(additionalGaps.BeginAddress(), additionalGaps.EndAddress()) ;
-				// Shift the additional gap. The input additional gap is based on the IMGT anotation, that does not consider previous additional gaps. 
-				int additionalGapSize = additionalGaps.Size() ;
-				for (j = 0 ; j < additionalGapSize ; ++j)
-					additionalGaps[j] += j ;
-
 				// Adjust the CDR regions
+				int additionalGapSize = additionalGaps.Size() ;
 				for (j = 0 ; j < 3 ; ++j)
 				{
+					int olda = cdrRegions[i][j].a ;
+					int oldb = cdrRegions[i][j].b ;
 					for (k = 0 ; k < additionalGapSize ; ++k)
 					{
-						if (additionalGaps[k] < cdrRegions[i][j].a)
+						if (additionalGaps[k] < olda)
 							cdrRegions[i][j].a += 1 ;
-						else if (additionalGaps[k] <= cdrRegions[i][j].b)
+						if (additionalGaps[k] <= oldb)
 							cdrRegions[i][j].b += 1 ;
-						else
-							break ;
 					}
 				}
 			}
@@ -2858,7 +2853,7 @@ public:
 					if ( fa.seq[i] != '.' )		
 						++k ;
 				sw.info[0].a = k ;
-				for ( ; i <= 3 * cdrRegions[chainType][0].b ; ++i )
+				for ( ; i < 3 * (cdrRegions[chainType][0].b + 1 ); ++i )
 					if ( fa.seq[i] != '.' )	
 						++k ;
 				sw.info[0].b = k - 1 ;
@@ -2870,7 +2865,7 @@ public:
 					if ( fa.seq[i] != '.' )		
 						++k ;
 				sw.info[1].a = k ;
-				for ( ; i <= 3 * cdrRegions[chainType][1].b ; ++i )
+				for ( ; i < 3 * (cdrRegions[chainType][1].b + 1) ; ++i )
 					if ( fa.seq[i] != '.' )	
 						++k ;
 				sw.info[1].b = k - 1 ;
