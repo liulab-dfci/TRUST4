@@ -2675,15 +2675,92 @@ public:
 		int i, j, k ;
 		ReadFiles fa ;
 		fa.AddReadFile( filename, false ) ;
-		
+
 		KmerCode kmerCode( kmerLength ) ;
-    std::map<std::string, int> existingSeq ; // for deduplication
+		std::map<std::string, int> existingSeq ; // for deduplication
+
+		struct _pair cdrRegions[7][3] ; // CDR1, 2, 3's region
 
 		// Variable to determine whether there is special gap
 		int chainVMotifShiftCount[7][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
 		for (i = 0 ; i < 7 ; ++i)
 			for (j = 0 ; j < 6 ; ++j)
 				chainVMotifShiftCount[i][j] = 0 ;
+
+		const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV"} ;
+		for (i = 0 ; i < 7 ; ++i) // CDR1, inclusive region, 0-based, count by codon
+		{
+			cdrRegions[i][0].a = 26 ;
+			cdrRegions[i][0].b = 37 ;
+		}
+		for (i = 0 ; i < 7 ; ++i) // CDR2, inclusive region, 0-based, count by codon
+		{
+			cdrRegions[i][1].a = 55 ;
+			cdrRegions[i][1].b = 64 ;
+		}
+		for (i = 0 ; i < 7 ; ++i) // CDR3, inclusive region, 0-based, count by codon
+		{
+			cdrRegions[i][2].a = 103 ;
+			cdrRegions[i][2].b = 103 ;
+		}
+
+		if (imgtAdditionalGap != NULL)
+		{
+			for (i = 0 ; i < 7 ; ++i) // different v genes. Capture the first one for each v gene.
+			{
+				SimpleVector<int> additionalGaps ; 
+				int l ;
+				for (j = 0 ; imgtAdditionalGap[j] ;)
+				{
+					for (l = 0 ; l < 4 && imgtAdditionalGap[j + l] ; ++l)  
+						if (imgtAdditionalGap[j + l] != chainName[i][l])
+							break ;
+					if (l >= 4)
+						break ;
+
+					for (; imgtAdditionalGap[j] && imgtAdditionalGap[j] != ';'; ++j)
+						;
+
+					if (imgtAdditionalGap[j]) // point to ';'
+						++j ;
+				}
+				if (imgtAdditionalGap[j] == '\0') // This v gene is not in the descriptor
+					continue ;
+
+				// e.g. TRAV:7,83
+				j += 5 ;
+				int n = 0 ;
+				for (; imgtAdditionalGap[j] ; ++j)
+				{
+					if (imgtAdditionalGap[j] >= '0' && imgtAdditionalGap[j] <= '9')
+						n = n * 10 + imgtAdditionalGap[j] - '0' ;
+					else
+					{
+						additionalGaps.PushBack(n) ;
+						n = 0 ;
+						if (imgtAdditionalGap[j] == ';')
+							break ;
+					}
+				}
+				if (n != 0)
+					additionalGaps.PushBack(n) ;
+
+				// Adjust the CDR regions
+				int additionalGapSize = additionalGaps.Size() ;
+				for (j = 0 ; j < 3 ; ++j)
+				{
+					int olda = cdrRegions[i][j].a ;
+					int oldb = cdrRegions[i][j].b ;
+					for (k = 0 ; k < additionalGapSize ; ++k)
+					{
+						if (additionalGaps[k] < olda)
+							cdrRegions[i][j].a += 1 ;
+						if (additionalGaps[k] <= oldb)
+							cdrRegions[i][j].b += 1 ;
+					}
+				}
+			}
+		} // end for if additional gap is provided
 
 		while ( fa.Next() )
 		{
@@ -2710,7 +2787,7 @@ public:
 			struct _seqWrapper &sw = seqs[id] ;
 			int seqLen = strlen( fa.seq ) ;
 			sw.consensus = strdup( fa.seq ) ;	
-			
+
 			// Remove "." from IMGT annotation.
 			k = 0 ;
 			for ( i = 0 ; i < seqLen ; ++i )
@@ -2719,17 +2796,17 @@ public:
 					sw.consensus[k] = sw.consensus[i] ;
 					if (sw.consensus[k] >= 'a' && sw.consensus[k] <= 'z') // lower case to upper case
 						sw.consensus[k] -= 'a' + 'A' ;
-    
-          if (sw.consensus[k] >= 'A' && sw.consensus[k] <= 'Z') 
-          {
-            if ( nucToNum[sw.consensus[k] - 'A'] == -1 
-                && sw.consensus[k] != 'N') // Handle special characters
-            {
-              sw.consensus[k] = 'N' ;
-            }
-          }
-          else
-            sw.consensus[k] = 'N' ;
+
+					if (sw.consensus[k] >= 'A' && sw.consensus[k] <= 'Z') 
+					{
+						if ( nucToNum[sw.consensus[k] - 'A'] == -1 
+								&& sw.consensus[k] != 'N') // Handle special characters
+						{
+							sw.consensus[k] = 'N' ;
+						}
+					}
+					else
+						sw.consensus[k] = 'N' ;
 					++k ;
 				}
 			sw.consensus[k] = '\0' ;
@@ -2740,7 +2817,7 @@ public:
 			if (existingSeq.find(strForDedup) != existingSeq.end())
 			{
 				i = existingSeq[strForDedup] ;
-				
+
 				int li = strlen(seqs[i].name) ;
 				if (strstr(seqs[i].name, sw.name) != NULL) // duplicate gene name and duplicated sequence
 				{
@@ -2768,14 +2845,15 @@ public:
 				existingSeq[strForDedup] = id ;
 
 			// Use IMGT documented coordinate to infer CDR1,2,3 coordinate.
-			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= 66 * 3 )
-			{	
+			int chainType = GetChainType(fa.id) ;
+			if ( isIMGT && GetGeneType( fa.id ) == 0 && seqLen >= (cdrRegions[chainType][1].b + 1 )* 3 )
+			{
 				// Infer the coordinate for CDR1
-				for ( i = 0, k = 0 ; i < 3 * ( 27 - 1 ) ; ++i )
+				for ( i = 0, k = 0 ; i < 3 * cdrRegions[chainType][0].a ; ++i )
 					if ( fa.seq[i] != '.' )		
 						++k ;
 				sw.info[0].a = k ;
-				for ( ; i < 3 * ( 38 ) ; ++i )
+				for ( ; i < 3 * (cdrRegions[chainType][0].b + 1 ); ++i )
 					if ( fa.seq[i] != '.' )	
 						++k ;
 				sw.info[0].b = k - 1 ;
@@ -2783,20 +2861,20 @@ public:
 					sw.info[0].a = sw.info[0].b = -1 ;
 
 				// Infer the coordinate for CDR2
-				for ( ; i < 3 * ( 56 - 1 ) ; ++i )
+				for ( ; i < 3 * cdrRegions[chainType][1].a ; ++i )
 					if ( fa.seq[i] != '.' )		
 						++k ;
 				sw.info[1].a = k ;
-				for ( ; i < 3 * ( 65 ) ; ++i )
+				for ( ; i < 3 * (cdrRegions[chainType][1].b + 1) ; ++i )
 					if ( fa.seq[i] != '.' )	
 						++k ;
 				sw.info[1].b = k - 1 ;
 				if (sw.info[1].a > sw.info[1].b) // in case the annotation does not have information on the cdr2
 					sw.info[1].a = sw.info[1].b = -1 ;
-				
-				if ( seqLen >= 3 * ( 104 - 1 ) + 1 )
+
+				if ( seqLen >= 3 * cdrRegions[chainType][2].a + 1 )
 				{
-					for ( ; i < 3 * ( 104 - 1 ) ; ++i )
+					for ( ; i < 3 * cdrRegions[chainType][2].a ; ++i )
 						if ( fa.seq[i] != '.' )
 							++k ;
 					sw.info[2].a = sw.info[2].b = k ;
@@ -2811,9 +2889,9 @@ public:
 						&& DnaToAa(sw.consensus[sw.info[2].a - 6], sw.consensus[sw.info[2].a - 5], 
 							sw.consensus[sw.info[2].a - 4]) != 'Y' 
 						&& (DnaToAa(sw.consensus[sw.info[2].a - 3], sw.consensus[sw.info[2].a - 2], 
-							sw.consensus[sw.info[2].a - 1]) != 'Y'
+								sw.consensus[sw.info[2].a - 1]) != 'Y'
 							|| DnaToAa(sw.consensus[sw.info[2].a], sw.consensus[sw.info[2].a + 1],
-              sw.consensus[sw.info[2].a + 2]) == 'Y') // The second condition is for shift by one codon
+								sw.consensus[sw.info[2].a + 2]) == 'Y') // The second condition is for shift by one codon
 					 )
 				{
 					// Check whether shifting a bit would work due to extra gaps
@@ -2863,7 +2941,7 @@ public:
 			sw.barcode = -1 ;
 			seqIndex.BuildIndexFromRead( kmerCode, sw.consensus, sw.consensusLen, id, -1 ) ;
 		}
-		
+
 		if (isIMGT) // Go through the sequences again to determine special gaps
 		{
 			const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV"} ;
@@ -2876,67 +2954,20 @@ public:
 				if (sum == 0 || chainVMotifShiftCount[i][0] > sum / 2)
 					continue ;
 
-				SimpleVector<int> additionalGaps ;
-				if (imgtAdditionalGap != NULL)
-				{
-					int l ;
-					for (j = 0 ; imgtAdditionalGap[j] ;)
-					{
-						for (l = 0 ; l < 4 && imgtAdditionalGap[j + l] ; ++l)  
-							if (imgtAdditionalGap[j + l] != chainName[i][l])
-								break ;
-						if (l >= 4)
-							break ;
-
-						for (; imgtAdditionalGap[j] && imgtAdditionalGap[j] != ';'; ++j)
-							break ;
-
-						if (imgtAdditionalGap[j]) // point to ';'
-							++j ;
-					}
-
-					// e.g. TRAV:7,83
-					j += 5 ;
-					int n = 0 ;
-					for (; imgtAdditionalGap[j] ; ++j)
-					{
-						if (imgtAdditionalGap[j] >= '0' && imgtAdditionalGap[j] <= '9')
-							n = n * 10 + imgtAdditionalGap[j] - '0' ;
-						else
-						{
-							additionalGaps.PushBack(n) ;
-							n = 0 ;
-							if (imgtAdditionalGap[j] == ';')
-								break ;
-						}
-					}
-					if (n != 0)
-						additionalGaps.PushBack(n) ;
-				}
-
 				int shift = 0 ;
 				for (j = 1 ; j < 5 ; ++j)
 					if (chainVMotifShiftCount[i][j] > sum / 2)
 						break ;
 				shift = j ;
-				bool additionalGapValid = false ;
 				if (shift < 5)
 				{
-					if (additionalGaps.Size() == shift)
-					{
-						additionalGapValid = true ;
-						PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s. Will use --imgtAdditionalGap adjustment to get CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
-					}
-					else
-					{
-						PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s, and the size does not match --imgtAdditionalGap (if provided). Will not annotate the CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
-					}
+					PrintLog("WARNING: IMGT may introduce %d bp additional gaps in %s, and the size does not match --imgtAdditionalGap (if provided). Will not annotate the CDR1 and CDR2 information for this chain.", 3 * shift, chainName[i]) ; 
 				}
 				else 
 				{
 					PrintLog("WARNING: IMGT may introduce additional gaps in %s and the gaps' total length cannot be determined. Will use the motif information for CDR3 inference and will not annotate the CDR1 and CDR2 information for this chain.", chainName[i]) ; 
 				}
-					
+
 				int seqCnt = seqs.size() ;
 				for (j = 0 ; j < seqCnt ; ++j)
 				{
@@ -2945,31 +2976,8 @@ public:
 						continue ;
 					//fprintf(stderr, "adjust %s\n", sw.name) ;
 
-					if (additionalGapValid)
-					{
-						int k, l ;
-						int size = additionalGaps.Size() ;
-						for (k = 0 ; k <= 1 ; ++k)
-						{
-							int aAdjust = 0 ;
-							int bAdjust = 0 ;
-							for (l = 0 ; l < size ; ++l)
-							{
-								if (sw.info[0].a > additionalGaps[l] * 3)
-									aAdjust += 3 ;
-								if (sw.info[0].b > additionalGaps[l] * 3)
-									bAdjust += 3 ;
-							}
-
-							sw.info[k].a += aAdjust ;
-							sw.info[k].b += bAdjust ;
-						}
-					}
-					else
-					{
-						sw.info[0].a = sw.info[0].b = -1 ;
-						sw.info[1].a = sw.info[1].b = -1 ;
-					}
+					sw.info[0].a = sw.info[0].b = -1 ;
+					sw.info[1].a = sw.info[1].b = -1 ;
 
 					if (shift < 5)
 					{
@@ -2977,7 +2985,7 @@ public:
 						sw.info[2].b += 3 * shift ;
 					}
 					else
-						sw.info[2].a = sw.info[i].b = -1 ;
+						sw.info[2].a = sw.info[2].b = -1 ;
 				}
 			}
 		}
