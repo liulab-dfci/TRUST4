@@ -2687,18 +2687,18 @@ public:
 			for (j = 0 ; j < 6 ; ++j)
 				chainVMotifShiftCount[i][j] = 0 ;
 
-		const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV"} ;
-		for (i = 0 ; i < 7 ; ++i) // CDR1, inclusive region, 0-based, count by codon
+		const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV", ""} ; // Has a 8-th empty one just to make sure memory safety, in case there are some very strange V gene chain
+		for (i = 0 ; i < 8 ; ++i) // CDR1, inclusive region, 0-based, count by codon
 		{
 			cdrRegions[i][0].a = 26 ;
 			cdrRegions[i][0].b = 37 ;
 		}
-		for (i = 0 ; i < 7 ; ++i) // CDR2, inclusive region, 0-based, count by codon
+		for (i = 0 ; i < 8 ; ++i) // CDR2, inclusive region, 0-based, count by codon
 		{
 			cdrRegions[i][1].a = 55 ;
 			cdrRegions[i][1].b = 64 ;
 		}
-		for (i = 0 ; i < 7 ; ++i) // CDR3, inclusive region, 0-based, count by codon
+		for (i = 0 ; i < 8 ; ++i) // CDR3, inclusive region, 0-based, count by codon
 		{
 			cdrRegions[i][2].a = 103 ;
 			cdrRegions[i][2].b = 103 ;
