@@ -2719,7 +2719,7 @@ public:
 						break ;
 
 					for (; imgtAdditionalGap[j] && imgtAdditionalGap[j] != ';'; ++j)
-						break ;
+						;
 
 					if (imgtAdditionalGap[j]) // point to ';'
 						++j ;
