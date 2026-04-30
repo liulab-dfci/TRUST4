@@ -2742,7 +2742,7 @@ public:
 							break ;
 					}
 				}
-				if (n != 0)
+				if (!imgtAdditionalGap[j]) // handle the last number
 					additionalGaps.PushBack(n) ;
 
 				// Adjust the CDR regions
