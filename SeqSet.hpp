@@ -2679,15 +2679,15 @@ public:
 		KmerCode kmerCode( kmerLength ) ;
 		std::map<std::string, int> existingSeq ; // for deduplication
 
-		struct _pair cdrRegions[7][3] ; // CDR1, 2, 3's region
+		struct _pair cdrRegions[8][3] ; // CDR1, 2, 3's region
 
 		// Variable to determine whether there is special gap
-		int chainVMotifShiftCount[7][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
-		for (i = 0 ; i < 7 ; ++i)
+		int chainVMotifShiftCount[8][6] ; // Consider motif shift by 0-4 codon. 5 means no search result
+		for (i = 0 ; i < 8 ; ++i)
 			for (j = 0 ; j < 6 ; ++j)
 				chainVMotifShiftCount[i][j] = 0 ;
 
-		const char *chainName[7] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV", ""} ; // Has a 8-th empty one just to make sure memory safety, in case there are some very strange V gene chain
+		const char *chainName[8] = {"IGHV", "IGKV", "IGLV", "TRAV", "TRBV", "TRGV", "TRDV", ""} ; // Has a 8-th empty one just to make sure memory safety, in case there are some very strange V gene chain
 		for (i = 0 ; i < 8 ; ++i) // CDR1, inclusive region, 0-based, count by codon
 		{
 			cdrRegions[i][0].a = 26 ;
