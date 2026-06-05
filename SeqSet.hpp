@@ -7298,6 +7298,7 @@ public:
 						//	read + jgene.readStart, jgene.readEnd - jgene.readStart + 1, align ) ;
 						for ( k = 0 ; align[k] != -1 ; ++k )
 							;
+						--k ;
 						for ( i = jgene.readEnd + 1, j = jgene.seqEnd + 1 ; 
 								k >= 0 ; --k )	
 						{
@@ -7320,8 +7321,8 @@ public:
 							if ( align[0] != EDIT_INSERT )
 								++j ;
 						}
-
-						for ( ; align[l] != -1 && l <= k + 6 ; ++l )
+						
+						for ( ; align[l] != -1 && l <= k + 2 ; ++l )
 						{
 							if ( align[l] == EDIT_INSERT || align[l] == EDIT_DELETE )
 							{
@@ -7329,12 +7330,13 @@ public:
 								break ;
 							}
 						}
+						
 						if ( !ambiguous )
 						{
 							if ( j == dest )
 							{
 								locateE = i ;
-                strongLocateE = true ;
+								strongLocateE = true ;
 							}
 							else if ( j == dest + 1 && read[ i - (j - dest)] != 'M' )
 							{
