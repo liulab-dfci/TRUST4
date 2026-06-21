@@ -233,6 +233,7 @@ public:
     ns.start = start ;
     ns.end = end ;
     ns.strand = strand ;
+    ns.inComment = false ;
     _segs[category].push_back(ns) ;
     //std::sort(_segs[ category ].begin(), _segs[ category ].end()) ;
     
