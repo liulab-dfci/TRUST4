@@ -145,6 +145,10 @@ sub GetLocusName
 		{
 			return "TRD" ;
 		}
+		elsif ( $g =~ /^TR/ || $g =~ /^IG/ )
+		{
+			return substr($g, 0, 3) ;
+		}
 	}
 }
 

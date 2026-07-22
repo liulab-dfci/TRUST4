@@ -130,6 +130,10 @@ sub GetDetailChainTypeFromGeneName
 	{
 		return 6 ;
 	}
+	elsif ($g =~ /^IG/)
+	{
+		return 1 ; # There are other unconventional light chain genes, assign them to IGK role
+	}
 	
 	return -1 ;
 }
