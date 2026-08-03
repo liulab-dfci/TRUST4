@@ -138,7 +138,16 @@ sub GetDetailChainType
 			return 6 ;
 		}
 	}
-	
+
+	# Get a uncommon gene game for all the field
+	foreach my $g (@_)
+	{
+		if ( $g =~ /^IG/ ) # There are other unconventional light chain genes, assign them to IGK role.
+		{
+			return 1 ;
+		}
+	}
+	return -1 ;	
 }
 
 # Use input V, J, C gene to report back the C gene if it is missing.
