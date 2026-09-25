@@ -1,13 +1,10 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 # Usage: a.py [OPTIONS] [barcode_files] > barcode_combinations.out
 
 import sys
 import argparse
 import itertools
-import os
-import re
-import numpy as np
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Enumerate combinatorial barcodes from input files.')
