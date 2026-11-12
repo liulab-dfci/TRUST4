@@ -2911,7 +2911,7 @@ public:
 				else
 					++chainVMotifShiftCount[GetChainType(fa.id)][0] ;
 			}
-			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3
+			else if ( isIMGT && GetGeneType( fa.id ) == 2 ) // Found the end position for CDR3 in J gene
 			{
 				bool found = false ;
 				for ( i = 0 ; i + 11 < seqLen ; ++i )
@@ -2919,10 +2919,47 @@ public:
 					if ( ( DnaToAa( fa.seq[i], fa.seq[i + 1], fa.seq[i + 2] ) == 'W' || 
 								DnaToAa( fa.seq[i], fa.seq[i + 1], fa.seq[i + 2] ) == 'F' )  
 							&& DnaToAa( fa.seq[i + 3], fa.seq[i + 4], fa.seq[i + 5] ) == 'G' 
-							&& DnaToAa( fa.seq[i + 9], fa.seq[i + 10], fa.seq[i + 11] ) == 'G' )
+							&& DnaToAa( fa.seq[i + 9], fa.seq[i + 10], fa.seq[i + 11] ) == 'G' 
+              && (seqLen - i) % 3 == 1) // Conventionally J gene ends with 1 nucleotide of the codon
 					{
 						found = true ;
 						break ;
+					}
+				}
+
+				if (!found) // Try weaker motif with just *GXG if the ideal case is not found
+				{
+					for ( i = 3 ; i + 11 < seqLen ; ++i ) // First codon probably is inside CDR3.
+					{
+						int motifCount = 0 ;
+						if ( ( DnaToAa( fa.seq[i], fa.seq[i + 1], fa.seq[i + 2] ) == 'W' || 
+									DnaToAa( fa.seq[i], fa.seq[i + 1], fa.seq[i + 2] ) == 'F' ))
+							++motifCount ;
+						if (DnaToAa( fa.seq[i + 3], fa.seq[i + 4], fa.seq[i + 5] ) == 'G')
+							++motifCount ;
+						if (DnaToAa( fa.seq[i + 9], fa.seq[i + 10], fa.seq[i + 11] ) == 'G')
+							++motifCount ;
+
+						if (motifCount >= 2 && (seqLen - i) % 3 == 1)
+						{
+							found = true ;
+							break ;
+						}
+					}
+				}
+
+				if (!found) // No frame constraint
+				{
+					for ( i = 0 ; i + 11 < seqLen ; ++i )
+					{
+						if ( ( DnaToAa( fa.seq[i], fa.seq[i + 1], fa.seq[i + 2] ) == 'W' || 
+									DnaToAa( fa.seq[i], fa.seq[i + 1], fa.seq[i + 2] ) == 'F' )  
+								&& DnaToAa( fa.seq[i + 3], fa.seq[i + 4], fa.seq[i + 5] ) == 'G' 
+								&& DnaToAa( fa.seq[i + 9], fa.seq[i + 10], fa.seq[i + 11] ) == 'G') 
+						{
+							found = true ;
+							break ;
+						}
 					}
 				}
 
